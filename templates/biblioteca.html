@@ -17,12 +17,15 @@
           <option value="pesquisa">pesquisa na web (evidências)</option>
           <option value="arquivos">arquivos do computador</option>
           <option value="pasta">pasta do servidor</option>
-          <option value="hf">huggingface (cards)</option>
+          <option value="hf">huggingface (datasets)</option>
         </select>
       </div>
       <div>
         <label id="rotulo-entrada">assunto (qualquer idioma; a busca sai em inglês)</label>
-        <input type="text" name="entrada" id="entrada" placeholder="ex.: vatapá, kubernetes ingress…">
+        <input type="text" name="entrada" id="entrada" placeholder="ex.: receitas brasileiras, kubernetes, diagnóstico médico…">
+      </div>
+      <div class="estreito" id="zona-hf-btn" style="display:none; align-self:end;">
+        <button type="button" class="" onclick="hfBuscar()" id="btn-hf">🔍 listar datasets</button>
       </div>
       <div class="estreito">
         <label>máx. fontes</label>
@@ -47,6 +50,13 @@
         <input type="file" name="arquivos" multiple>
       </div>
     </div>
+    {# 🤗 SELEÇÃO DE DATASETS do Hub (pedido do dono): listar (vitrine ou
+       busca) → MARCAR os desejados → o submit leva os IDS; sem marcação
+       segue a busca por assunto como antes. #}
+    <div id="zona-hf" style="display:none; margin-top:.5rem;">
+      <div id="hf-lista" class="colecao-grid" style="max-height:16rem; overflow-y:auto;"></div>
+      <p class="mini" id="hf-aviso" style="margin:.3rem 0 0;"></p>
+    </div>
     <div style="margin-top:.7rem;">
       <button class="primario" type="submit">iniciar (termina na revisão)</button>
     </div>
@@ -57,14 +67,46 @@
     const rot = document.getElementById("rotulo-entrada");
     const inp = document.getElementById("entrada");
     function ajusta() {
+      const ehHf = sel.value === "hf";
       zona.style.display = sel.value === "arquivos" ? "" : "none";
+      document.getElementById("zona-hf").style.display = ehHf ? "" : "none";
+      document.getElementById("zona-hf-btn").style.display = ehHf ? "" : "none";
       rot.textContent = { pesquisa: "assunto (qualquer idioma; a busca sai em inglês)",
                           arquivos: "coleção para os arquivos (vazio = automático)",
                           pasta: "caminho da pasta no servidor",
-                          hf: "buscar datasets no Hub" }[sel.value];
-      inp.required = sel.value !== "arquivos";
+                          hf: "buscar datasets no Hub (vazio = mais baixados)" }[sel.value];
+      inp.required = sel.value !== "arquivos" && sel.value !== "hf";
     }
     sel.addEventListener("change", ajusta); ajusta();
+
+    /* 🤗 datasets do Hub: lista (vitrine/busca) com MARCAÇÃO — os ids
+       marcados vão no submit; sem marcação, a query segue como antes */
+    async function hfBuscar() {
+      const btn = document.getElementById("btn-hf");
+      const lista = document.getElementById("hf-lista");
+      const aviso = document.getElementById("hf-aviso");
+      btn.textContent = "… buscando";
+      try {
+        const q = encodeURIComponent(document.getElementById("entrada").value.trim());
+        const r = await fetch("/api/hf/datasets?q=" + q + "&limite=24");
+        const d = await r.json();
+        aviso.textContent = (d.token ? "🤗 token ativo" : "🤗 sem token (API pública — rate limit menor; configure na tela Sistema)")
+          + " — marque os datasets que quer incluir";
+        lista.innerHTML = (d.datasets || []).map(ds => {
+          const k = (ds.downloads >= 1000000 ? (ds.downloads/1000000).toFixed(1)+"M"
+                     : ds.downloads >= 1000 ? Math.round(ds.downloads/1000)+"k"
+                     : ds.downloads);
+          return '<label class="colecao-check">'
+            + '<input type="checkbox" class="hf-id" value="' + ds.id + '"> '
+            + '<b>' + ds.id + '</b> <span class="mini">⬇ ' + k + ' · ♥ ' + ds.likes + '</span>'
+            + '<div class="mini" style="opacity:.7;">' + (ds.descricao || "").slice(0, 120) + '</div></label>';
+        }).join("") || '<p class="mini">nada encontrado — tente outro termo</p>';
+      } catch {
+        aviso.textContent = "indisponível agora — tente de novo";
+      }
+      btn.textContent = "🔍 listar datasets";
+    }
+    sel.addEventListener("change", () => { if (sel.value === "hf") hfBuscar(); });
       // destino: "criar nova" revela o nome; no submit o nome vira o valor real
       const selCol = document.getElementById("colecao");
       const zonaNova = document.getElementById("zona-nova");
@@ -74,6 +116,16 @@
       });
       selCol.closest("form").addEventListener("submit", () => {
         if (selCol.value === "__nova__") selCol.value = nova.value.trim();
+        // 🤗 ids marcados da lista → campo único vírgula-separado
+        const marcados = [...document.querySelectorAll(".hf-id:checked")]
+          .map(c => c.value).join(",");
+        let oculto = document.getElementById("hf-ids");
+        if (!oculto) {
+          oculto = document.createElement("input");
+          oculto.type = "hidden"; oculto.name = "hf_ids"; oculto.id = "hf-ids";
+          selCol.closest("form").appendChild(oculto);
+        }
+        oculto.value = marcados;
       });
   </script>
 </section>

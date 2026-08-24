@@ -95,17 +95,28 @@ def docs_pasta(pasta: str, log=print) -> list:
     return docs
 
 
-def docs_hf(query: str, limite: int, log=print) -> list:
+def docs_hf(query: str, limite: int, log=print, ids: list[str] | None = None) -> list:
     """Cards (README) + LINHAS dos datasets do HuggingFace — sem gravar
     nada. O card sozinho não é 'o dataset': os DADOS de verdade vêm do
-    datasets-server (mesma esteira do ingest_hf)."""
-    achados = hf.buscar(query, limite, log=log)
+    datasets-server (mesma esteira do ingest_hf).
+
+    `ids`: SELEÇÃO EXPLÍCITA da UI (usuário marcou datasets na lista) —
+    busca NÃO roda, cada id escolhido entra por inteiro (pedido do dono:
+    "selecionar e incluir numa coleção"). Sem ids: busca por relevância
+    como sempre."""
+    alvos = []
+    if ids:
+        for i in ids[:max(1, limite)]:
+            alvos.append(str(i))
+        log(f"🤗 seleção manual: {len(alvos)} dataset(s)")
+    else:
+        alvos = [a["id"] for a in hf.buscar(query, limite, log=log)]
     docs = []
-    for a in achados:
-        c = hf.card(a["id"], log=log)
+    for a_id in alvos:
+        c = hf.card(a_id, log=log)
         if c:
             docs.append(c["doc"])
-        docs.extend(hf.dados(a["id"], log=log))
+        docs.extend(hf.dados(a_id, log=log))
     log(f"🤗 {len(docs)} documento(s) (cards + dados)")
     return docs
 

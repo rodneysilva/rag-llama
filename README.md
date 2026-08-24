@@ -4,7 +4,7 @@
 
 # RagAroy
 
-**Um assistente de IA completo rodando na sua máquina: converse com seus documentos, gere imagens e vídeos na sua GPU e execute código num sandbox — nada sai para a nuvem.**
+**Construa sua própria LLM local: alimente a base com o que VOCÊ precisa (RAG), pergunte e receba respostas com fontes em milissegundos — GPU sua, custo zero por pergunta.**
 
 [![Licença: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![CI multi-OS](https://img.shields.io/badge/CI-ubuntu%20%7C%20windows%20%7C%20macos-green.svg)](.github/workflows/ci-cd.yml)
@@ -17,21 +17,35 @@
 
 ---
 
+## A ideia em uma frase
+
+Sua base de conhecimento vira a memória de um modelo local: as perguntas
+do SEU domínio respondem **rápido e barato** (busca vetorial + resposta
+citando fontes), sem depender de API paga. Provedores externos (GLM,
+DeepSeek, OpenAI, Claude) são **complemento pontual** — ligados quando o
+assunto está fora do alcance das suas coleções ou das ferramentas MCP.
+
+| | local (RagAroy) | provedor externo |
+|---|---|---|
+| custo por pergunta | zero (GPU/CPU sua) | por token |
+| latência | milissegundos (cache/Qdrant) | segundos |
+| conhecimento | suas coleções (RAG) | treino do modelo + web |
+| uso ideal | pesquisas centradas no seu domínio, repetidas, com fontes | o que não está nas suas bases nem nos MCPs |
+
 ![geração de imagem pela conversa](docs/telas/demo-imagem.gif)
 
 ## O que dá pra fazer
 
-**💬 Conversar com seus documentos**
-- Pergunte em português sobre PDFs, pastas, datasets do HuggingFace e páginas da web — a resposta cita os trechos `[n]` e as fontes ficam num painel.
-- 4 modos: `híbrido` (base + modelo), `rag` (só a base — recusa honesta quando não sabe), `livre` e `auto` (o roteador decide entre base e web).
-- **🌐 pesquisa-web** marcável por conversa: baixa páginas completas para responder com informação atual.
-- Cache semântico (pergunta repetida responde na hora), raciocínio expansível em tempo real, voz (ditado e resposta falada, pt-BR) e troca de modelo a quente.
+**💬 Conversar com seus documentos (o coração)**
+- Alimente a base com PDFs, pastas, **datasets do HuggingFace** (agora com vitrine e seleção) e pesquisa web profunda — tudo com **modo Revisão**: nada grava sem aprovação.
+- Pergunte em português — a resposta cita os trechos `[n]` e as fontes ficam num painel. Fragmento forte responde **direto da base, zero token**.
+- 4 modos: `híbrido` (base + modelo), `rag` (só a base — recusa honesta), `livre` e `auto` (o roteador decide entre base e web).
+- Cache semântico (pergunta repetida responde na hora), raciocínio expansível em tempo real, voz (pt-BR) e troca de modelo a quente.
 
-**🔌 Plugar APIs externas (GLM, DeepSeek, OpenAI, Claude…)**
+**🔌 Plugar APIs externas (GLM, DeepSeek, OpenAI, Claude…) — quando o RAG não cobre**
 - Qualquer endpoint OpenAI-compatible vira um provedor no seletor do chat — basta `PROV_<id>_BASE_URL` + `PROV_<id>_API_KEY` no `.env` (editável na tela Sistema, chave mascarada).
-- A lista de modelos é a **REAL do provedor** (`GET /models` — nada de nome predefinido; fallback manual em `PROV_<id>_MODELOS`).
-- Modelos **multimodais** (👁 gpt-4o, claude, glm-4v…) também servem a **análise de imagem (i2t)** direto pela API externa — a GPU local nem é tocada.
-- O mesmo vale para o seu próprio servidor remoto: aponte para qualquer llama-server na rede.
+- A lista de modelos é a **REAL do provedor** (`GET /models`); modelos **multimodais** (👁 gpt-4o, claude, glm-4v…) também servem a **análise de imagem** direto pela API externa.
+- Regra de bolso: se a resposta demora ou custa e o assunto É da sua base, use o local — o externo é para o que está **fora** das suas coleções e dos MCPs.
 
 **🎨 Gerar imagem e vídeo pela conversa**
 - Texto→imagem (FLUX.1), texto→vídeo e imagem→vídeo (Wan 2.1/2.2) e GIF com loop — tudo com progresso ao vivo e o resultado entra na conversa.

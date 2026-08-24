@@ -26,6 +26,34 @@ def _headers() -> dict:
     return {"Authorization": f"Bearer {token}"} if token else {}
 
 
+def populares(limite: int = 12, log=print) -> list[dict]:
+    """Datasets MAIS BAIXADOS do Hub (o "vitrine" — q vazia na Biblioteca).
+    Mesmo formato de buscar(): [{id, descricao, downloads, likes, url}]."""
+    try:
+        r = httpx.get(f"{_API}/datasets",
+                      params={"sort": "downloads", "direction": -1,
+                              "limit": limite},
+                      headers=_headers(), timeout=_TIMEOUT)
+        r.raise_for_status()
+        return [_resumo(d) for d in r.json() if _resumo(d)][:limite]
+    except Exception as e:
+        log(f"⚠️ HF populares: {str(e)[:80]}")
+        return []
+
+
+def _resumo(d: dict) -> dict | None:
+    """Item da API do Hub → formato da UI (sem campos desnecessários)."""
+    rid = d.get("id") or ""
+    if not rid:
+        return None
+    return {"id": rid,
+            "descricao": (d.get("description") or d.get("cardData", {})
+                          .get("pretty_name") or "")[:200],
+            "downloads": d.get("downloads") or 0,
+            "likes": d.get("likes") or 0,
+            "url": f"https://huggingface.co/datasets/{rid}"}
+
+
 def buscar(query: str, limite: int = 12, log=print) -> list[dict]:
     """Datasets do Hub por relevância/downloads: [{id, descricao, downloads,
     likes, url}]. Ordenado por downloads (mais usados = mais maduros).

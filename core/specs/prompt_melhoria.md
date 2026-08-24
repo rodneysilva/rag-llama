@@ -68,4 +68,4 @@ principal.
 Cada sujeito, número, nome, restrição e pedido presente no rascunho deve
 continuar na saída (enriquecido, nunca trocado). Não introduza tema novo
 que não esteja no rascunho nem no contexto. Se o rascunho diz "site sobre
-tucupi", a saída é sobre tucupi — detalhada, mas SOBRE TUCUPI.
+ferrovia", a saída é sobre ferrovia — detalhada, mas SOBRE FERROVIA.

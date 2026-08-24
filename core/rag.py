@@ -217,11 +217,12 @@ def llm(temperature=None):
                 pass
             self._registrar(entrada, saida, dur_total)
 
-    # temperatura: a do .env é respeitada COMO está (o operador manda);
-    # modelo de programação (ou pedido explícito de código) raciocinha frio
+    # TEMPERATURA: uma regra só (pedido do dono) — valor do Sistema/.env
+    # vale para TODAS as LLMs (local e provedores externos); default 0.5,
+    # alterável na tela Sistema sem restart. O antigo 0.15 para "coder"
+    # criava exceção invisível que contradizia o valor configurado.
     if temperature is None:
-        temperatura = (0.15 if "coder" in config.LLM_MODEL.lower()
-                       else config.TEMPERATURE)
+        temperatura = config.TEMPERATURE
     else:
         temperatura = temperature
     ov = _override()

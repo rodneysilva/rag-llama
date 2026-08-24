@@ -59,8 +59,8 @@ class TestGateDeTema:
     """O gate por cosseno (o reranker dava 0.0 para tudo — bug corrigido)."""
 
     def test_cosseno_doc_parecido(self):
-        a = "receita de vatapa prato da culinaria baiana"
-        b = "vatapa e um prato tipico da culinaria baiana com camarao"
+        a = "como instalar docker no ubuntu servidor"
+        b = "docker e uma plataforma de containers amplamente usada no ubuntu"
         # cosseno de vetores identicos = 1
         assert pv._coss([1.0, 0.0], [1.0, 0.0]) == 1.0
 

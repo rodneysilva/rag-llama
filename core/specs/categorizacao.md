@@ -22,11 +22,11 @@ Retorne um objeto JSON com exatamente estes campos:
   - `ciencia` — biologia, física, química, matemática, pesquisa acadêmica
   - `indeterminado` — só se nada se encaixar (evite; prefira o mais próximo)
 - `categoria`: rótulo curto em português, em snake_case, no máximo 3 palavras,
-  descrevendo o TEMA específico do arquivo (ex.: "receitas_paraenses",
-  "dicas_python", "skills_claude", "documentacao_api").
-- `descricao`: uma frase em português (até 140 caracteres) dizindo o que o
-  arquivo contém/para que serve (ex.: "Receitas paraenses: tacacá, pirarucu
-  de casaca e pato no tucupi.").
+  descrevendo o TEMA específico do arquivo (ex.: "logica_python",
+  "dicas_git", "skills_claude", "documentacao_api").
+- `descricao`: uma frase em português (até 140 caracteres) dizendo o que o
+  arquivo contém/para que serve (ex.: "Exercícios de lógica em Python:
+  listas, dicionários e compreensões.").
 
 Regras:
 - Baseie a classificação no conteúdo real, não no nome da pasta.

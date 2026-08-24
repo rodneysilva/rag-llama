@@ -235,7 +235,7 @@ def reload():
     SCORE_MIN = float(os.getenv("SCORE_MIN", "0.35"))
     SCORE_DIRETO = float(os.getenv("SCORE_DIRETO", "0.65"))
     SCORE_FRACO = float(os.getenv("SCORE_FRACO", "0.55"))
-    TEMPERATURE = float(os.getenv("TEMPERATURE", "0.2"))
+    TEMPERATURE = float(os.getenv("TEMPERATURE", "0.5"))
     PROMPT_SYSTEM = os.getenv(
         "PROMPT_SYSTEM",
         "Você é um assistente que responde em português usando APENAS o contexto fornecido.",

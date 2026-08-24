@@ -1910,10 +1910,14 @@ def sair():
 async def hx_aquisicao(request: Request, fonte: str = Form("pesquisa"),
                        entrada: str = Form(default=""), limite: int = Form(6),
                        colecao: str = Form(default=""),
+                       hf_ids: str = Form(default=""),
                        arquivos: list[UploadFile] | None = File(None)):
     """UMA entrada para todas as fontes — todo caminho termina na revisão."""
     entrada = (entrada or "").strip()
     colecao = colecao.strip() or None
+    # 🤗 ids MARCADOS na lista de datasets (campo único vírgula-separado —
+    # checkboxes com o MESMO name viram lista, mas o hx-post manda string)
+    ids_hf = [i.strip() for i in hf_ids.split(",") if i.strip()] or None
     try:
         if fonte == "pesquisa":
             if not entrada:
@@ -1928,11 +1932,13 @@ async def hx_aquisicao(request: Request, fonte: str = Form("pesquisa"),
                                          colecao=colecao))
             job, kind, rotulo = r["job"], "preview", f"revisão · {entrada[:50]}"
         elif fonte == "hf":
-            if not entrada:
-                raise ValueError("informe o que buscar no Hub")
+            if not entrada and not ids_hf:
+                raise ValueError("informe o que buscar no Hub (ou marque datasets)")
             r = ingest_preview(PreviewIn(fonte="hf", query=entrada,
-                                         limite=limite, colecao=colecao))
-            job, kind, rotulo = r["job"], "preview", f"huggingface · {entrada[:40]}"
+                                         limite=limite, colecao=colecao,
+                                         ids=ids_hf))
+            _rot = f"{len(ids_hf)} dataset(s)" if ids_hf else entrada[:40]
+            job, kind, rotulo = r["job"], "preview", f"huggingface · {_rot}"
         else:  # arquivos (upload) → dry-run (a rota salva em datasets/upload)
             if not arquivos:
                 raise ValueError("selecione ao menos um arquivo")
@@ -3271,6 +3277,7 @@ class PreviewIn(BaseModel):
     pasta: str = ""
     query: str = ""             # hf: o que buscar no Hub
     limite: int = 8             # hf: máx. de datasets
+    ids: list[str] | None = None  # hf: datasets MARCADOS na UI (seleção explícita)
     colecao: str | None = None  # alvo do gate de tema (opcional)
 
 
@@ -3308,6 +3315,22 @@ def _preview_disparar(docs_fn, colecao_alvo: str | None) -> str:
     return job
 
 
+@app.get("/api/hf/datasets")
+def hf_datasets(q: str = "", limite: int = 12, request: Request = None):
+    """Datasets do HuggingFace para SELECIONAR na Biblioteca (pedido do
+    dono: "aparecer tudo o que o HF oferece, selecionar e incluir numa
+    coleção"). Busca por relevância com ordenação por downloads; `q` vazio
+    lista os MAIS BAIXADOS (trending-like). Token do .env (se configurado
+    na tela Sistema) amplia o rate-limit — sem token a API pública serve."""
+    _usuario(request)
+    from core import hf as _hf
+    if not (q or "").strip():
+        achados = _hf.populares(limite, log=lambda m, g="": None)
+    else:
+        achados = _hf.buscar(q.strip(), limite, log=lambda m, g="": None)
+    return {"datasets": achados, "token": bool(getattr(config, "HF_TOKEN", ""))}
+
+
 @app.post("/api/ingest/preview")
 def ingest_preview(body: PreviewIn):
     """DRY-RUN da ingestão: pipeline inteiro (leitura → limpeza → chunks) e
@@ -3317,11 +3340,13 @@ def ingest_preview(body: PreviewIn):
     /api/ingest/preview/aplicar."""
     from core import preview as _pv
     if body.fonte == "hf":
-        if not body.query.strip():
-            raise HTTPException(status_code=400, detail="informe o que buscar no Hub")
+        if not body.ids and not body.query.strip():
+            raise HTTPException(status_code=400, detail="informe o que buscar no Hub (ou marque datasets da lista)")
         query, limite = body.query.strip(), body.limite
+        ids_sel = body.ids or None
         job = _preview_disparar(
-            lambda log: _pv.docs_hf(query, limite, log=log), body.colecao)
+            lambda log: _pv.docs_hf(query, limite, log=log, ids=ids_sel),
+            body.colecao)
     elif body.fonte == "pasta":
         if not body.pasta.strip():
             raise HTTPException(status_code=400, detail="informe a pasta no servidor")
