@@ -903,6 +903,22 @@ da API**.
   O 502 do Cloudflare em ai.disroy.org durante ~20 s = restart da API
   no deploy (CI `--force-recreate`) — janela normal de publicação; a UI
   aberta se recupera sozinha (polling/toast).
+- **🤗 HF com SELEÇÃO + TEMPERATURE única (24/08, 20h)**: Biblioteca →
+  fonte `huggingface (datasets)` abre VITRINE (`GET /api/hf/datasets` sem
+  `q` = mais baixados; com `q` = busca do `hf.buscar`) com CHECKBOXES —
+  ids marcados (`hf_ids` vírgula-separado no form) entram INTEIROS na
+  revisão (`PreviewIn.ids` → `docs_hf(ids=)` pula a busca); sem marcação
+  segue a query. `hf.populares()`/_resumo compartilham o formato. O aviso
+  da UI mostra se HF_TOKEN está ativo (ele NÃO está no .env — colar na
+  tela Sistema e SALVAR; sem token a API pública serve com rate-limit
+  menor). **TEMPERATURE 0.5 para TODAS as LLMs** (default 0.5 no config;
+  override 0.15 do coder REMOVIDO — uma regra, editável no Sistema;
+  .env da VPS já em 0.5). **Termos de teste NEUTROS**: nunca usar o
+  vocabulário de teste do dono (tacacá/vatapá/tucupi…) em
+  tests/tests_manual/specs-exemplos — trocado por docker/python/k8s.
+  README: framing "sua LLM local com RAG" + tabela local×externo
+  (custo/latência/uso). Permissões do Kilo: `permission` allow-all no
+  `~/.config/kilo/kilo.json` (vale para code/architect/plan).
 - **🌐 Provedores EXTERNOS de LLM (24/08, 16h)**: `core/provedores.py` —
   qualquer endpoint OpenAI-compatible (glm/deepseek/openai/anthropic…
   e o PRÓPRIO llama-server remoto) vira grupo 🌐 no seletor do chat.
