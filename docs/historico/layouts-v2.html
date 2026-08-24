@@ -1,0 +1,1475 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Layouts v2 — 30 propostas (Chat LLM · Multimodal · Importar RAG)</title>
+<!--
+  ════════════════════════════════════════════════════════════════════
+  LAYOUTS v2 — 30 propostas aplicando P8 (seleção explícita) e P9
+  (infra existente sempre visível). Premissas: docs/premissas-chat-central.md
+
+  3 seções × 10 layouts:
+    💬 CHAT LLM      — conversa com seleção de coleções/modo sempre visível
+    🎬 MULTIMODAL    — modalidade selecionada por clique (P8), nunca por LLM
+    📥 IMPORTAR RAG  — ingestão/seed seguindo o wizard de 7 etapas do core
+
+  Arquivo único, zero dependências. Cada layout mostra ONDE está cada seletor.
+  ════════════════════════════════════════════════════════════════════
+-->
+<style>
+/* ═══════════ TOKENS (RagAroy) ═══════════ */
+:root{
+  --background: oklch(0.13 0.028 261.7); --card: oklch(0.19 0.03 261.7);
+  --muted: oklch(0.24 0.03 261.7); --fg: oklch(0.93 0.01 261.7);
+  --fg-muted: oklch(0.65 0.02 261.7); --primary: oklch(0.62 0.19 260);
+  --primary-fg: oklch(0.98 0 0); --accent: oklch(0.28 0.03 261.7);
+  --ok: oklch(0.7 0.15 155); --warn: oklch(0.78 0.14 85);
+  --danger: oklch(0.6 0.2 25); --violet: oklch(0.66 0.16 300);
+  --pink: oklch(0.7 0.15 350); --cyan: oklch(0.72 0.12 200);
+  --border: oklch(0.30 0.03 261.7); --input: oklch(0.30 0.03 261.7);
+  --ring: oklch(0.62 0.19 260); --popover: oklch(0.21 0.03 261.7);
+  --radius: 0.6rem; --shadow: 0 10px 30px -10px oklch(0 0 0/.5);
+}
+html[data-theme="light"]{
+  --background: oklch(0.975 0.005 261.7); --card: oklch(1 0 0);
+  --muted: oklch(0.93 0.008 261.7); --fg: oklch(0.18 0.02 261.7);
+  --fg-muted: oklch(0.45 0.02 261.7); --primary: oklch(0.5 0.19 260);
+  --accent: oklch(0.9 0.012 261.7); --border: oklch(0.87 0.01 261.7);
+  --input: oklch(0.83 0.012 261.7); --popover: oklch(1 0 0);
+  --shadow: 0 10px 30px -12px oklch(0.3 0.02 261.7/.25);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{font-size:clamp(13px,calc(9px+.38vw),21px)}
+body{background:var(--background);color:var(--fg);line-height:1.45;
+  font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,Inter,sans-serif}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,select,textarea{font:inherit;color:inherit}
+svg{flex-shrink:0}
+:focus-visible{outline:2px solid var(--ring);outline-offset:1px;border-radius:4px}
+.mono{font-family:ui-monospace,Consolas,monospace}
+kbd{font-family:ui-monospace,Consolas,monospace;font-size:.7rem;background:var(--muted);
+  border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:.1rem .4rem}
+
+/* ═══════════ HEADER GLOBAL ═══════════ */
+.top{position:sticky;top:0;z-index:50;background:color-mix(in oklab,var(--background) 90%,transparent);
+  backdrop-filter:blur(8px);border-bottom:1px solid var(--border);
+  display:flex;gap:.7rem;align-items:center;padding:.65rem 1rem;flex-wrap:wrap}
+.top .logo{width:1.5rem;height:1.5rem;border-radius:6px;flex-shrink:0;
+  background:linear-gradient(135deg,var(--primary),oklch(.7 .15 300));
+  display:grid;place-items:center;font-size:.85rem}
+.top b{font-size:.95rem}
+.top .sp{flex:1}
+.abas-top{display:flex;gap:.3rem}
+.abt{padding:.4rem .85rem;border-radius:9px;font-size:.82rem;font-weight:600;
+  color:var(--fg-muted);border:1px solid transparent;display:inline-flex;gap:.4rem;align-items:center}
+.abt:hover{color:var(--fg);background:var(--accent)}
+.abt.on{background:color-mix(in oklab,var(--primary) 18%,transparent);
+  border-color:color-mix(in oklab,var(--primary) 45%,transparent);color:var(--fg)}
+.abt .n{font-size:.62rem;background:var(--muted);border-radius:99px;padding:0 .4rem;
+  font-variant-numeric:tabular-nums}
+
+/* ═══════════ ÍNDICE POR SEÇÃO ═══════════ */
+.wrap{max-width:74rem;margin:0 auto;padding:1.2rem 1rem 4rem}
+.secao{display:none}
+.secao.on{display:block}
+.secao>.intro{margin-bottom:1.2rem;padding:1rem 1.2rem;border:1px solid var(--border);
+  border-radius:12px;background:var(--card)}
+.secao>.intro h2{font-size:1.15rem;margin-bottom:.3rem}
+.secao>.intro p{font-size:.85rem;color:var(--fg-muted);max-width:60rem}
+.secao>.intro b{color:var(--fg)}
+
+.indice{display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));
+  gap:.5rem;margin-bottom:1.6rem}
+.indice a{display:flex;gap:.55rem;align-items:center;padding:.6rem .75rem;
+  border:1px solid var(--border);border-radius:10px;text-decoration:none;
+  color:var(--fg-muted);font-size:.8rem;background:var(--card);min-width:0}
+.indice a:hover{border-color:var(--primary);color:var(--fg)}
+.indice a .num{width:1.5rem;height:1.5rem;border-radius:7px;background:var(--muted);
+  display:grid;place-items:center;font-size:.7rem;font-weight:700;flex-shrink:0}
+.indice a .tt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ═══════════ CARD DE CADA LAYOUT ═══════════ */
+.ex{border:1px solid var(--border);border-radius:14px;background:var(--card);
+  margin-bottom:1.8rem;overflow:hidden;scroll-margin-top:4.5rem}
+.ex>header{display:flex;gap:.7rem;align-items:flex-start;padding:.85rem 1rem .7rem;
+  border-bottom:1px solid var(--border);flex-wrap:wrap;background:var(--popover)}
+.ex>header .num{width:2rem;height:2rem;border-radius:9px;display:grid;place-items:center;
+  font-size:.85rem;font-weight:800;flex-shrink:0;
+  background:color-mix(in oklab,var(--primary) 22%,var(--card));color:var(--primary)}
+.ex>header h3{font-size:1rem}
+.ex>header .ref{font-size:.72rem;color:var(--fg-muted)}
+.ex>header .sp{flex:1}
+.ex .desc{padding:.7rem 1rem;font-size:.82rem;color:var(--fg-muted);max-width:62rem;
+  border-bottom:1px dashed var(--border)}
+.ex .desc b{color:var(--fg)}
+.ex .desc .onde{color:var(--ok);font-weight:600}
+/* palco: onde o layout demo vive */
+.palco{padding:1rem;background:var(--background);position:relative}
+.palco .nota-palco{font-size:.65rem;color:var(--fg-muted);text-align:center;margin-top:.6rem;
+  font-family:ui-monospace,Consolas,monospace}
+.ex details{border-top:1px solid var(--border)}
+.ex summary{cursor:pointer;padding:.6rem 1rem;font-size:.78rem;color:var(--fg-muted);user-select:none}
+.ex summary:hover{color:var(--fg)}
+.ex .quando{padding:0 1rem .9rem;font-size:.78rem;color:var(--fg-muted)}
+.ex .quando b{color:var(--fg)}
+.ex .quando ul{margin:.3rem 0 0 1.1rem}
+.ex .quando li{margin-bottom:.2rem}
+
+/* ═══════════ COMPONENTES COMPARTILHADOS DOS LAYOUTS ═══════════ */
+/* janela de chat genérica (os 30 layouts compõem com estes) */
+.janela{border:1px solid var(--border);border-radius:12px;overflow:hidden;
+  background:var(--card);display:flex;flex-direction:column;min-width:0}
+.janela .j-top{display:flex;gap:.5rem;align-items:center;padding:.55rem .8rem;
+  border-bottom:1px solid var(--border);min-width:0;flex-wrap:wrap}
+.janela .j-top .t{font-size:.8rem;font-weight:600;min-width:0;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.j-top .sp{flex:1}
+.j-corpo{flex:1;padding:.8rem;display:flex;flex-direction:column;gap:.7rem;overflow:auto;min-height:8rem}
+.msg{display:flex;gap:.55rem;min-width:0}
+.msg .av{width:1.7rem;height:1.7rem;border-radius:99px;flex-shrink:0;display:grid;
+  place-items:center;font-size:.72rem;background:var(--muted)}
+.msg .av.ia{background:color-mix(in oklab,var(--primary) 30%,transparent)}
+.msg .bd{min-width:0;flex:1}
+.msg .quem{font-size:.68rem;font-weight:700;color:var(--fg-muted);display:flex;gap:.4rem;align-items:center;flex-wrap:wrap}
+.msg .tx{font-size:.8rem;margin-top:.15rem;overflow-wrap:break-word;white-space:pre-wrap}
+.msg .tx b{color:var(--fg)}
+
+/* COMPOSER (barra de escrever) */
+.composer{border-top:1px solid var(--border);padding:.6rem .7rem;display:flex;
+  flex-direction:column;gap:.45rem;background:var(--card)}
+.linha-in{display:flex;gap:.45rem;align-items:flex-end}
+.linha-in .campo{flex:1;min-width:0;background:var(--background);border:1px solid var(--input);
+  border-radius:10px;padding:.5rem .75rem;font-size:.82rem;color:var(--fg-muted);
+  min-height:2.2rem;display:flex;align-items:center}
+.enviar{width:2.2rem;height:2.2rem;border-radius:10px;background:var(--primary);
+  color:var(--primary-fg);display:grid;place-items:center;flex-shrink:0;font-size:.9rem}
+.mic{width:2.2rem;height:2.2rem;border-radius:10px;border:1px solid var(--border);
+  display:grid;place-items:center;flex-shrink:0}
+
+/* PILLS DE COLEÇÃO (o seletor que faltava!) */
+.pillc{display:inline-flex;align-items:center;gap:.35rem;font-size:.7rem;
+  background:color-mix(in oklab,var(--primary) 15%,transparent);
+  border:1px solid color-mix(in oklab,var(--primary) 40%,transparent);
+  color:var(--primary);border-radius:99px;padding:.18rem .6rem;max-width:12rem;white-space:nowrap}
+.pillc .nm{overflow:hidden;text-overflow:ellipsis}
+.pillc .x{opacity:.6}.pillc .x:hover{opacity:1}
+.pillc.off{background:var(--accent);color:var(--fg-muted);border-color:var(--border)}
+
+/* chips de MODO (rag/híbrido/livre/auto) */
+.chipmodo{display:inline-flex;gap:.35rem;align-items:center;font-size:.7rem;font-weight:600;
+  padding:.18rem .6rem;border-radius:99px;border:1px solid var(--border);color:var(--fg-muted)}
+.chipmodo.on{background:color-mix(in oklab,var(--primary) 20%,transparent);
+  border-color:var(--primary);color:var(--fg)}
+
+/* chips de MODALIDADE (P8 — a seleção explícita!) */
+.modchips{display:flex;gap:.3rem;flex-wrap:wrap}
+.mod{display:inline-flex;gap:.35rem;align-items:center;font-size:.74rem;font-weight:600;
+  padding:.28rem .75rem;border-radius:9px;border:1px solid var(--border);color:var(--fg-muted)}
+.mod:hover{color:var(--fg);border-color:var(--fg-muted)}
+.mod.on{color:var(--primary-fg);background:var(--primary);border-color:var(--primary)}
+
+/* segmented control */
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:9px;overflow:hidden}
+.seg button{padding:.3rem .8rem;font-size:.74rem;font-weight:600;color:var(--fg-muted)}
+.seg button:not(:last-child){border-right:1px solid var(--border)}
+.seg button.on{background:var(--primary);color:var(--primary-fg)}
+
+/* badge de fonte RAG (a citação) */
+.fonte{display:inline-flex;gap:.3rem;align-items:center;font-size:.66rem;
+  background:var(--accent);border:1px solid var(--border);border-radius:7px;
+  padding:.14rem .5rem;color:var(--fg-muted);max-width:14rem;white-space:nowrap}
+.fonte .nm{overflow:hidden;text-overflow:ellipsis}
+.fonte.ok{border-color:color-mix(in oklab,var(--ok) 45%,transparent);color:var(--ok)}
+.gridfontes{display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.4rem}
+
+/* dropdown aberto (mock do MultiCombobox do projeto) */
+.dd{position:absolute;z-index:30;background:var(--popover);border:1px solid var(--border);
+  border-radius:11px;box-shadow:var(--shadow);padding:.4rem;min-width:15rem;max-width:100%}
+.dd .dd-b{display:flex;gap:.45rem;align-items:center;padding:.35rem .55rem;border-radius:8px}
+.dd .dd-b:hover{background:var(--accent)}
+.dd .grp{font-size:.6rem;text-transform:uppercase;letter-spacing:.05em;color:var(--fg-muted);
+  padding:.4rem .55rem .15rem;font-weight:700}
+.dd .ck{width:.85rem;height:.85rem;border:1px solid var(--border);border-radius:4px;
+  display:grid;place-items:center;font-size:.65rem;flex-shrink:0}
+.dd .ck.on{background:var(--primary);border-color:var(--primary);color:var(--primary-fg)}
+.dd .npts{margin-left:auto;font-size:.62rem;color:var(--fg-muted);font-variant-numeric:tabular-nums}
+
+/* etapas do wizard de ingestão (infra real do core/ingest) */
+.wiz{display:flex;gap:.4rem;flex-wrap:wrap}
+.etapa{display:inline-flex;gap:.35rem;align-items:center;font-size:.68rem;font-weight:600;
+  padding:.3rem .65rem;border-radius:99px;border:1px solid var(--border);color:var(--fg-muted)}
+.etapa .b{width:.55rem;height:.55rem;border-radius:99px;background:var(--muted)}
+.etapa.feita{color:var(--ok);border-color:color-mix(in oklab,var(--ok) 40%,transparent)}
+.etapa.feita .b{background:var(--ok)}
+.etapa.ativa{color:var(--primary);border-color:var(--primary);background:
+  color-mix(in oklab,var(--primary) 12%,transparent)}
+.etapa.ativa .b{background:var(--primary);animation:pulsa 1.2s infinite}
+@keyframes pulsa{50%{opacity:.35}}
+
+/* dropzone */
+.drop{border:2px dashed var(--border);border-radius:12px;padding:1.6rem 1rem;
+  text-align:center;color:var(--fg-muted);font-size:.85rem;transition:.15s}
+.drop:hover,.drop.over{border-color:var(--primary);background:
+  color-mix(in oklab,var(--primary) 6%,transparent);color:var(--fg)}
+
+/* barra de progresso */
+.pbar{height:.4rem;background:var(--muted);border-radius:99px;overflow:hidden}
+.pbar i{display:block;height:100%;background:var(--primary);border-radius:99px;transition:width .4s}
+
+/* log de job */
+.logj{font-family:ui-monospace,Consolas,monospace;font-size:.66rem;color:var(--fg-muted);
+  background:var(--background);border:1px solid var(--border);border-radius:9px;
+  padding:.55rem .7rem;max-height:7rem;overflow-y:auto;white-space:pre-wrap;overflow-wrap:break-word}
+
+/* mini artefatos */
+.mini-cod{border:1px solid color-mix(in oklab,var(--violet) 40%,transparent);border-radius:9px;
+  overflow:hidden;max-width:26rem;background:var(--card)}
+.mini-cod .top{display:flex;gap:.4rem;align-items:center;padding:.35rem .6rem;font-size:.68rem;
+  background:color-mix(in oklab,var(--violet) 10%,transparent)}
+.mini-cod .top .ling{color:var(--violet);font-weight:700;text-transform:uppercase}
+.mini-cod .top .arq{font-family:ui-monospace,Consolas,monospace;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.mini-cod pre{padding:.5rem .6rem;font-size:.66rem;overflow-x:auto;
+  font-family:ui-monospace,Consolas,monospace;color:var(--fg-muted)}
+.mini-img{width:7.5rem;aspect-ratio:1;border-radius:9px;border:1px solid
+  color-mix(in oklab,var(--pink) 40%,transparent);display:grid;place-items:center;font-size:1.6rem}
+.mini-vid{aspect-ratio:16/9;border-radius:9px;border:1px solid
+  color-mix(in oklab,var(--pink) 40%,transparent);display:grid;place-items:center;font-size:1.4rem;position:relative}
+.mini-vid .pp{width:2rem;height:2rem;border-radius:99px;background:oklch(0 0 0/.5);
+  display:grid;place-items:center;color:#fff;font-size:.8rem}
+.v1{background:linear-gradient(135deg,oklch(.5 .18 320),oklch(.25 .1 240))}
+.v2{background:linear-gradient(135deg,oklch(.55 .16 200),oklch(.3 .08 260))}
+.v3{background:linear-gradient(135deg,oklch(.45 .14 150),oklch(.25 .1 220))}
+.k{color:oklch(.75 .14 300)} .s{color:oklch(.75 .12 150)} .f{color:oklch(.78 .12 200)}
+.c{color:var(--fg-muted);font-style:italic} .n{color:oklch(.8 .1 60)}
+
+/* utils */
+.flex{display:flex} .gap4{gap:.4rem} .gap6{gap:.6rem} .aie{align-items:flex-end}
+.min0{min-width:0} .f1{flex:1} .wrapf{flex-wrap:wrap} .mt1{margin-top:.4rem}
+.muted{color:var(--fg-muted)} .okc{color:var(--ok)} .pri{color:var(--primary)}
+.badge{display:inline-flex;gap:.3rem;align-items:center;font-size:.66rem;font-weight:600;
+  padding:.12rem .5rem;border-radius:99px;border:1px solid var(--border);color:var(--fg-muted)}
+.badge.ok{color:var(--ok);border-color:color-mix(in oklab,var(--ok) 40%,transparent)}
+</style>
+</head>
+<body>
+<style>
+/* ═══════════ ESPECÍFICOS — CHAT LLM ═══════════ */
+/* L2 sidebar contexto */
+.l2{display:grid;grid-template-columns:14rem 1fr;gap:0;height:24rem}
+.l2 .side{border-right:1px solid var(--border);padding:.6rem;overflow-y:auto;background:var(--card)}
+.l2 .side .h{font-size:.68rem;font-weight:700;color:var(--fg-muted);margin:.4rem 0 .3rem;text-transform:uppercase;letter-spacing:.04em}
+.l2 .item{display:flex;gap:.5rem;align-items:center;padding:.4rem .5rem;border-radius:8px;font-size:.76rem;min-width:0;cursor:pointer}
+.l2 .item:hover{background:var(--accent)}
+.l2 .item .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.l2 .item .np{font-size:.62rem;color:var(--fg-muted);font-variant-numeric:tabular-nums}
+/* L5 cards de fonte (Perplexity) */
+.cardfonte{border:1px solid var(--border);border-radius:10px;padding:.55rem .7rem;
+  background:var(--card);min-width:0;display:flex;flex-direction:column;gap:.2rem}
+.cardfonte .tt{font-size:.72rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cardfonte .ss{font-size:.64rem;color:var(--fg-muted);overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cardfonte .sc{font-size:.62rem;color:var(--ok);font-variant-numeric:tabular-nums}
+.gridcardf{display:grid;grid-template-columns:repeat(auto-fill,minmax(11rem,1fr));gap:.5rem}
+/* L6 split fontes */
+.l6{display:grid;grid-template-columns:1.4fr 1fr;gap:0;height:22rem}
+.l6 .dir{border-left:1px solid var(--border);padding:.6rem;overflow-y:auto;background:var(--card)}
+.chunk{border:1px solid var(--border);border-radius:9px;padding:.5rem .6rem;margin-bottom:.5rem;background:var(--background)}
+.chunk .tt{font-size:.68rem;font-weight:700;display:flex;gap:.4rem;align-items:center;min-width:0}
+.chunk .tt .arq{font-family:ui-monospace,Consolas,monospace;color:var(--fg-muted);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chunk .pp{font-size:.66rem;color:var(--fg-muted);margin-top:.2rem;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.chunk .sc{font-size:.62rem;color:var(--ok)}
+/* L7 timeline pipeline */
+.pipe{display:flex;flex-direction:column;gap:.25rem;margin-top:.5rem;
+  border-left:2px solid var(--border);padding-left:.7rem}
+.pstep{font-size:.68rem;color:var(--fg-muted);display:flex;gap:.5rem;align-items:baseline}
+.pstep .w{color:var(--ok);flex-shrink:0}
+.pstep b{color:var(--fg);font-weight:600}
+
+/* ═══════════ ESPECÍFICOS — MULTIMODAL ═══════════ */
+/* M5 galeria */
+.m5g{display:grid;grid-template-columns:repeat(auto-fill,minmax(7rem,1fr));gap:.5rem}
+/* M6 storyboard */
+.story{display:flex;gap:.5rem;overflow-x:auto;padding-bottom:.4rem}
+.stcard{min-width:12rem;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--card)}
+.stcard .im{aspect-ratio:16/10;display:grid;place-items:center;font-size:1.5rem}
+.stcard .bd{padding:.45rem .6rem;font-size:.66rem;color:var(--fg-muted)}
+.stcard .bd b{color:var(--fg);display:block;font-size:.7rem;margin-bottom:.1rem;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* M7 bancada */
+.m7{display:grid;grid-template-columns:16rem 1fr;gap:0;height:24rem}
+.m7 .esq{border-right:1px solid var(--border);padding:.7rem;overflow-y:auto;background:var(--card)}
+.m7 .prev{display:grid;place-items:center;background:var(--background);min-height:0}
+.fld{margin-bottom:.7rem}
+.fld label{font-size:.7rem;font-weight:700;display:block;margin-bottom:.25rem;color:var(--fg-muted)}
+.fld .in{width:100%;background:var(--background);border:1px solid var(--input);
+  border-radius:8px;padding:.4rem .6rem;font-size:.76rem}
+.fld select{width:100%;background:var(--background);border:1px solid var(--input);
+  border-radius:8px;padding:.4rem .6rem;font-size:.76rem}
+/* M10 popover parâmetros */
+.parampop{position:absolute;z-index:30;background:var(--popover);border:1px solid var(--border);
+  border-radius:11px;box-shadow:var(--shadow);padding:.7rem;width:16rem}
+
+/* ═══════════ ESPECÍFICOS — IMPORTAR RAG ═══════════ */
+/* I2 drop central / I3 duas colunas */
+.i3{display:grid;grid-template-columns:1fr 1fr;gap:0;height:21rem}
+.i3 .col{padding:.7rem;overflow-y:auto}
+.i3 .col.dir{border-left:1px solid var(--border);background:var(--card)}
+.arqrow{display:flex;gap:.5rem;align-items:center;padding:.4rem .55rem;border-radius:8px;
+  font-size:.74rem;min-width:0;border:1px solid transparent}
+.arqrow:hover{background:var(--accent)}
+.arqrow .ic{flex-shrink:0;font-size:.8rem}
+.arqrow .nm{font-family:ui-monospace,Consolas,monospace;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1;font-size:.68rem}
+.arqrow .st{font-size:.62rem;flex-shrink:0}
+.arqrow .st.ok{color:var(--ok)} .arqrow .st.run{color:var(--warn)}
+/* I4 cards de coleção */
+.colcard{border:1px solid var(--border);border-radius:11px;padding:.75rem;background:var(--card);
+  display:flex;flex-direction:column;gap:.3rem;min-width:0;cursor:pointer;transition:.15s}
+.colcard:hover{border-color:var(--primary)}
+.colcard.sel{border-color:var(--primary);background:color-mix(in oklab,var(--primary) 8%,transparent)}
+.colcard .nm{font-family:ui-monospace,Consolas,monospace;font-size:.78rem;font-weight:700;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.colcard .ds{font-size:.68rem;color:var(--fg-muted);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.colcard .np{font-size:.66rem;color:var(--primary);font-variant-numeric:tabular-nums}
+.gridcol{display:grid;grid-template-columns:repeat(auto-fill,minmax(13rem,1fr));gap:.6rem}
+/* I5 seed */
+.seedsteps{display:flex;flex-direction:column;gap:.4rem}
+.seedstep{display:flex;gap:.6rem;align-items:flex-start;font-size:.74rem;min-width:0}
+.seedstep .b{width:1.3rem;height:1.3rem;border-radius:99px;display:grid;place-items:center;
+  font-size:.62rem;flex-shrink:0;background:var(--muted);color:var(--fg-muted)}
+.seedstep.ok .b{background:var(--ok);color:#fff}
+.seedstep.run .b{background:var(--primary);color:var(--primary-fg);animation:pulsa 1.2s infinite}
+.seedstep .tx{min-width:0;flex:1}
+.seedstep .tx b{display:block}
+.seedstep .tx .sub{color:var(--fg-muted);font-size:.68rem}
+/* I6 fila tabela */
+.filatbl{width:100%;border-collapse:collapse;font-size:.74rem}
+.filatbl th{font-size:.62rem;text-transform:uppercase;color:var(--fg-muted);text-align:left;
+  padding:.4rem .55rem;border-bottom:1px solid var(--border)}
+.filatbl td{padding:.45rem .55rem;border-bottom:1px solid color-mix(in oklab,var(--border) 40%,transparent);min-width:0}
+.filatbl .mono-s{font-family:ui-monospace,Consolas,monospace;font-size:.66rem;max-width:14rem;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* I8 modal revisão */
+.modalrev{position:relative;background:var(--popover);border:1px solid var(--border);
+  border-radius:13px;box-shadow:var(--shadow);max-width:34rem;margin:0 auto;overflow:hidden}
+.modalrev .mh{display:flex;gap:.5rem;align-items:center;padding:.7rem .9rem;border-bottom:1px solid var(--border)}
+.modalrev .mb{padding:.8rem .9rem;max-height:16rem;overflow-y:auto}
+.revchunk{border:1px solid var(--border);border-radius:9px;padding:.5rem .65rem;margin-bottom:.5rem;background:var(--card)}
+.revchunk .hd{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+.revchunk .pp{font-size:.68rem;color:var(--fg-muted);margin-top:.25rem}
+.tagarea{font-size:.6rem;font-weight:700;padding:.08rem .45rem;border-radius:99px;
+  background:color-mix(in oklab,var(--violet) 18%,transparent);color:var(--violet)}
+.tagcat{font-size:.6rem;padding:.08rem .45rem;border-radius:99px;border:1px solid var(--border);color:var(--fg-muted)}
+</style>
+<header class="top">
+  <span class="logo">◧</span><b>Layouts v2</b>
+  <span style="font-size:.68rem;color:var(--fg-muted)">· P8 seleção explícita · P9 infra visível</span>
+  <div class="sp"></div>
+  <nav class="abas-top">
+    <button class="abt on" data-s="llm" onclick="sec(this)">💬 Chat LLM <span class="n">10</span></button>
+    <button class="abt" data-s="mm" onclick="sec(this)">🎬 Multimodal <span class="n">10</span></button>
+    <button class="abt" data-s="imp" onclick="sec(this)">📥 Importar RAG <span class="n">10</span></button>
+  </nav>
+  <button class="abt" onclick="toggleTheme()" id="themeBtn">☀️</button>
+</header>
+
+<div class="wrap">
+
+<!-- ══════════════════════════════════════════════════
+     SEÇÃO 1 — CHAT LLM (10)
+     ══════════════════════════════════════════════════ -->
+<section class="secao on" id="s-llm">
+  <div class="intro">
+    <h2>💬 Chat LLM — 10 layouts</h2>
+    <p>Todo layout mantém <b>visível e constante</b> a tríade de seleção do projeto (P8/P9):
+    <b>① coleções RAG</b> (nomes reais do Qdrant), <b>② modo</b> (rag · híbrido · livre · auto)
+    e <b>③ MCPs</b>. A diferença entre os 10 é <b>onde</b> essa tríade mora.</p>
+  </div>
+  <nav class="indice">
+    <a href="#L1"><span class="num">1</span><span class="tt">Pills no composer</span></a>
+    <a href="#L2"><span class="num">2</span><span class="tt">Sidebar de contexto</span></a>
+    <a href="#L3"><span class="num">3</span><span class="tt">Toolbar dupla</span></a>
+    <a href="#L4"><span class="num">4</span><span class="tt">Command-first ⌘K</span></a>
+    <a href="#L5"><span class="num">5</span><span class="tt">Cards de fonte</span></a>
+    <a href="#L6"><span class="num">6</span><span class="tt">Split de chunks</span></a>
+    <a href="#L7"><span class="num">7</span><span class="tt">Pipeline inline</span></a>
+    <a href="#L8"><span class="num">8</span><span class="tt">Denso p/ power user</span></a>
+    <a href="#L9"><span class="num">9</span><span class="tt">Focus mode</span></a>
+    <a href="#L10"><span class="num">10</span><span class="tt">Chat + catálogo</span></a>
+  </nav>
+
+  <!-- ═══ L1 · PILLS NO COMPOSER ═══ -->
+  <article class="ex" id="L1">
+    <header><span class="num">1</span>
+      <div><h3>Pills de coleção no composer</h3><span class="ref">Ref: ChatGPT attachments · Gmail chips</span></div>
+    </header>
+    <p class="desc">As coleções selecionadas são <b>pills grudadas no composer</b> (como anexos de e-mail):
+    <span class="onde">o RAG está literalmente no seu input</span> — impossível esquecer o que está ativo.
+    Modo e MCP ficam na linha de cima.</p>
+    <div class="palco">
+      <div class="janela" style="max-width:34rem;margin:0 auto;height:22rem">
+        <div class="j-top">
+          <span class="t">💬 conversa</span><div class="sp"></div>
+          <span class="chipmodo on">🔗 híbrido</span><span class="chipmodo">📚 rag</span>
+          <span class="chipmodo">🧠 livre</span><span class="chipmodo">🤖 auto</span>
+        </div>
+        <div class="j-corpo">
+          <div class="msg"><div class="av">🧑</div><div class="bd">
+            <div class="quem">Você</div><div class="tx">Como funciona o GC do .NET em modo servidor?</div></div></div>
+          <div class="msg"><div class="av ia">🤖</div><div class="bd">
+            <div class="quem">Assistente <span class="badge ok">📚 3 fontes</span></div>
+            <div class="tx">O GC em modo servidor cria <b>um heap por núcleo</b>… <b>[1][3]</b></div>
+            <div class="gridfontes">
+              <span class="fonte ok"><span>📄</span><span class="nm">dotnet_fundamentals · gc.md</span><span>0,71</span></span>
+              <span class="fonte ok"><span>📄</span><span class="nm">dotnet_bcl · memory.md</span><span>0,64</span></span>
+            </div></div></div>
+        </div>
+        <div class="composer">
+          <div class="flex gap4 wrapf">
+            <span class="pillc">📚 <span class="nm">dotnet_fundamentos</span><button class="x">✕</button></span>
+            <span class="pillc">📚 <span class="nm">dotnet_bcl</span><button class="x">✕</button></span>
+            <span class="pillc off">＋ coleção</span>
+            <span class="pillc off">🔌 filesystem</span>
+          </div>
+          <div class="linha-in">
+            <div class="campo">Pergunte sobre a base selecionada…</div>
+            <button class="mic">🎤</button><button class="enviar">➤</button>
+          </div>
+        </div>
+      </div>
+      <p class="nota-palco">↑ pills = o que entra na busca · chip de modo = como a LLM usa</p>
+    </div>
+    <details><summary>▸ quando usar este layout</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> o caso padrão do projeto — poucas coleções ativas (1–4), troca frequente.</li>
+      <li>Pills com <code>max-width</code> + truncate: nome longo nunca quebra (coleções da LLM são imprevisíveis).</li>
+      <li>É o layout mais próximo do <b>ColecaoPicker atual</b> do ChatTab — evolução natural.</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ L2 · SIDEBAR DE CONTEXTO ═══ -->
+  <article class="ex" id="L2">
+    <header><span class="num">2</span>
+      <div><h3>Sidebar de contexto (checkbox)</h3><span class="ref">Ref: Claude Projects · NotebookLM</span></div>
+    </header>
+    <p class="desc"><span class="onde">Todas as coleções visíveis o tempo todo</span> com checkbox e contador
+    de pontos — marcar/desmarcar sem abrir dropdown. Grupos por área (a metadata.area da ingestão).</p>
+    <div class="palco">
+      <div class="l2" style="max-width:44rem;margin:0 auto">
+        <div class="side">
+          <div class="h">📚 coleções · tecnologia</div>
+          <div class="item"><span class="ck on">✓</span><span class="nm">dotnet_fundamentos</span><span class="np">8.4k</span></div>
+          <div class="item"><span class="ck on">✓</span><span class="nm">dotnet_csharp</span><span class="np">5.1k</span></div>
+          <div class="item"><span class="ck"></span><span class="nm">py_linguagem</span><span class="np">9.8k</span></div>
+          <div class="item"><span class="ck"></span><span class="nm">py_ia_langchain</span><span class="np">12.9k</span></div>
+          <div class="h">🔌 mcps</div>
+          <div class="item"><span class="ck"></span><span class="nm">🔌 filesystem</span></div>
+          <div class="item"><span class="ck"></span><span class="nm">🔌 sequentialthinking</span></div>
+        </div>
+        <div class="janela" style="border:0;border-radius:0">
+          <div class="j-top"><span class="chipmodo on">🔗 híbrido</span><span class="badge">2 coleções ✓</span><div class="sp"></div><span class="badge ok">⚡ cache</span></div>
+          <div class="j-corpo">
+            <div class="msg"><div class="av ia">🤖</div><div class="bd">
+              <div class="quem">Assistente · base: dotnet_*</div>
+              <div class="tx">Busquei nas <b>2 coleções marcadas</b>… cada uma contribuiu com 4 fragmentos.</div></div></div>
+          </div>
+          <div class="composer"><div class="linha-in">
+            <div class="campo">Pergunta…</div><button class="enviar">➤</button></div></div>
+        </div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> bases grandes (as ~20 coleções do projeto) — ver tudo de uma vez.</li>
+      <li>Checkbox direto = zero cliques a menos que pills.</li>
+      <li>Custo: ~14rem de largura permanente.</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ L3 · TOOLBAR DUPLA ═══ -->
+  <article class="ex" id="L3">
+    <header><span class="num">3</span>
+      <div><h3>Toolbar dupla (contexto fixo)</h3><span class="ref">Ref: Slack · Linear editor</span></div>
+    </header>
+    <p class="desc"><span class="onde">Uma linha DEDICADA acima do composer</span> com tudo:
+    modo (segmented) + coleções (pills) + MCP. Fixa — não rola com a conversa.</p>
+    <div class="palco">
+      <div class="janela" style="max-width:36rem;margin:0 auto;height:20rem">
+        <div class="j-top"><span class="t">💬 conversa</span><div class="sp"></div>
+          <span class="badge ok">● qwen2.5-coder</span><span class="badge ok">⚡ 87</span></div>
+        <div class="j-corpo">
+          <div class="msg"><div class="av ia">🤖</div><div class="bd"><div class="quem">Assistente</div>
+            <div class="tx">Contexto atual aplicado a esta resposta <b>[1]</b>.</div></div></div>
+        </div>
+        <div class="composer">
+          <div class="flex gap4 wrapf" style="border:1px solid var(--border);border-radius:10px;padding:.4rem .5rem">
+            <span class="seg"><button class="on">🔗</button><button>📚</button><button>🧠</button><button>🤖</button></span>
+            <span class="pillc">📚 <span class="nm">py_stdlib</span> ✕</span>
+            <span class="pillc off">＋</span>
+            <span class="pillc off">🔌 0</span>
+          </div>
+          <div class="linha-in"><div class="campo">Pergunta…</div><button class="enviar">➤</button></div>
+        </div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> quem troca contexto A CADA pergunta — a toolbar é sempre alcançável.</li>
+      <li>Segmented do modo é mais rápido que chips soltos.</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ L4 · COMMAND-FIRST ═══ -->
+  <article class="ex" id="L4">
+    <header><span class="num">4</span>
+      <div><h3>Command-first (⌘K em tudo)</h3><span class="ref">Ref: Cursor · Raycast · Arc</span></div>
+    </header>
+    <p class="desc">Barra única minimalista; <span class="onde">digitar <code>@</code> abre o seletor de
+    coleção</span>, <code>/</code> comando, <code>#</code> MCP. Teclado-first, tela limpa.</p>
+    <div class="palco">
+      <div style="max-width:34rem;margin:0 auto;position:relative">
+        <div class="janela" style="height:16rem">
+          <div class="j-top muted" style="font-size:.72rem">tecle <kbd>@</kbd> coleção · <kbd>/</kbd> comando · <kbd>#</kbd> mcp</div>
+          <div class="j-corpo">
+            <div class="msg"><div class="av ia">🤖</div><div class="bd">
+              <div class="quem">Assistente · @py_linguagem @py_stdlib</div>
+              <div class="tx">Contexto das 2 coleções citadas no comando.</div></div></div>
+          </div>
+          <div class="composer"><div class="linha-in">
+            <div class="campo">@<b class="pri">py_lin</b> como funciona o GIL do python…</div>
+            <button class="enviar">➤</button></div></div>
+        </div>
+        <div class="dd" style="left:1.2rem;bottom:4.2rem">
+          <div class="grp">📚 coleções</div>
+          <div class="dd-b"><span class="ck on">✓</span><span class="mono" style="font-size:.74rem">py_linguagem</span><span class="npts">9.8k</span></div>
+          <div class="dd-b"><span class="ck"></span><span class="mono" style="font-size:.74rem">py_ia_langchain</span><span class="npts">12.9k</span></div>
+          <div class="dd-b"><span class="ck"></span><span class="mono" style="font-size:.74rem">py_stdlib</span><span class="npts">11.2k</span></div>
+        </div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> power user que odeia mouse — combina com o ⌘K já existente do projeto.</li>
+      <li>Menos descobribilidade: precisa de hint visível (a linha do topo).</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ L5 · CARDS DE FONTE ═══ -->
+  <article class="ex" id="L5">
+    <header><span class="num">5</span>
+      <div><h3>Cards de fonte (resposta com evidências)</h3><span class="ref">Ref: Perplexity · Google AI Overviews</span></div>
+    </header>
+    <p class="desc"><span class="onde">O RAG aparece como cards ACIMA da resposta</span> — cada card é um
+    chunk recuperado com score e arquivo. Clicar abre o chunk completo.</p>
+    <div class="palco">
+      <div style="max-width:40rem;margin:0 auto" class="janela">
+        <div class="j-top"><span class="pillc">📚 <span class="nm">dotnet_fundamentos</span> ✕</span>
+          <span class="chipmodo on">📚 rag</span><div class="sp"></div><span class="badge ok">6 chunks ≥ 0,35</span></div>
+        <div class="j-corpo">
+          <div class="msg"><div class="av">🧑</div><div class="bd"><div class="quem">Você</div>
+            <div class="tx">O que muda no GC entre .NET 7 e 8?</div></div></div>
+          <div class="msg"><div class="av ia">🤖</div><div class="bd">
+            <div class="quem">Assistente · fontes primeiro</div>
+            <div class="gridcardf">
+              <div class="cardfonte"><span class="tt">📄 gc-server.md</span><span class="ss">Server GC: heaps por núcleo, work stealing…</span><span class="sc">0,71</span></div>
+              <div class="cardfonte"><span class="tt">📄 whats-new-8.md</span><span class="ss">Dynamic P2P budgets, memory caps per heap…</span><span class="sc">0,68</span></div>
+              <div class="cardfonte"><span class="tt">📄 runtime-config.md</span><span class="ss">Configuração via runtimeconfig.json…</span><span class="sc">0,61</span></div>
+            </div>
+            <div class="tx mt1">No .NET 8 o <b>Dynamic P2P</b> redistribui orçamento entre heaps <b>[1][2]</b>…</div>
+          </div></div>
+        </div>
+        <div class="composer"><div class="linha-in"><div class="campo">Pergunta…</div><button class="enviar">➤</button></div></div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> respostas factuais auditáveis — evidência antes da conclusão.</li>
+      <li>Score visível treina o usuário a calibrar o <code>SCORE_MIN</code>.</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ L6 · SPLIT DE CHUNKS ═══ -->
+  <article class="ex" id="L6">
+    <header><span class="num">6</span>
+      <div><h3>Split: conversa × chunks recuperados</h3><span class="ref">Ref: NotebookLM · LangSmith trace</span></div>
+    </header>
+    <p class="desc"><span class="onde">Tudo que a busca achou fica à direita</span>, chunk por chunk com
+    arquivo e score — o que a LLM realmente leu, visível. Seletor de coleções no topo do painel.</p>
+    <div class="palco">
+      <div class="l6" style="max-width:50rem;margin:0 auto">
+        <div class="janela" style="border:0;border-radius:0">
+          <div class="j-top"><span class="pillc">📚 <span class="nm">py_ia_langchain</span> ✕</span>
+            <span class="chipmodo on">🔗 híbrido</span></div>
+          <div class="j-corpo">
+            <div class="msg"><div class="av">🧑</div><div class="bd"><div class="quem">Você</div>
+              <div class="tx">Como faço streaming de tokens com callbacks?</div></div></div>
+            <div class="msg"><div class="av ia">🤖</div><div class="bd"><div class="quem">Assistente</div>
+              <div class="tx">Use <b>astream_events</b> com filtro <code>on_chat_model_stream</code> <b>[2]</b>…</div></div></div>
+          </div>
+          <div class="composer"><div class="linha-in"><div class="campo">…</div><button class="enviar">➤</button></div></div>
+        </div>
+        <div class="dir">
+          <div style="font-size:.68rem;font-weight:700;color:var(--fg-muted);margin-bottom:.4rem">🔎 recuperados · 4 chunks</div>
+          <div class="chunk"><div class="tt"><span class="arq">streaming.ipynb</span><span class="sc">0,74</span></div>
+            <div class="pp">astream_events(response, version="v2") yields …</div></div>
+          <div class="chunk"><div class="tt"><span class="arq">callbacks.md</span><span class="sc">0,69</span></div>
+            <div class="pp">BaseCallbackHandler.on_llm_new_token…</div></div>
+          <div class="chunk"><div class="tt"><span class="arq">rag.mdx</span><span class="sc">0,58</span></div>
+            <div class="pp">Streaming em cadeias RAG: pipe de eventos…</div></div>
+          <div class="chunk" style="opacity:.5"><div class="tt"><span class="arq">agents.mdx</span><span class="sc">0,36 ⚠</span></div>
+            <div class="pp">Descartado pelo SCORE_MIN…</div></div>
+        </div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> depurar qualidade do RAG — ver exatamente o que alimentou o prompt.</li>
+      <li>Chunk descartado aparece esmaecido (transparência do <code>SCORE_MIN</code>).</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ L7 · PIPELINE INLINE ═══ -->
+  <article class="ex" id="L7">
+    <header><span class="num">7</span>
+      <div><h3>Pipeline inline (harness na resposta)</h3><span class="ref">Ref: DeepSeek harness · this chat</span></div>
+    </header>
+    <p class="desc"><span class="onde">Cada resposta carrega os passos executados</span> colapsáveis
+    abaixo dela — como o "pensando…" do projeto, mas completo: busca → rerank → geração → tokens.</p>
+    <div class="palco">
+      <div style="max-width:36rem;margin:0 auto" class="janela">
+        <div class="j-top"><span class="pillc">📚 <span class="nm">dotnet_csharp</span> ✕</span>
+          <span class="chipmodo on">🔗 híbrido</span><div class="sp"></div><span class="badge">1.8k 🔻</span></div>
+        <div class="j-corpo">
+          <div class="msg"><div class="av ia">🤖</div><div class="bd">
+            <div class="quem">Assistente · clique nos passos</div>
+            <div class="tx">Use <b>records</b> com validação no construtor… <b>[1][2]</b></div>
+            <div class="pipe">
+              <div class="pstep"><span class="w">✓</span><span><b>rota</b> escolhida: híbrido (você selecionou) · 180ms</span></div>
+              <div class="pstep"><span class="w">✓</span><span><b>busca</b> dotnet_csharp · 4 chunks · top score 0,71 · 240ms</span></div>
+              <div class="pstep"><span class="w">✓</span><span><b>rerank</b> 12→4 (bge-reranker CPU) · 310ms</span></div>
+              <div class="pstep"><span class="w">✓</span><span><b>geração</b> qwen2.5-coder · 604 tok · temp 0,2 · 8,4s</span></div>
+            </div></div></div>
+        </div>
+        <div class="composer"><div class="linha-in"><div class="campo">…</div><button class="enviar">➤</button></div></div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> o pedido original de transparência total — sem painel separado.</li>
+      <li>É literalmente o <b>"pensando…"</b> do ChatTab evoluído: cada etapa vira linha clicável.</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ L8 · DENSO ═══ -->
+  <article class="ex" id="L8">
+    <header><span class="num">8</span>
+      <div><h3>Denso (power user / terminal)</h3><span class="ref">Ref: Warp · terminal chats</span></div>
+    </header>
+    <p class="desc">Uma coluna, tipografia mono, seletores em <span class="onde">linha única compacta
+    acima do input</span> com contadores. Máxima informação por pixel.</p>
+    <div class="palco">
+      <div style="max-width:38rem;margin:0 auto" class="janela mono">
+        <div class="j-top" style="font-size:.68rem">
+          <span class="pri">● rag</span><span class="muted">● híbrido</span><span class="muted">● livre</span>
+          <span style="color:var(--border)">|</span>
+          <span class="okc">[dotnet_csharp 5.1k]</span><span class="okc">[dotnet_bcl 3.2k]</span>
+          <span class="muted">[+col]</span>
+          <div class="sp"></div><span class="muted">⚡87 · 🔻1.8M</span>
+        </div>
+        <div class="j-corpo mono" style="font-size:.72rem">
+          <div class="msg"><div class="av" style="font-size:.6rem">›</div><div class="bd">
+            <div class="quem mono">você</div><div class="tx mono">records com validação?</div></div></div>
+          <div class="msg"><div class="av ia mono" style="font-size:.6rem">«</div><div class="bd">
+            <div class="quem mono">qwen2.5-coder · 4 chunks</div>
+            <div class="tx mono">record Pessoa(string Nome, int Idade)\n{\n  public Pessoa : this … [1][2]</div></div></div>
+        </div>
+        <div class="composer"><div class="linha-in">
+          <div class="campo mono" style="font-size:.74rem">› _</div><button class="enviar mono">⏎</button></div></div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> sessões longas de código — o mesmo modelo mental do terminal.</li>
+      <li>Combina com o <b>modo dev</b> já existente nas modalidades do projeto.</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ L9 · FOCUS ═══ -->
+  <article class="ex" id="L9">
+    <header><span class="num">9</span>
+      <div><h3>Focus mode (leitura)</h3><span class="ref">Ref: iA Writer · Arc Focus</span></div>
+    </header>
+    <p class="desc">Tudo some exceto a conversa; <span class="onde">a tríade de seleção aparece SÓ
+    quando o input é focado</span> — o contexto surge no momento da escolha.</p>
+    <div class="palco">
+      <div style="max-width:30rem;margin:0 auto" class="janela">
+        <div class="j-corpo" style="min-height:9rem">
+          <div class="msg"><div class="av ia">🤖</div><div class="bd"><div class="quem">Assistente</div>
+            <div class="tx">Só a conversa. Nada de distração. O contexto mora no composer.</div></div></div>
+        </div>
+        <div class="composer" style="border-color:var(--primary)">
+          <div class="flex gap4 wrapf">
+            <span class="pillc">📚 <span class="nm">py_linguagem</span> ✕</span>
+            <span class="pillc off">＋</span><span class="chipmodo on">🔗</span>
+          </div>
+          <div class="linha-in"><div class="campo">| (focado → seletores aparecem)</div><button class="enviar">➤</button></div>
+        </div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> leitura de respostas longas / modo escrita.</li>
+      <li>Risco: esconde estado — só compensa com o badge de fontes na resposta.</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ L10 · CHAT + CATÁLOGO ═══ -->
+  <article class="ex" id="L10">
+    <header><span class="num">10</span>
+      <div><h3>Chat em cima, catálogo embaixo</h3><span class="ref">Ref: Notion AI · Obsidian</span></div>
+    </header>
+    <p class="desc"><span class="onde">O catálogo (meta_colecoes) vira parte do layout</span>:
+    painel inferior recolhível com TODAS as coleções — arrastar uma para o composer a ativa.</p>
+    <div class="palco">
+      <div style="max-width:42rem;margin:0 auto" class="janela">
+        <div class="j-top"><span class="t">💬 conversa</span><div class="sp"></div>
+          <span class="pillc">📚 <span class="nm">arrastada: py_stdlib</span> ✕</span><span class="chipmodo on">🔗</span></div>
+        <div class="j-corpo" style="min-height:7rem">
+          <div class="msg"><div class="av ia">🤖</div><div class="bd"><div class="quem">Assistente</div>
+            <div class="tx">Arraste uma coleção do catálogo abaixo para o campo…</div></div></div>
+        </div>
+        <div class="composer"><div class="linha-in"><div class="campo">solte uma coleção aqui…</div><button class="enviar">➤</button></div></div>
+        <div style="border-top:1px solid var(--border);padding:.6rem .8rem;background:var(--popover)">
+          <div style="font-size:.68rem;font-weight:700;color:var(--fg-muted);margin-bottom:.4rem">
+            📚 catálogo · meta_colecoes <span class="muted" style="font-weight:400">(arraste ↑)</span></div>
+          <div class="gridcol">
+            <div class="colcard" draggable="true"><span class="nm">dotnet_cli</span><span class="ds">referência de comandos</span><span class="np">2.1k pts</span></div>
+            <div class="colcard" draggable="true"><span class="nm">py_stdlib</span><span class="ds">biblioteca padrão</span><span class="np">11.2k pts</span></div>
+            <div class="colcard" draggable="true"><span class="nm">py_ia_openai</span><span class="ds">SDK Python OpenAI</span><span class="np">1.4k pts</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> explorar a base — quem não sabe o que existe descobre arrastando.</li>
+      <li>O catálogo é a coleção <b>meta_colecoes</b> real do projeto (análise da LLM em PT).</li></ul>
+    </div></details>
+  </article>
+
+</section>
+
+<!-- ══════════════════════════════════════════════════
+     SEÇÃO 2 — MULTIMODAL (10) — P8: SELEÇÃO EXPLÍCITA
+     ══════════════════════════════════════════════════ -->
+<section class="secao" id="s-mm">
+  <div class="intro">
+    <h2>🎬 Multimodal — 10 layouts</h2>
+    <p><b>P8 em ação:</b> a modalidade é <b>CLIQUE do usuário</b> (💬 texto · 🧩 código · 🎨 imagem ·
+    🎬 vídeo), nunca análise da LLM. Os 9 modos do estúdio e as modalidades declarativas do projeto
+    aparecem como seletores de primeiro nível.</p>
+  </div>
+  <nav class="indice">
+    <a href="#M1"><span class="num">1</span><span class="tt">Chips de modalidade</span></a>
+    <a href="#M2"><span class="num">2</span><span class="tt">Abas de entrada</span></a>
+    <a href="#M3"><span class="num">3</span><span class="tt">Rail de ferramentas</span></a>
+    <a href="#M4"><span class="num">4</span><span class="tt">Segmented + parâmetros</span></a>
+    <a href="#M5"><span class="num">5</span><span class="tt">Galeria + chat</span></a>
+    <a href="#M6"><span class="num">6</span><span class="tt">Storyboard temporal</span></a>
+    <a href="#M7"><span class="num">7</span><span class="tt">Bancada (input|preview)</span></a>
+    <a href="#M8"><span class="num">8</span><span class="tt">Dropdown "gerar:"</span></a>
+    <a href="#M9"><span class="num">9</span><span class="tt">Mídia inline no fluxo</span></a>
+    <a href="#M10"><span class="num">10</span><span class="tt">Popover de estúdio</span></a>
+  </nav>
+
+  <!-- ═══ M1 · CHIPS DE MODALIDADE ═══ -->
+  <article class="ex" id="M1">
+    <header><span class="num">1</span>
+      <div><h3>Chips de modalidade no composer</h3><span class="ref">Ref: Meta AI · Grok composer</span></div>
+    </header>
+    <p class="desc"><span class="onde">A seleção P8 literal:</span> 4 chips grandes acima do input —
+    💬 conversa · 🧩 código · 🎨 imagem · 🎬 vídeo. Coleções RAG continuam como pills (mídia usa
+    <code>prompts_midia</code> automaticamente).</p>
+    <div class="palco">
+      <div style="max-width:36rem;margin:0 auto" class="janela">
+        <div class="j-top"><span class="pillc">📚 <span class="nm">prompts_midia</span><span class="muted">auto p/ mídia</span></span>
+          <div class="sp"></div><span class="badge">🎮 6,2/8 GB</span></div>
+        <div class="j-corpo" style="min-height:9rem">
+          <div class="msg"><div class="av">🧑</div><div class="bd"><div class="quem">Você</div>
+            <div class="tx">Raposa artesã soldando numa oficina aconchegante</div></div></div>
+          <div class="msg"><div class="av ia">🎨</div><div class="bd">
+            <div class="quem">Flux dev <span class="badge ok">pipeline: 3 variações → crítica</span></div>
+            <div class="flex gap6 mt1"><div class="mini-img v2">🦊</div></div></div></div>
+        </div>
+        <div class="composer">
+          <div class="modchips">
+            <button class="mod">💬 conversa</button>
+            <button class="mod">🧩 código</button>
+            <button class="mod on">🎨 imagem</button>
+            <button class="mod">🎬 vídeo</button>
+          </div>
+          <div class="linha-in"><div class="campo">descreva a imagem… (prompt RAG-ancorado)</div>
+            <button class="mic">🎤</button><button class="enviar">➤</button></div>
+        </div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> o pedido central — seleção explícita, zero LLM decidindo.</li>
+      <li>Chip ativo muda o placeholder do input (affordance dupla).</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ M2 · ABAS DE ENTRADA ═══ -->
+  <article class="ex" id="M2">
+    <header><span class="num">2</span>
+      <div><h3>Abas de entrada</h3><span class="ref">Ref: ChatGPT (DALL-E tab) · HuggingFace Spaces</span></div>
+    </header>
+    <p class="desc">Três <span class="onde">abas ACIMA do composer</span> trocam o modo de entrada;
+    histórico da conversa é compartilhado (a conversa é uma só, P1).</p>
+    <div class="palco">
+      <div style="max-width:36rem;margin:0 auto" class="janela">
+        <div class="j-top" style="gap:0;padding:0">
+          <button class="mod" style="border-radius:0;border:0;border-bottom:2px solid transparent;padding:.55rem .9rem">💬 Conversar</button>
+          <button class="mod on" style="border-radius:0;border:0;border-bottom:2px solid var(--primary);padding:.55rem .9rem">🎨 Criar imagem</button>
+          <button class="mod" style="border-radius:0;border:0;border-bottom:2px solid transparent;padding:.55rem .9rem">🎬 Criar vídeo</button>
+        </div>
+        <div class="j-corpo" style="min-height:8rem">
+          <div class="msg"><div class="av ia">🎨</div><div class="bd">
+            <div class="quem">Flux schnell · rápido</div>
+            <div class="flex gap6 mt1"><div class="mini-img v3">🏭</div><div class="mini-img v1">🌆</div></div></div></div>
+        </div>
+        <div class="composer">
+          <div class="flex gap4 wrapf"><span class="seg">
+            <button class="on">⚡ schnell</button><button>🎨 dev</button></span>
+            <span class="badge">1024×1024 · 4 steps</span>
+            <span class="pillc">📚 <span class="nm">prompts_midia</span></span></div>
+          <div class="linha-in"><div class="campo">prompt da imagem…</div><button class="enviar">➤</button></div>
+        </div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> sessões dedicadas de criação (aba Estúdio do projeto).</li>
+      <li>Perde a mistura orgânica — bom quando o foco é produção em série.</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ M3 · RAIL DE FERRAMENTAS ═══ -->
+  <article class="ex" id="M3">
+    <header><span class="num">3</span>
+      <div><h3>Rail de ferramentas (ícones à esquerda)</h3><span class="ref">Ref: ChatGPT atual · Gemini</span></div>
+    </header>
+    <p class="desc"><span class="onde">Rail vertical escolhe a ferramenta</span>; o composer adapta-se.
+    Cada ícone = uma modalidade declarativa do <code>core/modalidades.py</code>.</p>
+    <div class="palco">
+      <div style="max-width:44rem;margin:0 auto;display:grid;grid-template-columns:3rem 1fr;gap:0;height:20rem">
+        <div style="border-right:1px solid var(--border);display:flex;flex-direction:column;gap:.3rem;padding:.6rem .35rem;background:var(--card)">
+          <button class="mod" style="width:100%;justify-content:center;padding:.5rem 0">💬</button>
+          <button class="mod" style="width:100%;justify-content:center;padding:.5rem 0">🧩</button>
+          <button class="mod on" style="width:100%;justify-content:center;padding:.5rem 0">🎨</button>
+          <button class="mod" style="width:100%;justify-content:center;padding:.5rem 0">🎬</button>
+          <button class="mod" style="width:100%;justify-content:center;padding:.5rem 0">🎧</button>
+        </div>
+        <div class="janela" style="border:0;border-radius:0">
+          <div class="j-top"><span class="badge ok">🎨 t2i ativo</span>
+            <span class="pillc">📚 <span class="nm">prompts_midia</span></span></div>
+          <div class="j-corpo"><div class="msg"><div class="av ia">🎨</div><div class="bd">
+            <div class="quem">Flux dev</div><div class="flex gap6 mt1"><div class="mini-img v4">🌅</div></div></div></div></div>
+          <div class="composer"><div class="linha-in"><div class="campo">🎨 descreva…</div><button class="enviar">➤</button></div></div>
+        </div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> as 9 modalidades do estúdio numa tela — escalável.</li>
+      <li>Tooltip no hover mostra o nome (t2i, i2v, a2t…).</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ M4 · SEGMENTED + PARÂMETROS ═══ -->
+  <article class="ex" id="M4">
+    <header><span class="num">4</span>
+      <div><h3>Segmented + linha de parâmetros</h3><span class="ref">Ref: Figma export · Vercel deploy</span></div>
+    </header>
+    <p class="desc"><span class="onde">Segmented compacto + parâmetros do gerador na linha seguinte</span>
+    (modelo, steps, tamanho) — tudo que o sd-cli aceita, exposto.</p>
+    <div class="palco">
+      <div style="max-width:38rem;margin:0 auto" class="janela">
+        <div class="j-corpo" style="min-height:8rem">
+          <div class="msg"><div class="av ia">🎬</div><div class="bd"><div class="quem">Wan2.2 · render</div>
+            <div class="mini-vid v1" style="max-width:16rem"><span class="pp">▶</span></div>
+            <div class="pbar mt1" style="max-width:16rem"><i style="width:64%"></i></div>
+            <div class="muted" style="font-size:.66rem">ETA 47s · chat :8090 pausado, volta ao fim</div></div></div>
+        </div>
+        <div class="composer">
+          <div class="flex gap4 wrapf">
+            <span class="seg"><button>💬</button><button>🧩</button><button>🎨</button><button class="on">🎬</button></span>
+            <span class="badge">Wan2.2 TI2V-5B</span><span class="badge">832×480</span><span class="badge">20 steps</span>
+            <span class="pillc">📚 <span class="nm">prompts_midia</span></span>
+          </div>
+          <div class="linha-in"><div class="campo">prompt do vídeo…</div><button class="enviar">➤</button></div>
+        </div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> usuários avançados que ajustam steps/tamanho sempre.</li>
+      <li>Badges clicáveis abrem popover de ajuste.</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ M5 · GALERIA + CHAT ═══ -->
+  <article class="ex" id="M5">
+    <header><span class="num">5</span>
+      <div><h3>Galeria + chat compacto</h3><span class="ref">Ref: Midjourney web · Leonardo.ai</span></div>
+    </header>
+    <p class="desc">Mídia é o protagonista: <span class="onde">grade de resultados dominante</span>,
+    conversa compacta no topo com o prompt. Clique num resultado → "usar como referência".</p>
+    <div class="palco">
+      <div style="max-width:44rem;margin:0 auto" class="janela">
+        <div class="j-top"><span class="pillc">📚 <span class="nm">prompts_midia</span></span>
+          <div class="sp"></div><span class="chipmodo on">🎨 imagem</span></div>
+        <div style="padding:.6rem;border-bottom:1px solid var(--border)">
+          <div class="msg"><div class="av">🧑</div><div class="bd"><div class="quem">Você</div>
+            <div class="tx">cidade flutuante estilo Ghibli ao amanhecer</div></div></div>
+        </div>
+        <div class="j-corpo" style="padding:.7rem">
+          <div class="m5g">
+            <div class="mini-img v1" style="aspect-ratio:1;width:auto">🎈</div>
+            <div class="mini-img v2" style="aspect-ratio:1;width:auto">☁️</div>
+            <div class="mini-img v3" style="aspect-ratio:1;width:auto">🌆</div>
+            <div class="mini-img v4" style="aspect-ratio:1;width:auto">🌅</div>
+            <div class="mini-img v1" style="aspect-ratio:1;width:auto">🚀</div>
+            <div class="mini-img v2" style="aspect-ratio:1;width:auto">🗺️</div>
+          </div>
+        </div>
+        <div class="composer"><div class="linha-in"><div class="campo">novo prompt…</div><button class="enviar">➤</button></div></div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> iteração visual rápida (variações do mesmo conceito).</li>
+      <li>Alinhado à galeria por sessão de estúdio já existente.</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ M6 · STORYBOARD ═══ -->
+  <article class="ex" id="M6">
+    <header><span class="num">6</span>
+      <div><h3>Storyboard temporal</h3><span class="ref">Ref: Runway · CapCut storyboard</span></div>
+    </header>
+    <p class="desc">Respostas multimodais em <span class="onde">sequência de cards horizontais</span> —
+    cada card é uma geração da conversa, com sua modalidade. A conversa vira linha do tempo.</p>
+    <div class="palco">
+      <div style="max-width:44rem;margin:0 auto" class="janela">
+        <div class="j-top"><span class="chipmodo on">🎨</span><span class="chipmodo">🎬</span>
+          <div class="sp"></div><span class="badge ok">sessão: s_principal</span></div>
+        <div class="j-corpo">
+          <div class="story">
+            <div class="stcard"><div class="im v1">🦊</div><div class="bd"><b>t2i · Flux dev</b>raposa artesã…</div></div>
+            <div class="stcard"><div class="im v2">🏭</div><div class="bd"><b>t2i · schnell</b>oficina steampunk…</div></div>
+            <div class="stcard"><div class="im v3">🎬</div><div class="bd"><b>t2v · Wan2.2</b>timelapse 5s</div></div>
+            <div class="stcard" style="border-style:dashed;display:grid;place-items:center;color:var(--fg-muted);font-size:.7rem">＋ próximo</div>
+          </div>
+        </div>
+        <div class="composer"><div class="modchips" style="margin-bottom:.35rem">
+          <button class="mod on">🎨</button><button class="mod">🎬</button></div>
+          <div class="linha-in"><div class="campo">continuar a sequência…</div><button class="enviar">➤</button></div></div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> narrativas visuais — storyboard de vídeo, storyboards de produto.</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ M7 · BANCADA ═══ -->
+  <article class="ex" id="M7">
+    <header><span class="num">7</span>
+      <div><h3>Bancada (parâmetros | preview grande)</h3><span class="ref">Ref: ComfyUI · Figma inspect</span></div>
+    </header>
+    <p class="desc"><span class="onde">Formulário completo à esquerda, preview grande à direita</span> —
+    o "BancadaEstudio" do projeto como layout principal de criação.</p>
+    <div class="palco">
+      <div class="m7" style="max-width:48rem;margin:0 auto">
+        <div class="esq">
+          <div class="modchips" style="margin-bottom:.7rem">
+            <button class="mod">💬</button><button class="mod on">🎨</button><button class="mod">🎬</button>
+          </div>
+          <div class="fld"><label>modalidade (declarativa)</label>
+            <select><option>texto→imagem · Flux dev (qualidade)</option><option>texto→imagem · schnell (rápido)</option><option>texto→vídeo · Wan2.2</option></select></div>
+          <div class="fld"><label>modelo RAG do prompt</label>
+            <div class="in mono" style="font-size:.7rem">prompts_midia · 34 exemplares</div></div>
+          <div class="fld"><label>resolução</label>
+            <select><option>1024×1024</option><option>832×480</option></select></div>
+          <div class="fld"><label>prompt</label>
+            <div class="in" style="min-height:3.5rem">raposa artesã soldando…</div></div>
+          <button class="enviar" style="width:100%;height:2.2rem">🎨 gerar</button>
+        </div>
+        <div class="prev">
+          <div style="text-align:center">
+            <div class="mini-img v2" style="width:11rem;margin:0 auto">🦊</div>
+            <p class="muted" style="font-size:.7rem;margin-top:.5rem">preview · clique p/ lightbox</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> parâmetros muitos (i2v com imagem de entrada, a2v…).</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ M8 · DROPDOWN "GERAR:" ═══ -->
+  <article class="ex" id="M8">
+    <header><span class="num">8</span>
+      <div><h3>Dropdown "gerar:" no início do input</h3><span class="ref">Ref: Slack slash · Discord bots</span></div>
+    </header>
+    <p class="desc"><span class="onde">O próprio texto começa com a seleção</span>:
+    <code>/img</code>, <code>/vid</code>, <code>/code</code> — visível, editável, auditável na mensagem enviada.</p>
+    <div class="palco">
+      <div style="max-width:34rem;margin:0 auto" class="janela">
+        <div class="j-corpo" style="min-height:8rem">
+          <div class="msg"><div class="av">🧑</div><div class="bd"><div class="quem">Você</div>
+            <div class="tx"><span class="pri mono">/img</span> farol numa tempestade, pintura a óleo</div></div></div>
+          <div class="msg"><div class="av ia">🎨</div><div class="bd">
+            <div class="quem">Flux dev · /img</div><div class="flex gap6 mt1"><div class="mini-img v3">🌊</div></div></div></div>
+        </div>
+        <div class="composer">
+          <div class="linha-in">
+            <span class="seg"><button class="on mono">/img</button><button class="mono">/vid</button><button class="mono">/code</button></span>
+            <div class="campo">farol numa tempestade…</div><button class="enviar">➤</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> mensagem auto-documentada — a seleção viaja COM o texto (histórico mostra).</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ M9 · MÍDIA INLINE NO FLUXO ═══ -->
+  <article class="ex" id="M9">
+    <header><span class="num">9</span>
+      <div><h3>Mídia inline orgânica no fluxo</h3><span class="ref">Ref: este formato de conversa</span></div>
+    </header>
+    <p class="desc">Conversa normal onde <span class="onde">cada resposta pode ser texto OU mídia</span>,
+    com badge da modalidade — o cenário P1 completo (mistura orgânica, mesma conversa).</p>
+    <div class="palco">
+      <div style="max-width:36rem;margin:0 auto" class="janela">
+        <div class="j-corpo">
+          <div class="msg"><div class="av">🧑</div><div class="bd"><div class="quem">Você</div>
+            <div class="tx">o que é pattern matching em C#?</div></div></div>
+          <div class="msg"><div class="av ia">💬</div><div class="bd">
+            <div class="quem">Assistente <span class="badge">💬 texto</span></div>
+            <div class="tx">Pattern matching testa a FORMA do dado… <b>[1]</b></div></div></div>
+          <div class="msg"><div class="av">🧑</div><div class="bd"><div class="quem">Você</div>
+            <div class="tx">me mostra isso numa imagem estilo diagrama isométrico</div></div></div>
+          <div class="msg"><div class="av ia">🎨</div><div class="bd">
+            <div class="quem">Flux dev <span class="badge" style="color:var(--pink)">🎨 mídia</span></div>
+            <div class="flex gap6 mt1"><div class="mini-img v4">🔷</div></div>
+            <div class="muted" style="font-size:.66rem;margin-top:.3rem">✓ indexado em midia_gerada — pergunte sobre a imagem</div></div></div>
+        </div>
+        <div class="composer"><div class="modchips" style="margin-bottom:.35rem">
+          <button class="mod on">💬</button><button class="mod">🎨</button><button class="mod">🎬</button></div>
+          <div class="linha-in"><div class="campo">…</div><button class="enviar">➤</button></div></div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> o chat central do projeto — orgânico por definição (P1/P5).</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ M10 · POPOVER DE ESTÚDIO ═══ -->
+  <article class="ex" id="M10">
+    <header><span class="num">10</span>
+      <div><h3>Popover de estúdio sobre o composer</h3><span class="ref">Ref: Linear attachments · Notion menu</span></div>
+    </header>
+    <p class="desc">Composer limpo; <span class="onde">o botão 🎨 abre popover ancorado</span> com as 9
+    modalidades declarativas + parâmetros — estúdio completo sem sair do chat.</p>
+    <div class="palco">
+      <div style="max-width:36rem;margin:0 auto;position:relative" class="janela">
+        <div class="j-corpo" style="min-height:7rem">
+          <div class="msg"><div class="av ia">🎨</div><div class="bd">
+            <div class="quem">t2i · Flux dev</div><div class="flex gap6 mt1"><div class="mini-img v2">🦊</div></div></div></div>
+        </div>
+        <div class="composer"><div class="linha-in">
+          <button class="mic" style="border-color:var(--primary)">🎨</button>
+          <div class="campo">raposa artesã…</div><button class="enviar">➤</button>
+        </div></div>
+        <div class="parampop" style="right:.7rem;bottom:4.3rem">
+          <div style="font-size:.7rem;font-weight:700;margin-bottom:.4rem">🎬 modalidades · core/modalidades</div>
+          <div class="flex gap4 wrapf" style="margin-bottom:.6rem">
+            <button class="mod on">🎨 t2i</button><button class="mod">🎬 t2v</button>
+            <button class="mod">🖼→🎬 i2v</button><button class="mod">🖼→💬 i2t</button>
+            <button class="mod">🎬→💬 v2t</button><button class="mod">🎧→💬 a2t</button>
+          </div>
+          <div class="fld"><label>modelo</label><select><option>Flux dev</option><option>Flux schnell</option><option>Wan2.2</option></select></div>
+          <div class="fld"><label>RAG do prompt</label><div class="in mono" style="font-size:.66rem">prompts_midia ✓</div></div>
+        </div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> chat limpo com estúdio completo a 1 clique — equilibra P1 e P9.</li></ul>
+    </div></details>
+  </article>
+
+</section>
+
+<!-- ══════════════════════════════════════════════════
+     SEÇÃO 3 — IMPORTAR RAG (10) — wizard 7 etapas do core
+     ══════════════════════════════════════════════════ -->
+<section class="secao" id="s-imp">
+  <div class="intro">
+    <h2>📥 Importar RAG — 10 layouts</h2>
+    <p>Todos seguem o <b>fluxo real do projeto</b>: ler → <b>categorizar (LLM)</b> → dividir →
+    <b>embedding</b> → coleção → indexar → <b>catálogo</b>. Também cobrem o <b>seed profundo</b>
+    (assunto → web → curadoria → coleção) e a escolha de coleção de destino.</p>
+  </div>
+  <nav class="indice">
+    <a href="#I1"><span class="num">1</span><span class="tt">Wizard 7 etapas</span></a>
+    <a href="#I2"><span class="num">2</span><span class="tt">Drop central único</span></a>
+    <a href="#I3"><span class="num">3</span><span class="tt">Fonte → destino</span></a>
+    <a href="#I4"><span class="num">4</span><span class="tt">Cards de coleção</span></a>
+    <a href="#I5"><span class="num">5</span><span class="tt">Seed por assunto</span></a>
+    <a href="#I6"><span class="num">6</span><span class="tt">Fila de arquivos</span></a>
+    <a href="#I7"><span class="num">7</span><span class="tt">Pipeline/logs ao vivo</span></a>
+    <a href="#I8"><span class="num">8</span><span class="tt">Revisão antes de indexar</span></a>
+    <a href="#I9"><span class="num">9</span><span class="tt">Input universal</span></a>
+    <a href="#I10"><span class="num">10</span><span class="tt">Catálogo + importar</span></a>
+  </nav>
+
+  <!-- ═══ I1 · WIZARD 7 ETAPAS (o do projeto!) ═══ -->
+  <article class="ex" id="I1">
+    <header><span class="num">1</span>
+      <div><h3>Wizard de 7 etapas (layout do core/ingest)</h3><span class="ref">Ref: o IngestTab do projeto hoje</span></div>
+    </header>
+    <p class="desc"><span class="onde">As 7 etapas do core/ingest acendem em sequência</span> com log ao
+    vivo — o layout canônico do projeto, mantido como referência.</p>
+    <div class="palco">
+      <div style="max-width:42rem;margin:0 auto" class="janela">
+        <div class="j-top"><span class="t">📂 ingestão · dotnet_docs_novos</span><div class="sp"></div>
+          <span class="badge ok">● embed :8081</span></div>
+        <div style="padding:.7rem .8rem">
+          <div class="wiz">
+            <span class="etapa feita"><span class="b"></span>1 · ler</span>
+            <span class="etapa feita"><span class="b"></span>2 · categorizar</span>
+            <span class="etapa feita"><span class="b"></span>3 · dividir</span>
+            <span class="etapa ativa"><span class="b"></span>4 · embedding</span>
+            <span class="etapa"><span class="b"></span>5 · coleção</span>
+            <span class="etapa"><span class="b"></span>6 · indexar</span>
+            <span class="etapa"><span class="b"></span>7 · catálogo</span>
+          </div>
+          <div class="pbar mt1"><i style="width:52%"></i></div>
+          <div class="logj mt1">📐 embedding 342/660 chunks (bge-m3 :8081)
+🏷️ gc-server.md → área:tecnologia · categoria:runtime · "GC do servidor .NET"
+🏷️ whats-new-8.md → área:tecnologia · categoria:novidades
+✂️ dividido: 412 arquivos → 660 chunks (média 1.6/arquivo)</div>
+        </div>
+        <div class="composer" style="flex-direction:row;align-items:center;gap:.6rem">
+          <span class="pillc">📚 destino: <span class="nm">dotnet_fundamentos</span></span>
+          <span class="chipmodo on">🧠 com LLM por arquivo</span><div class="sp"></div>
+          <span class="badge">660 chunks</span>
+        </div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> ingestão curada — categorização LLM por arquivo (o diferencial do projeto).</li>
+      <li>Checkbox "rapido" (modo lote) troca o chip para "⚡ sem LLM (lote)".</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ I2 · DROP CENTRAL ═══ -->
+  <article class="ex" id="I2">
+    <header><span class="num">2</span>
+      <div><h3>Drop central único</h3><span class="ref">Ref: Vercel deploy · Netlify drop</span></div>
+    </header>
+    <p class="desc"><span class="onde">Tela quase vazia: uma zona de drop gigante</span>. Coleção de
+    destino escolhida DEPOIS, com sugestão automática (slug da pasta, como o core faz).</p>
+    <div class="palco">
+      <div style="max-width:36rem;margin:0 auto" class="janela">
+        <div class="j-corpo" style="min-height:11rem;display:grid;place-items:center">
+          <div class="drop" style="width:100%">
+            <div style="font-size:1.6rem;margin-bottom:.3rem">📂</div>
+            <b>Arraste pasta ou arquivos aqui</b>
+            <p class="muted" style="font-size:.72rem;margin-top:.25rem">
+              .txt .md .mdx .rst .pdf + código · subpastas preservadas · 30 MB</p>
+          </div>
+        </div>
+        <div class="composer" style="flex-direction:row;gap:.5rem;align-items:center">
+          <span class="muted" style="font-size:.72rem">sugerido:</span>
+          <span class="pillc">📚 <span class="nm">dotnet_docs_novos</span> ✏️</span>
+          <div class="sp"></div><button class="mod">ou 🌱 criar por assunto</button>
+        </div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> primeira ingestão / usuário novo — zero decisão antes do drop.</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ I3 · FONTE → DESTINO ═══ -->
+  <article class="ex" id="I3">
+    <header><span class="num">3</span>
+      <div><h3>Duas colunas: fonte → destino</h3><span class="ref">Ref: Figma layers · Airtable base</span></div>
+    </header>
+    <p class="desc"><span class="onde">Esquerda: o que entra. Direita: onde vai</span>. Drag de arquivo
+    → coleção específica mapeia destino por arquivo.</p>
+    <div class="palco">
+      <div class="i3" style="max-width:46rem;margin:0 auto">
+        <div class="col">
+          <div style="font-size:.72rem;font-weight:700;margin-bottom:.5rem">📥 fonte · dotnet-docs/</div>
+          <div class="arqrow"><span class="ic">📄</span><span class="nm">core/tools/dotnet-cli.md</span><span class="st ok">→ cli ✓</span></div>
+          <div class="arqrow"><span class="ic">📄</span><span class="nm">fundamentals/runtime.md</span><span class="st ok">→ fundamentos ✓</span></div>
+          <div class="arqrow"><span class="ic">📄</span><span class="nm">csharp/tutorials/patterns.md</span><span class="st run">categorizando…</span></div>
+          <div class="arqrow"><span class="ic">📄</span><span class="nm">csharp/language-refs/records.md</span><span class="st muted">—</span></div>
+        </div>
+        <div class="col dir">
+          <div style="font-size:.72rem;font-weight:700;margin-bottom:.5rem">📚 destino · coleções</div>
+          <div class="colcard sel"><span class="nm">dotnet_cli</span><span class="ds">comandos dotnet</span><span class="np">+18 hoje</span></div>
+          <div class="colcard sel"><span class="nm">dotnet_fundamentos</span><span class="ds">runtime, GC</span><span class="np">+42 hoje</span></div>
+          <div class="colcard"><span class="nm">dotnet_csharp</span><span class="ds">linguagem C#</span><span class="np">+0</span></div>
+        </div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> pastas mistas — a categorização da LLM sugere, você corrige arrastando.</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ I4 · CARDS DE COLEÇÃO ═══ -->
+  <article class="ex" id="I4">
+    <header><span class="num">4</span>
+      <div><h3>Escolha a coleção primeiro (cards)</h3><span class="ref">Ref: Google Drive "move to"</span></div>
+    </header>
+    <p class="desc"><span class="onde">Catálogo em cards com a descrição em PT da LLM</span> (meta_colecoes);
+    selecionar uma abre o drop já apontando para ela.</p>
+    <div class="palco">
+      <div style="max-width:44rem;margin:0 auto" class="janela">
+        <div style="padding:.8rem">
+          <div style="font-size:.75rem;font-weight:700;margin-bottom:.5rem">📥 importar para…</div>
+          <div class="gridcol">
+            <div class="colcard sel"><span class="nm">py_linguagem</span><span class="ds">tutorial, referência, how-tos, what's new (cpython Doc/)</span><span class="np">9.842 pts</span></div>
+            <div class="colcard"><span class="nm">py_stdlib</span><span class="ds">referência completa da stdlib</span><span class="np">11.204 pts</span></div>
+            <div class="colcard"><span class="nm">＋ nova coleção</span><span class="ds">slug a partir do nome da pasta</span><span class="np">—</span></div>
+          </div>
+        </div>
+        <div class="composer" style="flex-direction:row;align-items:center;gap:.5rem">
+          <span class="pillc">📚 <span class="nm">py_linguagem</span></span>
+          <div class="sp"></div><span class="badge ok">pronto p/ receber arquivos</span>
+        </div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> quando a coleção já existe — descrição da análise ajuda a decidir.</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ I5 · SEED POR ASSUNTO ═══ -->
+  <article class="ex" id="I5">
+    <header><span class="num">5</span>
+      <div><h3>Seed profundo por assunto (core/seed)</h3><span class="ref">Ref: NotebookLM "sources" · Elicit</span></div>
+    </header>
+    <p class="desc"><span class="onde">Digite um assunto → o seed faz tudo</span>: definição da RAG,
+    rodadas de busca, scores de curadoria, download, ingestão — com as etapas do seed reais.</p>
+    <div class="palco">
+      <div style="max-width:42rem;margin:0 auto" class="janela">
+        <div class="j-top"><span class="t">🌱 nova coleção por assunto</span><div class="sp"></div>
+          <span class="badge ok">DuckDuckGo → Serper</span></div>
+        <div style="padding:.8rem">
+          <div class="linha-in" style="margin-bottom:.8rem">
+            <div class="campo">consensus algorithms distributed systems</div>
+            <button class="enviar">🌱</button>
+          </div>
+          <div class="seedsteps">
+            <div class="seedstep ok"><span class="b">✓</span><div class="tx"><b>definição da RAG (LLM)</b>
+              <span class="sub">escopo: consenso, raft, paxos, byzantine · tópicos anti-sujeira fixados</span></div></div>
+            <div class="seedstep ok"><span class="b">✓</span><div class="tx"><b>rodada 1 · DuckDuckGo</b>
+              <span class="sub">14 fontes · scores 6–9 · 3 descartadas (&lt;6)</span></div></div>
+            <div class="seedstep run"><span class="b">⋯</span><div class="tx"><b>recursos internos (≥7)</b>
+              <span class="sub">baixando /tutorial (8) · /raft.pdf (9)…</span></div></div>
+            <div class="seedstep"><span class="b">4</span><div class="tx muted"><b>clone de repo oficial</b>
+              <span class="sub">etcd-io/raft (docs/) — clone esparso</span></div></div>
+            <div class="seedstep"><span class="b">5</span><div class="tx muted"><b>ingestão + catálogo</b>
+              <span class="sub">limpeza → embedding → coleção distributed_systems</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> base nova do zero — o caminho sem arrastar nada.</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ I6 · FILA DE ARQUIVOS ═══ -->
+  <article class="ex" id="I6">
+    <header><span class="num">6</span>
+      <div><h3>Fila de upload (tabela de status)</h3><span class="ref">Ref: Drive upload · Dropbox queue</span></div>
+    </header>
+    <p class="desc"><span class="onde">Cada arquivo é uma linha com estado</span> (aguardando · categorizando ·
+    embedando ✓ · erro → DLQ) — multiplos drops empilham.</p>
+    <div class="palco">
+      <div style="max-width:46rem;margin:0 auto" class="janela">
+        <div style="overflow-x:auto">
+          <table class="filatbl">
+            <thead><tr><th>arquivo</th><th>área · categoria</th><th>chunks</th><th>estado</th></tr></thead>
+            <tbody>
+              <tr><td class="mono-s">runtime.md</td><td><span class="tagarea">tecnologia</span> <span class="tagcat">runtime</span></td><td>38</td><td class="okc">✓ indexado</td></tr>
+              <tr><td class="mono-s">dotnet-cli.md</td><td><span class="tagarea">tecnologia</span> <span class="tagcat">cli</span></td><td>24</td><td class="okc">✓ indexado</td></tr>
+              <tr><td class="mono-s">patterns.md</td><td><span class="tagarea">tecnologia</span> <span class="tagcat">c#</span></td><td>12</td><td style="color:var(--warn)">📐 embedding…</td></tr>
+              <tr><td class="mono-s">records.md</td><td class="muted">—</td><td>—</td><td class="muted">aguardando</td></tr>
+              <tr><td class="mono-s">big-diagram.pdf</td><td class="muted">—</td><td>—</td><td style="color:var(--danger)">✗ >30 MB</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="composer" style="flex-direction:row;align-items:center;gap:.5rem">
+          <span class="drop" style="padding:.4rem .8rem;font-size:.72rem;flex:1">＋ solte mais arquivos</span>
+          <span class="badge">3/5 ok</span>
+        </div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> lotes grandes — visão exata do que falhou (integrado ao job Rabbit).</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ I7 · PIPELINE/LOGS ═══ -->
+  <article class="ex" id="I7">
+    <header><span class="num">7</span>
+      <div><h3>Terminal de pipeline ao vivo</h3><span class="ref">Ref: GitHub Actions log · Docker build</span></div>
+    </header>
+    <p class="desc"><span class="onde">O log É a interface</span> — pipeline monoespaçado rolando com as
+    7 etapas, cursor piscando. Para quem gosta de ver o motor.</p>
+    <div class="palco">
+      <div style="max-width:42rem;margin:0 auto" class="janela">
+        <div style="padding:.6rem .8rem">
+          <div class="logj" style="max-height:12rem">
+<b style="color:var(--ok)">[ler]</b> 412 arquivos · 2.7 MB
+<b style="color:var(--ok)">[categorizar]</b> 411/412 · área=tecnologia (98%)
+  ├─ runtime.md → runtime · "GC, JIT, hospedagem"
+  ├─ dotnet-cli.md → cli · "referência de comandos"
+  └─ 1 erro: big-diagram.pdf (muito grande)
+<b style="color:var(--ok)">[dividir]</b> 412 → 660 chunks (headers markdown preservados)
+<b style="color:var(--ok)">[embedding]</b> bge-m3 :8081 · 660/660 · 92 tok/s médio
+<b style="color:var(--primary)">[coleção]</b> dotnet_fundamentos · upsert…
+<span style="color:var(--warn)">▊</span></div>
+        </div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> depuração e power user — é o log do job do chat em tela cheia.</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ I8 · REVISÃO ANTES DE INDEXAR ═══ -->
+  <article class="ex" id="I8">
+    <header><span class="num">8</span>
+      <div><h3>Modal de revisão (dry-run)</h3><span class="ref">Ref: GitHub PR diff · this chat's plan</span></div>
+    </header>
+    <p class="desc"><span class="onde">Antes de gravar, revise o que a LLM decidiu</span>: chunks
+    categorizados, duplicados detectados, lixo descartado — aprovar ou editar.</p>
+    <div class="palco">
+      <div class="modalrev">
+        <div class="mh"><b style="font-size:.85rem">👀 revisar antes de indexar</b>
+          <div class="sp" style="flex:1"></div>
+          <span class="badge">660 chunks · 12 duplicados · 4 lixo</span></div>
+        <div class="mb">
+          <div class="revchunk"><div class="hd">
+            <span class="mono" style="font-size:.68rem">runtime.md#L40-62</span>
+            <span class="tagarea">tecnologia · runtime</span>
+            <span class="badge ok">score limpeza 0,9</span></div>
+            <div class="pp">"Server GC creates one heap per logical core…"</div></div>
+          <div class="revchunk" style="border-style:dashed;opacity:.6"><div class="hd">
+            <span class="mono" style="font-size:.68rem">nav-menu.md</span>
+            <span class="badge" style="color:var(--danger)">✗ descartado: lixo (e_lixo)</span></div>
+            <div class="pp">"Skip to content · Docs · .NET · Feedback"</div></div>
+          <div class="revchunk" style="border-style:dashed;opacity:.6"><div class="hd">
+            <span class="mono" style="font-size:.68rem">runtime.md#L10-30</span>
+            <span class="badge" style="color:var(--warn)">⧉ duplicado de #L40</span></div></div>
+        </div>
+        <div class="composer" style="flex-direction:row;gap:.5rem">
+          <span class="muted" style="font-size:.72rem">editar categorias clicando nas tags</span>
+          <div class="sp"></div>
+          <button class="mod">✗ descartar tudo</button>
+          <button class="mod on">✓ indexar 660</button>
+        </div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> ingestão de qualidade — conecta ao <b>modo Revisão</b> (preview) já existente.</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ I9 · INPUT UNIVERSAL ═══ -->
+  <article class="ex" id="I9">
+    <header><span class="num">9</span>
+      <div><h3>Input universal (texto · pasta · URL)</h3><span class="ref">Ref: Raycast · Raycast AI</span></div>
+    </header>
+    <p class="desc"><span class="onde">UM campo aceita tudo</span>: colar texto vira chunks, colar URL
+    baixa e limpa (trafilatura), caminho de pasta ingere — detecta o TIPO, não o conteúdo.</p>
+    <div class="palco">
+      <div style="max-width:36rem;margin:0 auto" class="janela">
+        <div class="j-corpo" style="min-height:6rem">
+          <div class="msg"><div class="av">📥</div><div class="bd">
+            <div class="quem">detectado: URL</div>
+            <div class="tx mono" style="font-size:.7rem">https://raft.github.io/raft.pdf</div>
+            <div class="gridfontes mt1">
+              <span class="fonte ok"><span>🌐</span><span class="nm">trazendo via trafilatura</span></span>
+              <span class="pillc off">📚 destino: distributed_systems</span></div></div></div>
+        </div>
+        <div class="composer">
+          <div class="linha-in"><div class="campo">cole texto, caminho de pasta ou URL…</div>
+            <button class="enviar">➤</button></div>
+        </div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> captura rápida de material solto — 1 clique até a base.</li></ul>
+    </div></details>
+  </article>
+
+  <!-- ═══ I10 · CATÁLOGO + IMPORTAR ═══ -->
+  <article class="ex" id="I10">
+    <header><span class="num">10</span>
+      <div><h3>Catálogo primeiro, importar é ação do card</h3><span class="ref">Ref: Apple Photos albums · Spotify</span></div>
+    </header>
+    <p class="desc"><span class="onde">A Biblioteca (todas as coleções) é a home</span>; cada card tem
+    "＋ importar aqui" e as ações de manutenção reais (🔎 varredura · ✨ higienizar · 🧹 destrinchar).</p>
+    <div class="palco">
+      <div style="max-width:46rem;margin:0 auto" class="janela">
+        <div class="j-top"><span class="t">📚 biblioteca</span><div class="sp"></div>
+          <button class="mod on">🌱 nova por assunto</button><button class="mod">📂 importar</button></div>
+        <div style="padding:.7rem .8rem">
+          <div class="gridcol">
+            <div class="colcard"><span class="nm">dotnet_fundamentos</span>
+              <span class="ds">Runtime, publicação, GC, diagnóstico</span><span class="np">8.412 pts</span>
+              <div class="flex gap4" style="margin-top:.2rem">
+                <button class="mod" style="padding:.15rem .5rem;font-size:.62rem">＋ importar</button>
+                <button class="mod" style="padding:.15rem .5rem;font-size:.62rem">✨</button>
+                <button class="mod" style="padding:.15rem .5rem;font-size:.62rem">🔎</button></div></div>
+            <div class="colcard"><span class="nm">py_ia_langchain</span>
+              <span class="ds">LangChain v1, LangGraph, deep agents</span><span class="np">12.907 pts</span>
+              <div class="flex gap4" style="margin-top:.2rem">
+                <button class="mod" style="padding:.15rem .5rem;font-size:.62rem">＋ importar</button>
+                <button class="mod" style="padding:.15rem .5rem;font-size:.62rem">✨</button>
+                <button class="mod" style="padding:.15rem .5rem;font-size:.62rem">🔎</button></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <details><summary>▸ quando usar</summary><div class="quando">
+      <ul><li><b>Melhor para:</b> manter a Biblioteca do projeto como hub — ingestão contextualizada.</li>
+      <li>As 3 ações de manutenção do CollectionsTab já existem — só mudam de casa.</li></ul>
+    </div></details>
+  </article>
+</section>
+
+</div>
+<script>
+function sec(b){
+  document.querySelectorAll('.abt[data-s]').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('.secao').forEach(s=>s.classList.toggle('on',s.id==='s-'+b.dataset.s));
+  window.scrollTo({top:0});
+}
+function toggleTheme(){
+  const h=document.documentElement;
+  h.dataset.theme = h.dataset.theme==='light'?'dark':'light';
+  document.getElementById('themeBtn').textContent = h.dataset.theme==='light'?'🌙':'☀️';
+}
+document.querySelectorAll('a[href^="#"]').forEach(a=>a.addEventListener('click',()=>{
+  const al=document.querySelector(a.getAttribute('href'));
+  if(al) setTimeout(()=>al.scrollIntoView({behavior:'smooth',block:'start'}),10);
+}));
+</script>
+
+</body>
+</html>

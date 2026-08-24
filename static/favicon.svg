@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- RagAroy: losango (base vetorial) + R + faísca (IA) -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6366f1"/>
+      <stop offset="1" stop-color="#14b8a6"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="15" fill="url(#g)"/>
+  <path d="M22 46V18h13a9 9 0 0 1 5.6 16.1L47 46h-8.2l-5.5-10H29v10h-7zm7-16h5.4a3.2 3.2 0 0 0 0-6.4H29V30z" fill="#fff"/>
+  <circle cx="49" cy="17" r="4.5" fill="#fbbf24"/>
+</svg>

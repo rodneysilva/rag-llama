@@ -1,0 +1,1 @@
+# Nomes permitidos a criar login (um por linha — adicione os seus)

@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- barra do navegador do celular acompanha o tema (claro/escuro) -->
+  <meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#101418" media="(prefers-color-scheme: dark)">
+  <title>{% block titulo %}RagAroy{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v={{ v_fav }}">
+  <link rel="stylesheet" href="/static/app.css?v={{ v_css }}">
+  {# 🎨 TAILWIND (runtime local, sem build/Node): utilitários para EVOLUIR a
+     UI sem tocar no CSS legado. Vem DEPOIS do app.css de propósito: onde um
+     utilitário é aplicado, ELE vence no empate (migração incremental — o
+     CSS legado segue valendo para tudo que não ganhou utilitário).
+     PREFLIGHT DESLIGADO (o reset não sobrescreve nada); as cores apontam
+     para os TOKENS do tema (claro/escuro trocam sozinhos); o script observa
+     o DOM (MutationObserver): classes em swaps do htmx são geradas na hora. #}
+  <script src="/static/vendor/tailwind.js?v={{ v_tw }}"></script>
+  <script>
+    tailwind.config = {
+      corePlugins: { preflight: false },
+      theme: { extend: { colors: {
+        fundo: "var(--bg)", card: "var(--card)", texto: "var(--texto)",
+        suave: "var(--suave)", borda: "var(--borda)",
+        acento: "var(--acento)", "acento-suave": "var(--acento-suave)",
+        ok: "var(--ok)", erro: "var(--erro)", aviso: "var(--aviso)",
+        codigo: "var(--fundo-codigo)",
+      } } },
+    };
+  </script>
+  <script src="/static/htmx.min.js?v={{ v_js }}"></script>
+</head>
+<body class="{% block classe %}{% endblock %}">
+<header class="topo">
+  {# LOGO clicável → chat (tela principal), em TODAS as páginas #}
+  <a class="marca" href="/" title="RagAroy — voltar ao chat">
+    <img src="/static/logo.svg?v={{ v_fav }}" alt="RagAroy" width="26" height="26">
+    <span>RagAroy</span>
+  </a>
+  <nav>
+    <a href="/" class="{{ 'ativo' if aba == 'chat' }}">Chat</a>
+    <a href="/biblioteca" class="{{ 'ativo' if aba == 'biblioteca' }}">Biblioteca</a>
+    <a href="/dashboard" class="{{ 'ativo' if aba == 'dashboard' }}">Dashboard</a>
+    {% if admin %}<a href="/sistema" class="{{ 'ativo' if aba == 'sistema' }}">Sistema</a>{% endif %}
+  </nav>
+  <span class="direita">
+    <span hx-get="/hx/contagem" hx-trigger="load, every 5s" hx-swap="outerHTML"
+          class="tok-live-slot"></span>
+    <span>{{ usuario }}</span>
+    <a href="/sair">sair</a>
+  </span>
+</header>
+<main>
+{# JOBS EM SEGUNDO PLANO: barra global em TODAS as páginas (polling 4s) #}
+<div id="jobsbar-slot" hx-get="/hx/jobsbar" hx-trigger="load, every 4s" hx-swap="innerHTML"></div>
+{% block conteudo %}{% endblock %}
+</main>
+<script>
+  // SCROLL DOS LOGS PRESERVADO entre swaps do polling: o card é recriado a
+  // cada 1,5 s (outerHTML) e o .log novo nascia com scrollTop=0 — o log
+  // "subia sozinho" o tempo todo. Capturamos as posições ANTES do swap e
+  // restauramos DEPOIS (chave = índice do .log no documento, estável entre
+  // swaps porque a estrutura do card é a mesma).
+  window.__logScroll = [];
+  document.body.addEventListener("htmx:beforeSwap", () => {
+    window.__logScroll = [...document.querySelectorAll(".log")]
+      .map(el => el.scrollTop);
+  });
+  document.body.addEventListener("htmx:afterSwap", () => {
+    document.querySelectorAll(".log").forEach((el, i) => {
+      if (window.__logScroll[i] != null) el.scrollTop = window.__logScroll[i];
+    });
+  });
+
+  // ESTADO de <details> preservado entre swaps do polling: o usuário
+  // ABRIU/FECHOU algo? a escolha sobrevive a QUALQUER re-render (raciocínio
+  // do chat, passos de job, sub-passos "+N linhas", cache…). A chave é
+  // ESTÁVEL entre swaps: o card ancestral com id (job-xxx) + o TEXTO do
+  // summary (ou "::raciocinio" para o toggle principal, cujo resumo muda
+  // a cada linha nova). A INTENÇÃO é capturada no pointerdown (fase de
+  // CAPTURA) — se o polling recriar o nó no meio do clique, a escolha já
+  // foi registrada e o afterSwap a reaplica no nó novo (era o bug "eu
+  // abro o raciocínio e ele fecha sozinho enquanto gera logs").
+  window.__detalhes = window.__detalhes || new Map();
+  function _ctxDetalhe(d) {
+    // 1º a MENSAGEM (data-mi): mensagens do histórico compartilham o id
+    //    do ancestral #conversa — sem isto o estado "vazava" entre elas
+    const msg = d.closest("[data-mi]");
+    if (msg) return "msg" + msg.dataset.mi;
+    const comId = d.closest("[id]");
+    if (comId) return comId.id;
+    return "doc";
+  }
+  function _chaveDetalhe(d) {
+    if (d.classList.contains("raciocinio-vivo"))
+      return _ctxDetalhe(d) + "::raciocinio";   // resumo muda a cada passo
+    const s = d.querySelector("summary");
+    return _ctxDetalhe(d) + "::" + (s ? s.textContent.trim().replace(/\s+/g, " ") : "?");
+  }
+  document.body.addEventListener("pointerdown", (e) => {
+    const s = e.target.closest ? e.target.closest("details > summary") : null;
+    if (!s) return;
+    const d = s.parentElement;
+    window.__detalhes.set(_chaveDetalhe(d), !d.open);
+  }, true);
+  document.body.addEventListener("htmx:afterSwap", (ev) => {
+    const raiz = ev.target;
+    if (!raiz || !raiz.querySelectorAll) return;
+    raiz.querySelectorAll("details").forEach(d => {
+      const k = _chaveDetalhe(d);
+      if (window.__detalhes.has(k)) d.open = window.__detalhes.get(k);
+    });
+  });
+
+  // SEM AUTO-SCROLL (pedido do dono): a página nunca rola sozinha — o
+  // usuário controla o scroll em todos os lugares (chat incluso).
+
+  // COPIAR código dos CARDS (figure.cod) — clique DELEGADO no body: vale
+  // para resposta final, streaming, histórico e qualquer swap do HTMX.
+  document.body.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-copiar]");
+    if (!b) return;
+    const code = b.closest("figure.cod")?.querySelector("code");
+    if (!code) return;
+    navigator.clipboard.writeText(code.textContent).then(() => {
+      const o = b.textContent; b.textContent = "✓ copiado";
+      setTimeout(() => (b.textContent = o), 1400);
+    });
+  });
+
+  // 🍞 TOAST GLOBAL (reutilizável): `toast("msg", "ok"|"erro")` em
+  // qualquer página — o elemento nasce aqui e usa as classes do app.css.
+  window.toast = function (msg, tipo = "", ms = 3200) {
+    let el = document.getElementById("toast-global");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "toast-global";
+      document.body.appendChild(el);
+    }
+    el.textContent = msg;
+    el.className = "mostrar " + (tipo || "");
+    clearTimeout(el._t);
+    el._t = setTimeout(() => (el.className = ""), ms);
+  };
+
+  // 📡 FEEDBACK de conexão nos swaps do htmx: um engasgo do proxy (502 do
+  // gateway, API recriando) aparecia SÓ no console — o usuário ficava sem
+  // saber se a tela ainda viva. Toast único e discreto; o polling continua
+  // e a tela se recupera sozinha quando a conexão volta.
+  let _netTravado = false;
+  document.body.addEventListener("htmx:responseError", (e) => {
+    if (e.detail?.xhr?.status !== 502 && e.detail?.xhr?.status !== 503
+        && e.detail?.xhr?.status !== 504) return;
+    if (_netTravado) return;
+    _netTravado = true;
+    window.toast("conexão engascou (" + (e.detail.xhr?.status || "?") +
+                 ") — a tela se recupera sozinha…", "erro", 4200);
+    setTimeout(() => (_netTravado = false), 12000);
+  });
+</script>
+</body>
+</html>

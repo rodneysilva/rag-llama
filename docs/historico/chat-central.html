@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat Central — layout unificado (protótipo das premissas)</title>
+<!--
+  ═══════════════════════════════════════════════════════════════
+  CHAT CENTRAL — protótipo do layout unificado
+  Documento de premissas: docs/premissas-chat-central.md
+  ═══════════════════════════════════════════════════════════════
+  P1 chat = hub único · P2 trilha de execução (por quê/como)
+  P3 logs EN→PT via LLM · P4 split único p/ código E mídia
+  P5 mensagens orgânicas por categoria · P6 comentário ancorado
+  Arquivo único, zero dependências — abra no navegador.
+-->
+<style>
+/* ═══════════ TOKENS (identidade RagAroy) ═══════════ */
+:root{
+  --background: oklch(0.13 0.028 261.7);
+  --card:       oklch(0.19 0.03 261.7);
+  --muted:      oklch(0.24 0.03 261.7);
+  --fg:         oklch(0.93 0.01 261.7);
+  --fg-muted:   oklch(0.65 0.02 261.7);
+  --primary:    oklch(0.62 0.19 260);
+  --primary-fg: oklch(0.98 0 0);
+  --accent:     oklch(0.28 0.03 261.7);
+  --danger:     oklch(0.6 0.2 25);
+  --ok:         oklch(0.7 0.15 155);
+  --warn:       oklch(0.78 0.14 85);
+  --violet:     oklch(0.66 0.16 300);   /* categoria código   */
+  --pink:       oklch(0.7 0.15 350);    /* categoria mídia    */
+  --cyan:       oklch(0.72 0.12 200);   /* categoria ferramenta */
+  --amber:      oklch(0.78 0.14 85);    /* categoria comentário */
+  --border:     oklch(0.30 0.03 261.7);
+  --input:      oklch(0.30 0.03 261.7);
+  --ring:       oklch(0.62 0.19 260);
+  --popover:    oklch(0.21 0.03 261.7);
+  --radius: 0.6rem;
+  --shadow: 0 10px 30px -10px oklch(0 0 0 / .5);
+}
+html[data-theme="light"]{
+  --background: oklch(0.975 0.005 261.7);
+  --card:       oklch(1 0 0);
+  --muted:      oklch(0.93 0.008 261.7);
+  --fg:         oklch(0.18 0.02 261.7);
+  --fg-muted:   oklch(0.45 0.02 261.7);
+  --primary:    oklch(0.5 0.19 260);
+  --accent:     oklch(0.9 0.012 261.7);
+  --border:     oklch(0.87 0.01 261.7);
+  --input:      oklch(0.83 0.012 261.7);
+  --popover:    oklch(1 0 0);
+  --shadow: 0 10px 30px -12px oklch(0.3 0.02 261.7 / .25);
+}
+
+/* ═══════════ BASE ═══════════ */
+*{box-sizing:border-box;margin:0;padding:0}
+html{font-size:clamp(14px,calc(9px + .4vw),22px)}
+body{background:var(--background);color:var(--fg);
+  font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,Inter,sans-serif;line-height:1.45;
+  overflow:hidden;height:100vh}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,select,textarea{font:inherit;color:inherit}
+svg{flex-shrink:0}
+:focus-visible{outline:2px solid var(--ring);outline-offset:1px;border-radius:4px}
+::selection{background:var(--primary);color:var(--primary-fg)}
+kbd{font-family:ui-monospace,Consolas,monospace;font-size:.7rem;background:var(--muted);
+  border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:.1rem .4rem}
+.mono{font-family:ui-monospace,Consolas,monospace}
+
+/* ═══════════ SHELL: 3 colunas ═══════════
+   [trilha] [chat central] [split artefato]      */
+.shell{display:grid;height:100vh;
+  grid-template-columns:auto 1fr auto;          /* trilha e split: auto (colapsam) */
+  transition:grid-template-columns .25s ease}
+.shell.sem-trilha{grid-template-columns:0 1fr auto}
+.shell.sem-split{grid-template-columns:auto 1fr 0}
+.shell.sem-trilha.sem-split{grid-template-columns:0 1fr 0}
+
+/* ═══════════ P2 — TRILHA DE EXECUÇÃO (esquerda) ═══════════ */
+.trilha{width:21rem;overflow:hidden;border-right:1px solid var(--border);
+  background:color-mix(in oklab,var(--card) 55%,transparent);
+  display:flex;flex-direction:column;min-width:0}
+.shell.sem-trilha .trilha{width:0;opacity:0;pointer-events:none}
+.trilha .hd{display:flex;gap:.5rem;align-items:center;padding:.8rem .9rem;
+  border-bottom:1px solid var(--border);min-width:0}
+.trilha .hd b{font-size:.9rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trilha .hd .sp{flex:1}
+.trilha .corpo{flex:1;overflow-y:auto;padding:.6rem;min-width:21rem}
+
+/* passo da trilha: ação + por quê + como + resultado */
+.passo{border:1px solid var(--border);border-radius:10px;background:var(--card);
+  margin-bottom:.5rem;overflow:hidden;min-width:0}
+.passo > button{display:flex;gap:.55rem;align-items:center;width:100%;text-align:left;
+  padding:.6rem .7rem;min-width:0}
+.passo .ic{width:1.5rem;height:1.5rem;border-radius:7px;display:grid;place-items:center;
+  font-size:.8rem;flex-shrink:0;background:var(--muted)}
+.passo .bt{min-width:0;flex:1}
+.passo .bt .t{font-size:.8rem;font-weight:600;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;display:flex;gap:.4rem;align-items:center}
+.passo .bt .dur{font-size:.65rem;color:var(--fg-muted);font-variant-numeric:tabular-nums}
+.passo .chev{color:var(--fg-muted);font-size:.7rem;transition:transform .2s}
+.passo.aberto .chev{transform:rotate(90deg)}
+.passo .dentro{display:none;padding:0 .7rem .7rem;border-top:1px dashed var(--border)}
+.passo.aberto .dentro{display:block}
+
+/* os 3 campos do harness */
+.campo{margin-top:.55rem}
+.campo .rot{font-size:.62rem;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--fg-muted);font-weight:700;margin-bottom:.2rem}
+.campo .val{font-size:.78rem;color:var(--fg)}
+.campo .tec{font-family:ui-monospace,Consolas,monospace;font-size:.68rem;
+  color:var(--fg-muted);background:var(--background);border:1px solid var(--border);
+  border-radius:7px;padding:.5rem .6rem;white-space:pre-wrap;overflow-wrap:break-word;max-height:8rem;overflow-y:auto}
+/* categorias de passo (cor do ícone) */
+.p-codigo .ic{background:color-mix(in oklab,var(--violet) 25%,var(--card));color:var(--violet)}
+.p-busca .ic{background:color-mix(in oklab,var(--cyan) 22%,var(--card));color:var(--cyan)}
+.p-midia .ic{background:color-mix(in oklab,var(--pink) 22%,var(--card));color:var(--pink)}
+.p-llm .ic{background:color-mix(in oklab,var(--primary) 25%,var(--card));color:var(--primary)}
+.p-ferramenta .ic{background:color-mix(in oklab,var(--ok) 22%,var(--card));color:var(--ok)}
+/* EN→PT: duas versões do "como" (P3) */
+.traduz{margin-top:.4rem;display:flex;gap:.4rem;align-items:center}
+.traduz button{font-size:.68rem;padding:.2rem .55rem;border-radius:99px;
+  border:1px solid var(--border);color:var(--fg-muted)}
+.traduz button.on{background:var(--primary);color:var(--primary-fg);border-color:var(--primary)}
+.v-pt{display:none}
+.trilha.pt .v-en{display:none}
+.trilha.pt .v-pt{display:block}
+.v-pt{font-size:.78rem;color:var(--fg)}
+.v-pt b{color:var(--primary)}
+/* spec ligada (embeddings agrupam conceito → spec) */
+.spec-link{display:inline-flex;gap:.35rem;align-items:center;font-size:.68rem;
+  color:var(--fg-muted);margin-top:.45rem;text-decoration:none;
+  border:1px solid var(--border);border-radius:99px;padding:.15rem .55rem}
+.spec-link:hover{color:var(--fg);border-color:var(--primary)}
+
+/* ═══════════ TOPBAR global ═══════════ */
+.topbar{position:fixed;top:0;left:0;right:0;z-index:50;display:flex;gap:.5rem;
+  align-items:center;padding:.55rem .8rem;
+  background:color-mix(in oklab,var(--background) 88%,transparent);backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--border)}
+.topbar .logo{width:1.5rem;height:1.5rem;border-radius:6px;flex-shrink:0;
+  background:linear-gradient(135deg,var(--primary),oklch(0.7 0.15 300));
+  display:grid;place-items:center;font-size:.85rem}
+.topbar b{font-size:.9rem}
+.topbar .sp{flex:1}
+.tgl{display:inline-flex;gap:.4rem;align-items:center;font-size:.75rem;
+  padding:.32rem .7rem;border-radius:8px;border:1px solid var(--border);color:var(--fg-muted)}
+.tgl:hover{color:var(--fg)}
+.tgl.on{background:color-mix(in oklab,var(--primary) 18%,transparent);
+  border-color:var(--primary);color:var(--fg)}
+.corpo-wrap{padding-top:3.2rem;height:100vh}
+
+/* ═══════════ P1/P5 — CHAT CENTRAL ═══════════ */
+.chatc{display:flex;flex-direction:column;min-width:0;height:100%;background:var(--background)}
+.chatc .filtros{display:flex;gap:.4rem;align-items:center;padding:.6rem .9rem 0;flex-wrap:wrap}
+.fchip{display:inline-flex;gap:.35rem;align-items:center;font-size:.72rem;
+  padding:.25rem .65rem;border-radius:99px;border:1px solid var(--border);color:var(--fg-muted)}
+.fchip:hover{color:var(--fg)}
+.fchip.on{color:var(--fg);border-color:currentColor}
+.fchip .n{background:var(--muted);border-radius:99px;padding:0 .4rem;font-size:.65rem;font-variant-numeric:tabular-nums}
+/* cores das categorias nos chips */
+.fchip[data-c="codigo"].on{background:color-mix(in oklab,var(--violet) 18%,transparent)}
+.fchip[data-c="midia"].on{background:color-mix(in oklab,var(--pink) 18%,transparent)}
+.fchip[data-c="ferramenta"].on{background:color-mix(in oklab,var(--cyan) 18%,transparent)}
+.fchip[data-c="comentario"].on{background:color-mix(in oklab,var(--amber) 18%,transparent)}
+
+.fluxo{flex:1;overflow-y:auto;padding:1rem .9rem 0;display:flex;flex-direction:column;gap:1rem}
+.msgc{display:flex;gap:.7rem;max-width:100%;min-width:0}
+.msgc.escondida{display:none}
+.msgc .av{width:2rem;height:2rem;border-radius:99px;flex-shrink:0;display:grid;
+  place-items:center;font-size:.85rem;background:var(--muted)}
+.msgc .av.ia{background:color-mix(in oklab,var(--primary) 30%,transparent)}
+.msgc .corpo-msg{min-width:0;flex:1;display:flex;flex-direction:column;gap:.3rem;max-width:46rem}
+.msgc .cab{display:flex;gap:.5rem;align-items:center;min-width:0}
+.msgc .quem{font-size:.75rem;font-weight:700;color:var(--fg-muted)}
+.cat{display:inline-flex;gap:.3rem;align-items:center;font-size:.62rem;font-weight:700;
+  padding:.12rem .5rem;border-radius:99px;text-transform:uppercase;letter-spacing:.04em}
+.cat-conversa{color:var(--fg-muted);border:1px solid var(--border)}
+.cat-codigo{color:var(--violet);border:1px solid color-mix(in oklab,var(--violet) 45%,transparent);
+  background:color-mix(in oklab,var(--violet) 12%,transparent)}
+.cat-midia{color:var(--pink);border:1px solid color-mix(in oklab,var(--pink) 45%,transparent);
+  background:color-mix(in oklab,var(--pink) 12%,transparent)}
+.cat-ferramenta{color:var(--cyan);border:1px solid color-mix(in oklab,var(--cyan) 45%,transparent);
+  background:color-mix(in oklab,var(--cyan) 12%,transparent)}
+.cat-comentario{color:var(--amber);border:1px solid color-mix(in oklab,var(--amber) 50%,transparent);
+  background:color-mix(in oklab,var(--amber) 12%,transparent)}
+.msgc .txt{font-size:.9rem;overflow-wrap:break-word;white-space:pre-wrap}
+.msgc .txt b{color:var(--fg)}
+.msgc .txt code{background:var(--muted);padding:.05rem .3rem;border-radius:4px;
+  font-family:ui-monospace,Consolas,monospace;font-size:.8em}
+
+/* resumo de artefato (código) no chat — abre no SPLIT (P4) */
+.arte{border:1px solid color-mix(in oklab,var(--violet) 40%,transparent);
+  border-radius:10px;overflow:hidden;max-width:30rem;background:var(--card)}
+.arte .top{display:flex;gap:.5rem;align-items:center;padding:.5rem .7rem;
+  background:color-mix(in oklab,var(--violet) 10%,transparent);min-width:0}
+.arte .top .ling{font-size:.68rem;font-weight:700;color:var(--violet);text-transform:uppercase}
+.arte .top .arq{font-size:.75rem;font-family:ui-monospace,Consolas,monospace;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.arte pre{padding:.6rem .7rem;font-size:.68rem;line-height:1.55;overflow-x:auto;
+  font-family:ui-monospace,Consolas,monospace;color:var(--fg-muted);
+  max-height:7.5rem;position:relative;
+  mask-image:linear-gradient(180deg,#000 55%,transparent)}
+.arte .rod{display:flex;gap:.5rem;align-items:center;padding:.4rem .7rem;
+  border-top:1px solid var(--border)}
+.arte .rod .abrir{display:inline-flex;gap:.35rem;align-items:center;font-size:.72rem;
+  font-weight:600;color:var(--primary);padding:.25rem .6rem;border-radius:7px;
+  border:1px solid color-mix(in oklab,var(--primary) 45%,transparent)}
+.arte .rod .abrir:hover{background:color-mix(in oklab,var(--primary) 15%,transparent)}
+.arte .rod .meta{font-size:.65rem;color:var(--fg-muted);margin-left:auto;
+  font-variant-numeric:tabular-nums}
+
+/* mídia INLINE no chat (orgânica) */
+.minline{border:1px solid color-mix(in oklab,var(--pink) 40%,transparent);
+  border-radius:10px;overflow:hidden;max-width:22rem;background:var(--card)}
+.minline .telav{aspect-ratio:16/9;display:grid;place-items:center;cursor:pointer;
+  position:relative;background:linear-gradient(140deg,oklch(.5 .18 320),oklch(.25 .1 240))}
+.minline .telav:hover .play{transform:scale(1.12)}
+.minline .play{width:3rem;height:3rem;border-radius:99px;background:oklch(0 0 0/.55);
+  display:grid;place-items:center;font-size:1.1rem;color:#fff;transition:transform .15s;
+  backdrop-filter:blur(4px)}
+.minline .durv{position:absolute;bottom:.5rem;right:.5rem;font-size:.65rem;
+  background:oklch(0 0 0/.6);color:#fff;padding:.1rem .4rem;border-radius:5px;
+  font-variant-numeric:tabular-nums}
+.minline .rodv{display:flex;gap:.5rem;align-items:center;padding:.45rem .6rem;min-width:0}
+.minline .rodv .t{font-size:.72rem;color:var(--fg-muted);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.minline .rodv .abrir{font-size:.7rem;font-weight:600;color:var(--pink);flex-shrink:0}
+
+/* comentário ancorado (P6) no chat */
+.cmt{border-left:3px solid var(--amber);background:color-mix(in oklab,var(--amber) 8%,transparent);
+  border-radius:0 10px 10px 0;padding:.55rem .7rem;max-width:34rem}
+.cmt .ancora{display:inline-flex;gap:.35rem;align-items:center;font-size:.68rem;
+  font-family:ui-monospace,Consolas,monospace;color:var(--amber);cursor:pointer;
+  padding:.15rem .5rem;border-radius:6px;border:1px solid
+  color-mix(in oklab,var(--amber) 40%,transparent);margin-bottom:.35rem}
+.cmt .ancora:hover{background:color-mix(in oklab,var(--amber) 15%,transparent)}
+.cmt .txt{font-size:.85rem}
+
+/* ═══════════ COMPOSER ═══════════ */
+.composer{border-top:1px solid var(--border);padding:.7rem .9rem .9rem;
+  display:flex;flex-direction:column;gap:.5rem;background:var(--background)}
+.composer .linha{display:flex;gap:.5rem;align-items:flex-end}
+.composer textarea{flex:1;min-width:0;resize:none;min-height:2.5rem;max-height:8rem;
+  background:var(--card);border:1px solid var(--input);border-radius:10px;
+  padding:.55rem .8rem;font-size:.9rem}
+.composer textarea:focus{outline:none;border-color:var(--primary);
+  box-shadow:0 0 0 2px color-mix(in oklab,var(--ring) 25%,transparent)}
+.icobtn{width:2.5rem;height:2.5rem;border-radius:10px;display:grid;place-items:center;
+  border:1px solid var(--border);font-size:.95rem;flex-shrink:0}
+.icobtn:hover{background:var(--accent)}
+.icobtn.p{background:var(--primary);color:var(--primary-fg);border-color:var(--primary)}
+.dica{font-size:.65rem;color:var(--fg-muted);text-align:center}
+
+/* ═══════════ P4 — SPLIT MULTIMODAL (direita) ═══════════ */
+.split{width:34rem;overflow:hidden;border-left:1px solid var(--border);
+  background:color-mix(in oklab,var(--card) 55%,transparent);
+  display:flex;flex-direction:column;min-width:0;
+  box-shadow:-14px 0 30px -18px oklch(0 0 0/.4)}
+.shell.sem-split .split{width:0;opacity:0;pointer-events:none}
+.split .abas{display:flex;gap:.25rem;padding:.55rem .6rem 0;min-width:34rem;overflow-x:auto;scrollbar-width:none}
+.split .abas::-webkit-scrollbar{display:none}
+.aba{display:inline-flex;gap:.4rem;align-items-center;font-size:.75rem;padding:.4rem .7rem;
+  border-radius:9px 9px 0 0;border:1px solid transparent;border-bottom:0;color:var(--fg-muted);
+  white-space:nowrap;max-width:11rem}
+.aba .t{overflow:hidden;text-overflow:ellipsis}
+.aba .x{opacity:.5;font-size:.65rem}
+.aba .x:hover{opacity:1}
+.aba.on{background:var(--card);border-color:var(--border);color:var(--fg)}
+.aba .ponto{width:.4rem;height:.4rem;border-radius:99px;flex-shrink:0}
+.aba .ponto.v{background:var(--violet)}
+.aba .ponto.m{background:var(--pink)}
+.split .painel{flex:1;overflow:auto;background:var(--card);border-top:1px solid var(--border);
+  min-width:34rem;position:relative}
+
+/* código com linhas SELECIONÁVEIS (P6) */
+.codeview{font-family:ui-monospace,Consolas,monospace;font-size:.75rem;line-height:1.6}
+.cl{display:flex;gap:0;min-width:0;position:relative}
+.cl .ln{width:2.6rem;flex-shrink:0;text-align:right;padding:.05rem .55rem .05rem 0;
+  color:var(--fg-muted);opacity:.55;user-select:none;cursor:pointer;
+  font-variant-numeric:tabular-nums;border-right:1px solid var(--border)}
+.cl .fc{flex:1;padding:.05rem .8rem;white-space:pre;overflow-x:auto;min-width:0;
+  color:var(--fg)}
+.cl:hover{background:var(--accent)}
+.cl.sel{background:color-mix(in oklab,var(--amber) 22%,transparent)}
+.cl.sel .ln{color:var(--amber);opacity:1;border-right-color:var(--amber)}
+.cl.cmt-feito{background:color-mix(in oklab,var(--amber) 10%,transparent)}
+.k{color:oklch(.75 .14 300)}   /* keyword */
+.s{color:oklch(.75 .12 150)}   /* string */
+.f{color:oklch(.78 .12 200)}   /* função */
+.c{color:var(--fg-muted);font-style:italic} /* comentário */
+.n{color:oklch(.8 .1 60)}      /* número */
+
+/* botão flutuante de comentário sobre a seleção */
+.cmt-fab{position:fixed;z-index:80;display:none;gap:.4rem;align-items:center;
+  background:var(--popover);border:1px solid var(--amber);border-radius:9px;
+  padding:.35rem .6rem;font-size:.75rem;font-weight:600;color:var(--amber);
+  box-shadow:var(--shadow)}
+.cmt-fab.on{display:inline-flex}
+
+/* painel de mídia no split */
+.mpalco{display:flex;flex-direction:column;gap:.6rem;padding:.8rem}
+.mtelao{aspect-ratio:16/9;border-radius:10px;overflow:hidden;position:relative;
+  display:grid;place-items:center;
+  background:linear-gradient(140deg,oklch(.5 .18 320),oklch(.25 .1 240));font-size:3rem}
+.mtelao .play{width:3.4rem;height:3.4rem;border-radius:99px;background:oklch(0 0 0/.55);
+  display:grid;place-items:center;color:#fff;font-size:1.2rem;cursor:pointer;transition:transform .15s}
+.mtelao .play:hover{transform:scale(1.1)}
+.mmeta{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+.mmeta .tagm{font-size:.68rem;padding:.15rem .55rem;border-radius:99px;
+  border:1px solid var(--border);color:var(--fg-muted)}
+.mprompt{font-size:.78rem;color:var(--fg-muted);border:1px dashed var(--border);
+  border-radius:9px;padding:.6rem .7rem}
+.mprompt b{color:var(--fg)}
+/* timeline de quadros (selecionar trecho do vídeo p/ comentário) */
+.frames{display:flex;gap:.25rem}
+.frames button{aspect-ratio:16/9;flex:1;border-radius:5px;border:1px solid var(--border);
+  opacity:.65;transition:opacity .15s;min-width:0}
+.frames button:hover{opacity:1}
+.frames button.sel{opacity:1;outline:2px solid var(--amber);border-color:var(--amber)}
+.fr1{background:linear-gradient(140deg,oklch(.5 .18 320),oklch(.3 .1 250))}
+.fr2{background:linear-gradient(140deg,oklch(.55 .16 200),oklch(.3 .08 260))}
+.fr3{background:linear-gradient(140deg,oklch(.45 .14 150),oklch(.25 .1 220))}
+.fr4{background:linear-gradient(140deg,oklch(.6 .12 60),oklch(.3 .1 240))}
+
+/* lista de comentários do artefato (dentro do split) */
+.cmts-arte{border-top:1px solid var(--border);padding:.7rem .8rem}
+.cmts-arte .h{font-size:.75rem;font-weight:700;color:var(--fg-muted);margin-bottom:.5rem}
+.cmt-item{display:flex;gap:.55rem;padding:.45rem .55rem;border-radius:8px;min-width:0}
+.cmt-item:hover{background:var(--accent)}
+.cmt-item .mini{font-size:.62rem;font-family:ui-monospace,Consolas,monospace;
+  color:var(--amber);flex-shrink:0;padding-top:.15rem}
+.cmt-item .t{font-size:.78rem;min-width:0;overflow-wrap:break-word}
+
+/* toasts */
+.toasts{position:fixed;bottom:1.2rem;left:50%;transform:translateX(-50%);
+  display:flex;flex-direction:column;gap:.5rem;z-index:200;align-items:center}
+.toast{background:var(--popover);border:1px solid var(--border);border-radius:9px;
+  padding:.55rem .9rem;font-size:.8rem;box-shadow:var(--shadow);
+  animation:tin .25s ease;max-width:26rem}
+@keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
+</style>
+</head>
+<body>
+<!-- ═══════════ TOPBAR ═══════════ -->
+<header class="topbar">
+  <span class="logo">◧</span><b>RagAroy</b>
+  <span style="font-size:.7rem;color:var(--fg-muted);margin-left:.3rem">· chat central</span>
+  <div class="sp"></div>
+  <button class="tgl on" id="tglTrilha" onclick="tglTrilha()">🧾 Trilha de execução</button>
+  <button class="tgl" id="tglSplit" onclick="tglSplit()">◧ Split do artefato</button>
+  <button class="tgl" onclick="toggleTheme()" id="themeBtn">☀️</button>
+</header>
+
+<div class="corpo-wrap">
+<div class="shell" id="shell">
+
+  <!-- ═══════════ P2/P3 — TRILHA DE EXECUÇÃO ═══════════ -->
+  <aside class="trilha" id="trilha">
+    <div class="hd">
+      <b>🧾 Trilha de execução</b>
+      <div class="sp"></div>
+      <span class="badge" style="font-size:.65rem;border:1px solid var(--border);
+        border-radius:99px;padding:.1rem .5rem;color:var(--fg-muted)">9 passos · 2 artefatos</span>
+      <button title="fechar" onclick="tglTrilha()" style="color:var(--fg-muted)">✕</button>
+    </div>
+    <div class="traduz" style="padding:.6rem .6rem 0">
+      <span style="font-size:.65rem;color:var(--fg-muted)">idioma dos logs (P3):</span>
+      <button class="on" onclick="setPT(this,false)">🔩 técnico EN</button>
+      <button onclick="setPT(this,true)">🇧🇷 PT pela LLM</button>
+    </div>
+    <div class="corpo" id="corpoTrilha">
+
+      <div class="passo p-llm" onclick="this.classList.toggle('aberto')">
+        <button>
+          <span class="ic">🧭</span>
+          <span class="bt">
+            <span class="t">Roteamento da pergunta <span class="dur">180ms</span></span>
+          </span>
+          <span class="chev">▸</span>
+        </button>
+        <div class="dentro">
+          <div class="campo"><div class="rot">Por quê</div>
+            <div class="val">Toda pergunta passa pelo roteador antes de qualquer coisa.</div></div>
+          <div class="campo"><div class="rot">Como</div>
+            <div class="v-en"><div class="tec">router → mode=codigo
+query_rewritten(EN)="fastapi endpoint pydantic validation"
+confidence=0.94</div></div>
+            <div class="v-pt">A LLM reescreveu sua pergunta em <b>inglês</b> (a base é toda
+              em inglês) e decidiu usar o <b>modo código</b> com 94% de confiança — por isso
+              a busca foi na coleção de código, não nas outras.</div></div>
+          <a class="spec-link" href="#" onclick="return false">📄 spec roteador.md</a>
+        </div>
+      </div>
+
+      <div class="passo p-busca" onclick="this.classList.toggle('aberto')">
+        <button>
+          <span class="ic">🔎</span>
+          <span class="bt">
+            <span class="t">Busca vetorial (3 coleções) <span class="dur">240ms</span></span>
+          </span>
+          <span class="chev">▸</span>
+        </button>
+        <div class="dentro">
+          <div class="campo"><div class="rot">Por quê</div>
+            <div class="val">O roteador escolheu modo código → precisa de referência real antes de gerar.</div></div>
+          <div class="campo"><div class="rot">Como</div>
+            <div class="v-en"><div class="tec">qdrant.search(cosine, top_k=4, score_min=0.35)
+collections=[py_ia_langchain, py_stdlib, dotnet_fundamentos]
+embedding=bge-m3@8081 · vectors=1</div></div>
+            <div class="v-pt">Sua pergunta virou vetor no <b>BGE-M3</b> e foi comparada
+              (cosseno) com os chunks de 3 coleções — cada uma contribuiu com seus 4 melhores
+              trechos, descartando o que pontuou abaixo de 0,35.</div></div>
+          <div class="campo"><div class="rot">Resultado</div>
+            <div class="val">12 fragmentos · melhor score 0,71</div></div>
+        </div>
+      </div>
+
+      <div class="passo p-busca" onclick="this.classList.toggle('aberto')">
+        <button>
+          <span class="ic">🎛️</span>
+          <span class="bt">
+            <span class="t">Rerank cross-encoder <span class="dur">310ms</span></span>
+          </span>
+          <span class="chev">▸</span>
+        </button>
+        <div class="dentro">
+          <div class="campo"><div class="rot">Por quê</div>
+            <div class="val">12 fragmentos é contexto demais para o prompt — rerank corta para os 4 mais relevantes.</div></div>
+          <div class="campo"><div class="rot">Como</div>
+            <div class="v-en"><div class="tec">bge-reranker-base (CPU)
+12 docs → scores [0.94, 0.91, 0.88, 0.71, ...] → top4</div></div>
+            <div class="v-pt">Um <b>cross-encoder</b> leu pergunta+texto juntos e deu nota
+              de 0 a 1 para cada um dos 12; só os 4 acima de 0,88 foram para o prompt.</div></div>
+          <a class="spec-link" href="#" onclick="return false">📄 agrupado por embedding · conceito "rerank"</a>
+        </div>
+      </div>
+
+      <div class="passo p-codigo" onclick="this.classList.toggle('aberto')">
+        <button>
+          <span class="ic">🧩</span>
+          <span class="bt">
+            <span class="t">Geração do código <span class="dur">8,4s</span></span>
+          </span>
+          <span class="chev">▸</span>
+        </button>
+        <div class="dentro">
+          <div class="campo"><div class="rot">Por quê</div>
+            <div class="val">Com as referências ranqueadas, a LLM gera o artefato no formato da spec de geração.</div></div>
+          <div class="campo"><div class="rot">Como</div>
+            <div class="v-en"><div class="tec">llm=qwen2.5-coder-7b temp=0.2 ctx=4 docs
+usage: 1.812 prompt / 604 completion tokens</div></div>
+            <div class="v-pt">O <b>Qwen2.5-Coder</b> recebeu os 4 trechos como referência
+              e escreveu o endpoint — 604 tokens gerados a partir de 1.812 de contexto,
+              com temperatura baixa (0,2) para código.</div></div>
+          <div class="campo"><div class="rot">Resultado</div>
+            <div class="val">artefato <b>endpoint.py</b> · aberto no split</div></div>
+        </div>
+      </div>
+
+      <div class="passo p-ferramenta" onclick="this.classList.toggle('aberto')">
+        <button>
+          <span class="ic">🔧</span>
+          <span class="bt">
+            <span class="t">Validação MCP (syntax) <span class="dur">1,1s</span></span>
+          </span>
+          <span class="chev">▸</span>
+        </button>
+        <div class="dentro">
+          <div class="campo"><div class="rot">Por quê</div>
+            <div class="val">Código gerado passa por verificação automática antes de ser entregue (anti-invenção).</div></div>
+          <div class="campo"><div class="rot">Como</div>
+            <div class="v-en"><div class="tec">mcp: python_lint.check(path="endpoint.py")
+→ ok · 0 errors · 1 warning (import order)</div></div>
+            <div class="v-pt">A ferramenta MCP de lint leu o arquivo gerado e confirmou
+              <b>0 erros</b> — o registro real dela é a prova, não a palavra do modelo.</div></div>
+        </div>
+      </div>
+
+      <div class="passo p-midia" onclick="this.classList.toggle('aberto')">
+        <button>
+          <span class="ic">🎬</span>
+          <span class="bt">
+            <span class="t">Pipeline de mídia (t2v) <span class="dur">2min 41s</span></span>
+          </span>
+          <span class="chev">▸</span>
+        </button>
+        <div class="dentro">
+          <div class="campo"><div class="rot">Por quê</div>
+            <div class="val">O pedido seguinte foi visual → pipeline RAG-ancorado de prompt + difusão.</div></div>
+          <div class="campo"><div class="rot">Como</div>
+            <div class="v-en"><div class="tec">prompts_midia.knn(ideia) → 3 variações → critica
+wan2.2 TI2V-5B · steps=20 · 832x480
+vram: pause chat:8090 → render → restore ok</div></div>
+            <div class="v-pt">A LLM escreveu <b>3 variações do prompt</b> apoiadas nos
+              exemplos da coleção <b>prompts_midia</b>, criticou-as e usou a melhor;
+              o chat pausou para liberar VRAM e <b>voltou sozinho</b> ao fim.</div></div>
+          <div class="campo"><div class="rot">Resultado</div>
+            <div class="val">🎬 <b>video_0012.mp4</b> · 5s · inline no chat + split</div></div>
+        </div>
+      </div>
+
+      <div class="passo p-llm" onclick="this.classList.toggle('aberto')">
+        <button>
+          <span class="ic">📐</span>
+          <span class="bt">
+            <span class="t">Descrição da mídia (i2t) <span class="dur">3,2s</span></span>
+          </span>
+          <span class="chev">▸</span>
+        </button>
+        <div class="dentro">
+          <div class="campo"><div class="rot">Por quê</div>
+            <div class="val">Para a mídia entrar no contexto da conversa, ela precisa virar texto (RAG).</div></div>
+          <div class="campo"><div class="rot">Como</div>
+            <div class="v-en"><div class="tec">qwen2.5-vl @8082 → describe(frames=8)
+→ embed(bge-m3) → qdrant.upsert(midia_gerada)</div></div>
+            <div class="v-pt">O modelo de <b>visão</b> descreveu o vídeo frame a frame,
+              a descrição virou embedding e foi indexada — agora dá para <b>perguntar sobre
+              o vídeo</b> no chat.</div></div>
+        </div>
+      </div>
+
+      <div class="passo p-llm" onclick="this.classList.toggle('aberto')">
+        <button>
+          <span class="ic">🌐</span>
+          <span class="bt">
+            <span class="t">Tradução dos logs (este painel) <span class="dur">sob demanda</span></span>
+          </span>
+          <span class="chev">▸</span>
+        </button>
+        <div class="dentro">
+          <div class="campo"><div class="rot">Por quê</div>
+            <div class="val">Log técnico é fonte da verdade, mas a leitura é em português (P3).</div></div>
+          <div class="campo"><div class="rot">Como</div>
+            <div class="v-en"><div class="tec">for passo in trilha: llm.translate(EN→PT, ctx=spec)
+cache: redis · chave=hash(passo) · agrupamento=embedding(≥0.93)</div></div>
+            <div class="v-pt">Cada linha técnica foi traduzida <b>pela própria LLM</b> com o
+              contexto da spec; traduções ficam em cache no Redis e passos <b>semanticamente
+              iguais</b> (embedding ≥ 0,93) compartilham a mesma explicação.</div></div>
+          <a class="spec-link" href="#" onclick="return false">📄 conceito agrupado: "tradução de log"</a>
+        </div>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- ═══════════ P1/P5 — CHAT CENTRAL ═══════════ -->
+  <main class="chatc">
+    <div class="filtros">
+      <span style="font-size:.7rem;color:var(--fg-muted);margin-right:.2rem">categorias:</span>
+      <button class="fchip on" data-c="tudo" onclick="filtrar(this)">Tudo <span class="n">7</span></button>
+      <button class="fchip" data-c="conversa" onclick="filtrar(this)">💬 Conversa <span class="n">3</span></button>
+      <button class="fchip" data-c="codigo" onclick="filtrar(this)">🧩 Código <span class="n">1</span></button>
+      <button class="fchip" data-c="midia" onclick="filtrar(this)">🎬 Mídia <span class="n">1</span></button>
+      <button class="fchip" data-c="ferramenta" onclick="filtrar(this)">🔧 Ferramenta <span class="n">1</span></button>
+      <button class="fchip" data-c="comentario" onclick="filtrar(this)">🖊️ Comentário <span class="n">1</span></button>
+    </div>
+
+    <div class="fluxo" id="fluxo">
+
+      <!-- 1 · pergunta (conversa) -->
+      <div class="msgc" data-cat="conversa">
+        <div class="av">🧑</div>
+        <div class="corpo-msg">
+          <div class="cab"><span class="quem">Você</span><span class="cat cat-conversa">💬 conversa</span></div>
+          <div class="txt">Cria um endpoint FastAPI com validação de payload via pydantic, seguindo os padrões da base.</div>
+        </div>
+      </div>
+
+      <!-- 2 · resposta com ARTEFATO código (orgânico + resumo) -->
+      <div class="msgc" data-cat="codigo">
+        <div class="av ia">🤖</div>
+        <div class="corpo-msg">
+          <div class="cab">
+            <span class="quem">Assistente</span><span class="cat cat-codigo">🧩 código</span>
+            <span class="quem" style="font-weight:400">· qwen2.5-coder · 4 fontes</span>
+          </div>
+          <div class="txt">Pronto — segui o padrão de <b>resposta + modelo pydantic + router separado</b> das fontes
+da base (py_ia_langchain [1], py_stdlib [3]). Validador de e-mail incluso. O arquivo está no split:</div>
+          <div class="arte">
+            <div class="top">
+              <span class="ling">python</span>
+              <span class="arq">endpoint.py</span>
+              <span class="n" style="font-size:.65rem;color:var(--fg-muted)">32 linhas</span>
+            </div>
+<pre><span class="k">from</span> fastapi <span class="k">import</span> APIRouter, HTTPException
+<span class="k">from</span> pydantic <span class="k">import</span> BaseModel, EmailStr, Field
+
+router = APIRouter(prefix=<span class="s">"/api/usuarios"</span>)
+
+<span class="k">class</span> <span class="f">UsuarioIn</span>(BaseModel):
+    nome: <span class="f">str</span> = Field(min_length=<span class="n">2</span>, max_length=<span class="n">80</span>)
+    email: EmailStr
+    idade: <span class="f">int</span> = Field(ge=<span class="n">13</span>, le=<span class="n">120</span>)
+
+<span class="f">@router.post</span>(<span class="s">""</span>, status_code=<span class="n">201</span>)
+<span class="k">async def</span> <span class="f">criar</span>(dados: UsuarioIn): ...</pre>
+            <div class="rod">
+              <button class="abrir" onclick="abrirArtefato('codigo')">◧ abrir no split</button>
+              <span class="meta">612 tok · 8,4s · lint ✓</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3 · pedido de mídia na MESMA conversa (orgânico) -->
+      <div class="msgc" data-cat="conversa">
+        <div class="av">🧑</div>
+        <div class="corpo-msg">
+          <div class="cab"><span class="quem">Você</span><span class="cat cat-conversa">💬 conversa</span></div>
+          <div class="txt">Agora gera um vídeo curto mostrando esse endpoint recebendo requisições e respondendo 201.</div>
+        </div>
+      </div>
+
+      <!-- 4 · mídia INLINE no chat -->
+      <div class="msgc" data-cat="midia">
+        <div class="av ia">🤖</div>
+        <div class="corpo-msg">
+          <div class="cab">
+            <span class="quem">Estúdio</span><span class="cat cat-midia">🎬 mídia</span>
+            <span class="quem" style="font-weight:400">· Wan2.2 t2v · prompt RAG-ancorado</span>
+          </div>
+          <div class="minline">
+            <div class="telav" onclick="abrirArtefato('midia')">
+              <span class="play">▶</span>
+              <span class="durv">0:05</span>
+            </div>
+            <div class="rodv">
+              <span class="t">video_0012.mp4 · 832×480 · 5s · 2min 41s de render</span>
+              <button class="abrir" onclick="abrirArtefato('midia')">◧ split</button>
+            </div>
+          </div>
+          <div class="txt" style="margin-top:.4rem">O vídeo já foi <b>descrito e indexado</b> (i2t → embedding) —
+pergunte qualquer coisa sobre ele nesta conversa. O pipeline completo está na trilha à esquerda.</div>
+        </div>
+      </div>
+
+      <!-- 5 · ferramenta executada (transparente) -->
+      <div class="msgc" data-cat="ferramenta">
+        <div class="av">⚙️</div>
+        <div class="corpo-msg">
+          <div class="cab">
+            <span class="quem">Sistema</span><span class="cat cat-ferramenta">🔧 ferramenta</span>
+            <span class="quem" style="font-weight:400">· MCP python_lint</span>
+          </div>
+          <div class="txt">Verificação automática de <code>endpoint.py</code>: <b>0 erros</b>, 1 aviso
+(ordem de import) — registro real do MCP na trilha, não afirmação do modelo.</div>
+        </div>
+      </div>
+
+      <!-- 6 · COMENTÁRIO ANCORADO (P6) — nasce da seleção no split -->
+      <div class="msgc" data-cat="comentario" id="cmtMsg1" style="display:none">
+        <div class="av" style="background:color-mix(in oklab,var(--amber) 30%,transparent)">🖊️</div>
+        <div class="corpo-msg">
+          <div class="cab">
+            <span class="quem">Você</span><span class="cat cat-comentario">🖊️ comentário</span>
+            <span class="quem" style="font-weight:400">· ancorado em endpoint.py</span>
+          </div>
+          <div class="cmt">
+            <button class="ancora" onclick="irParaLinhas(9,11)">🧩 endpoint.py : L9–L11</button>
+            <div class="txt" id="cmtTexto1">—</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- COMPOSER -->
+    <div class="composer">
+      <div class="linha">
+        <button class="icobtn" title="anexar contexto da sessão">📎</button>
+        <textarea id="pergunta" rows="1"
+          placeholder="Converse, peça código ou peça mídia — a resposta aparece aqui e o artefato no split…"></textarea>
+        <button class="icobtn" title="ditar (STT)">🎤</button>
+        <button class="icobtn p" title="enviar" onclick="enviarDemo()">➤</button>
+      </div>
+      <div class="dica">
+        ⏎ envia · ⇧⏎ nova linha · <b>selecione linhas no split</b> para comentar ancorado (P6) ·
+        categorias filtram sem quebrar o fluxo (P5)
+      </div>
+    </div>
+  </main>
+
+  <!-- ═══════════ P4 — SPLIT MULTIMODAL ═══════════ -->
+  <aside class="split" id="split">
+    <div class="abas">
+      <button class="aba on" id="aba-codigo" onclick="mudarAba('codigo')">
+        <span class="ponto v"></span><span class="t">endpoint.py</span>
+        <span class="x" onclick="event.stopPropagation();fecharSplit()">✕</span>
+      </button>
+      <button class="aba" id="aba-midia" onclick="mudarAba('midia')">
+        <span class="ponto m"></span><span class="t">video_0012.mp4</span>
+        <span class="x" onclick="event.stopPropagation();fecharSplit()">✕</span>
+      </button>
+    </div>
+
+    <!-- painel CÓDIGO -->
+    <div class="painel" id="painel-codigo">
+      <div class="codeview" id="codeview">
+        <div class="cl"><span class="ln">1</span><span class="fc"><span class="c"># endpoint.py — gerado pela conversa acima</span></span></div>
+        <div class="cl"><span class="ln">2</span><span class="fc"><span class="k">from</span> fastapi <span class="k">import</span> APIRouter, HTTPException</span></div>
+        <div class="cl"><span class="ln">3</span><span class="fc"><span class="k">from</span> pydantic <span class="k">import</span> BaseModel, EmailStr, Field</span></div>
+        <div class="cl"><span class="ln">4</span><span class="fc"></span></div>
+        <div class="cl"><span class="ln">5</span><span class="fc">router = APIRouter(prefix=<span class="s">"/api/usuarios"</span>)</span></div>
+        <div class="cl"><span class="ln">6</span><span class="fc"></span></div>
+        <div class="cl"><span class="ln">7</span><span class="fc"><span class="k">class</span> <span class="f">UsuarioIn</span>(BaseModel):</span></div>
+        <div class="cl"><span class="ln">8</span><span class="fc">    <span class="c">"""payload validado — contrato da API"""</span></span></div>
+        <div class="cl"><span class="ln">9</span><span class="fc">    nome: <span class="f">str</span> = Field(min_length=<span class="n">2</span>, max_length=<span class="n">80</span>)</span></div>
+        <div class="cl"><span class="ln">10</span><span class="fc">    email: EmailStr</span></div>
+        <div class="cl"><span class="ln">11</span><span class="fc">    idade: <span class="f">int</span> = Field(ge=<span class="n">13</span>, le=<span class="n">120</span>)</span></div>
+        <div class="cl"><span class="ln">12</span><span class="fc"></span></div>
+        <div class="cl"><span class="ln">13</span><span class="fc"><span class="k">class</span> <span class="f">UsuarioOut</span>(BaseModel):</span></div>
+        <div class="cl"><span class="ln">14</span><span class="fc">    id: <span class="f">int</span></span></div>
+        <div class="cl"><span class="ln">15</span><span class="fc">    criado_em: <span class="f">str</span></span></div>
+        <div class="cl"><span class="ln">16</span><span class="fc"></span></div>
+        <div class="cl"><span class="ln">17</span><span class="fc"><span class="f">@router.post</span>(<span class="s">""</span>, status_code=<span class="n">201</span>, response_model=UsuarioOut)</span></div>
+        <div class="cl"><span class="ln">18</span><span class="fc"><span class="k">async def</span> <span class="f">criar</span>(dados: UsuarioIn):</span></div>
+        <div class="cl"><span class="ln">19</span><span class="fc">    usuario = <span class="k">await</span> repo.salvar(dados)</span></div>
+        <div class="cl"><span class="ln">20</span><span class="fc">    <span class="k">return</span> UsuarioOut(id=usuario.id, criado_em=usuario.criado_em)</span></div>
+        <div class="cl"><span class="ln">21</span><span class="fc"></span></div>
+        <div class="cl"><span class="ln">22</span><span class="fc"><span class="f">@router.get</span>(<span class="s">"/{id}"</span>)</span></div>
+        <div class="cl"><span class="ln">23</span><span class="fc"><span class="k">async def</span> <span class="f">buscar</span>(id: <span class="f">int</span>):</span></div>
+        <div class="cl"><span class="ln">24</span><span class="fc">    usuario = <span class="k">await</span> repo.obter(id)</span></div>
+        <div class="cl"><span class="ln">25</span><span class="fc">    <span class="k">if not</span> usuario:</span></div>
+        <div class="cl"><span class="ln">26</span><span class="fc">        <span class="k">raise</span> HTTPException(<span class="n">404</span>, <span class="s">"usuário não encontrado"</span>)</span></div>
+        <div class="cl"><span class="ln">27</span><span class="fc">    <span class="k">return</span> usuario</span></div>
+      </div>
+      <div class="cmts-arte" id="cmtsArte">
+        <div class="h">🖊️ comentários ancorados neste arquivo</div>
+        <div class="cmt-item" id="cmtListaItem" style="display:none">
+          <span class="mini" id="cmtMini">L9–L11</span>
+          <span class="t" id="cmtT">—</span>
+        </div>
+        <p style="font-size:.7rem;color:var(--fg-muted);margin-top:.5rem" id="cmtDica">
+          Dica: clique nos <b>números de linha</b> à esquerda para selecionar → botão
+          <b style="color:var(--amber)">💬 comentar seleção</b> aparece → o comentário vira
+          mensagem orgânica no chat com a âncora <span class="mono">endpoint.py:L9–L11</span>.
+        </p>
+      </div>
+    </div>
+
+    <!-- painel MÍDIA -->
+    <div class="painel" id="painel-midia" style="display:none">
+      <div class="mpalco">
+        <div class="mtelao"><span class="play">▶</span></div>
+        <div class="mmeta">
+          <span class="tagm">🎬 Wan2.2 TI2V-5B</span>
+          <span class="tagm">832×480 · 5s</span>
+          <span class="tagm">2min 41s · VRAM ok</span>
+          <span class="tagm" style="color:var(--ok)">✓ indexado (i2t)</span>
+        </div>
+        <div class="mprompt">
+          <b>Prompt final (critica escolheu a variação 2 de 3):</b><br>
+          "Cinematic shot of a glowing REST endpoint receiving glowing request orbs,
+          each orb validated by a shield of light (201 CREATED stamped), dark server
+          room ambiance, volumetric light, smooth camera dolly, 5 seconds"
+        </div>
+        <div>
+          <div style="font-size:.72rem;color:var(--fg-muted);margin-bottom:.35rem">
+            🎞️ quadros — <b>clique para selecionar um trecho</b> e comentar ancorado (P6)
+          </div>
+          <div class="frames">
+            <button class="fr1" onclick="selFrame(this,0)" title="0:00–0:01"></button>
+            <button class="fr2" onclick="selFrame(this,1)" title="0:01–0:02"></button>
+            <button class="fr3" onclick="selFrame(this,2)" title="0:02–0:03"></button>
+            <button class="fr4" onclick="selFrame(this,3)" title="0:03–0:05"></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+</div><!-- /shell -->
+</div><!-- /corpo-wrap -->
+
+<!-- FAB de comentário (aparece sobre a seleção de linhas) -->
+<div class="cmt-fab" id="cmtFab">💬 comentar seleção <span class="mono" id="fabRange" style="opacity:.8"></span></div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+/* ═══════════ MOTOR DO PROTÓTIPO ═══════════ */
+
+function toast(msg){
+  const el=document.createElement('div');
+  el.className='toast'; el.textContent=msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(()=>{el.style.opacity='0';el.style.transition='opacity .3s'},2600);
+  setTimeout(()=>el.remove(),3000);
+}
+
+/* ── toggles de painel ── */
+function tglTrilha(){
+  const on=document.getElementById('shell').classList.toggle('sem-trilha');
+  document.getElementById('tglTrilha').classList.toggle('on',!on);
+}
+function tglSplit(){ document.getElementById('split').classList.contains('fechado') ?
+  abrirSplit() : fecharSplit(); }
+function abrirSplit(){
+  const s=document.getElementById('shell');
+  s.classList.remove('sem-split');
+  document.getElementById('split').classList.remove('fechado');
+  document.getElementById('tglSplit').classList.add('on');
+}
+function fecharSplit(){
+  document.getElementById('shell').classList.add('sem-split');
+  document.getElementById('split').classList.add('fechado');
+  document.getElementById('tglSplit').classList.remove('on');
+  esconderFab();
+}
+function abrirArtefato(tipo){
+  abrirSplit(); mudarAba(tipo);
+  toast(tipo==='codigo'?'🧩 endpoint.py aberto no split (P4)':'🎬 video_0012.mp4 no split (P4)');
+}
+function mudarAba(tipo){
+  document.getElementById('aba-codigo').classList.toggle('on',tipo==='codigo');
+  document.getElementById('aba-midia').classList.toggle('on',tipo==='midia');
+  document.getElementById('painel-codigo').style.display=tipo==='codigo'?'':'none';
+  document.getElementById('painel-midia').style.display=tipo==='midia'?'':'none';
+  esconderFab();
+}
+
+/* ── P3: EN técnico ↔ PT da LLM ── */
+function setPT(btn,pt){
+  document.querySelectorAll('.traduz button').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById('trilha').classList.toggle('pt',pt);
+  toast(pt?'🇧🇷 explicação em PT pela LLM (cache Redis + agrupamento por embedding)'
+          :'🔩 log técnico original (EN) — fonte da verdade');
+}
+
+/* ── P5: filtro por categoria ── */
+function filtrar(chip){
+  document.querySelectorAll('.fchip').forEach(c=>c.classList.remove('on'));
+  chip.classList.add('on');
+  const cat=chip.dataset.c;
+  document.querySelectorAll('.msgc').forEach(m=>{
+    m.classList.toggle('escondida',cat!=='tudo'&&m.dataset.cat!==cat);
+  });
+  toast(cat==='tudo'?'🗂️ fluxo completo (orgânico)':
+    '🗂️ filtrando '+cat+' — o fluxo temporal continua o mesmo (P5)');
+}
+
+/* ── P6: seleção de linhas → comentário ancorado ── */
+let selIni=null, selFim=null;
+const fab=document.getElementById('cmtFab');
+
+document.querySelectorAll('#codeview .cl .ln').forEach(ln=>{
+  ln.addEventListener('click',e=>{
+    const linha=+ln.textContent;
+    if(selIni===null){ selIni=linha; selFim=linha; }
+    else if(linha<=selIni){ selIni=linha; }
+    else { selFim=linha; }
+    pintarSel();
+    posicionarFab(e);
+  });
+});
+function pintarSel(){
+  document.querySelectorAll('#codeview .cl').forEach(cl=>{
+    const n=+cl.querySelector('.ln').textContent;
+    cl.classList.toggle('sel',n>=selIni&&n<=selFim);
+  });
+  document.getElementById('fabRange').textContent=
+    selIni===selFim?('L'+selIni):('L'+selIni+'–L'+selFim);
+}
+function posicionarFab(e){
+  const r=e.target.getBoundingClientRect();
+  fab.style.left=(r.left+40)+'px';
+  fab.style.top=(r.bottom+6)+'px';
+  fab.classList.add('on');
+}
+function esconderFab(){ fab.classList.remove('on'); selIni=selFim=null;
+  document.querySelectorAll('#codeview .cl').forEach(c=>c.classList.remove('sel')); }
+
+fab.addEventListener('click',()=>{
+  const txt=prompt('Comentário ancorado em endpoint.py:'+
+    (selIni===selFim?('L'+selIni):('L'+selIni+'–L'+selFim))+
+    '\n\n(o que você quer dizer sobre este trecho?)');
+  if(!txt){ return; }
+  /* marca as linhas como comentadas */
+  document.querySelectorAll('#codeview .cl').forEach(cl=>{
+    const n=+cl.querySelector('.ln').textContent;
+    cl.classList.toggle('cmt-feito',n>=selIni&&n<=selFim);
+  });
+  /* lista no split */
+  document.getElementById('cmtMini').textContent=
+    selIni===selFim?('L'+selIni):('L'+selIni+'–L'+selFim);
+  document.getElementById('cmtT').textContent=txt;
+  document.getElementById('cmtListaItem').style.display='';
+  /* mensagem orgânica no chat (P5/P6) */
+  document.getElementById('cmtTexto1').textContent=txt;
+  const m=document.getElementById('cmtMsg1');
+  m.style.display='';
+  m.scrollIntoView({behavior:'smooth',block:'center'});
+  esconderFab();
+  toast('🖊️ comentário ancorado publicado no chat — clicar na âncora volta ao trecho');
+});
+
+/* âncora no chat → abre split nas linhas */
+function irParaLinhas(a,b){
+  mudarAba('codigo'); abrirSplit();
+  selIni=a; selFim=b; pintarSel();
+  const alvo=document.querySelector('#codeview .cl:nth-child('+a+')');
+  if(alvo) alvo.scrollIntoView({behavior:'smooth',block:'center'});
+  toast('🧩 saltou para endpoint.py:'+a+'–'+b);
+}
+
+/* ── P6 (mídia): selecionar quadro → comentário ancorado no tempo ── */
+let frameSel=null;
+function selFrame(btn,i){
+  document.querySelectorAll('.frames button').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel'); frameSel=i;
+  const t=['0:00–0:01','0:01–0:02','0:02–0:03','0:03–0:05'][i];
+  const txt=prompt('Comentário ancorado em video_0012.mp4 @'+t+':');
+  if(!txt){ btn.classList.remove('sel'); frameSel=null; return; }
+  const fluxo=document.getElementById('fluxo');
+  const m=document.createElement('div');
+  m.className='msgc'; m.dataset.cat='comentario';
+  m.innerHTML=
+    '<div class="av" style="background:color-mix(in oklab,var(--amber) 30%,transparent)">🖊️</div>'+
+    '<div class="corpo-msg"><div class="cab">'+
+    '<span class="quem">Você</span><span class="cat cat-comentario">🖊️ comentário</span>'+
+    '<span class="quem" style="font-weight:400">· ancorado em video_0012.mp4</span></div>'+
+    '<div class="cmt"><button class="ancora" onclick="mudarAba(\'midia\');abrirSplit()">🎬 video_0012 @'+t+'</button>'+
+    '<div class="txt">'+txt+'</div></div></div>';
+  fluxo.appendChild(m); m.scrollIntoView({behavior:'smooth'});
+  toast('🖊️ comentário ancorado no TEMPO do vídeo — mesmo modelo do código (P6)');
+}
+
+/* ── composer: demonstra resposta orgânica por categoria ── */
+function enviarDemo(){
+  const ta=document.getElementById('pergunta');
+  const q=(ta.value||'').trim(); if(!q){ toast('digite algo…'); return; }
+  const fluxo=document.getElementById('fluxo');
+  const m=document.createElement('div');
+  m.className='msgc'; m.dataset.cat='conversa';
+  m.innerHTML='<div class="av">🧑</div><div class="corpo-msg">'+
+    '<div class="cab"><span class="quem">Você</span>'+
+    '<span class="cat cat-conversa">💬 conversa</span></div>'+
+    '<div class="txt"></div></div>';
+  m.querySelector('.txt').textContent=q;
+  fluxo.appendChild(m); ta.value=''; m.scrollIntoView({behavior:'smooth'});
+  setTimeout(()=>toast('🤖 (protótipo de layout) — a resposta real viria com a categoria '+
+    'detectada pelo roteador: conversa / código→split / mídia→split'),500);
+}
+
+/* Enter envia · Shift+Enter quebra */
+document.getElementById('pergunta').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); enviarDemo(); }
+});
+
+/* tema */
+function toggleTheme(){
+  const h=document.documentElement;
+  const claro=h.dataset.theme==='light';
+  h.dataset.theme=claro?'dark':'light';
+  document.getElementById('themeBtn').textContent=claro?'☀️':'🌙';
+}
+
+/* boot */
+setTimeout(()=>toast('👋 Premissas ativas: P1 chat hub · P2 trilha (clique nos passos!) · P4 split · P6 selecione linhas do código'),700);
+</script>
+</body>
+</html>
+

@@ -1,0 +1,11 @@
+# Normaliza finais de linha: LF no repo (CRLF só em arquivos Windows-only).
+# Elimina os warnings "LF will be replaced by CRLF" e mantém checkout consistente.
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.png binary
+*.jpg binary
+*.ico binary
+*.gguf binary
+*.safetensors binary

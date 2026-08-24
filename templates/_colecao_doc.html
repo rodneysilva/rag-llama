@@ -1,0 +1,16 @@
+{# DETALHE do documento (conteúdo do modal da Biblioteca) #}
+<div class="doc-detalhe">
+  <div class="doc-hd">
+    <b>{{ titulo[:110] }}</b>
+    <span class="doc-col">{{ total }} pedaço(s)</span>
+    <span class="doc-col">{{ nome }}</span>
+  </div>
+  {% if chave %}<div class="mini" style="overflow-wrap:anywhere;">origem: {{ chave }}</div>{% endif %}
+  {% for c in chunks %}
+  <div class="doc-tx" style="margin-top:.55rem; max-height:none; -webkit-line-clamp:unset; display:block; white-space:pre-wrap;">{{ c }}</div>
+  {% if not loop.last %}<hr style="border:0;border-top:1px dashed var(--borda);margin:.6rem 0;">{% endif %}
+  {% endfor %}
+  {% if total > chunks | length %}
+  <p class="mini" style="margin-top:.5rem;">mostrando {{ chunks | length }} de {{ total }} pedaço(s) — a busca usa todos.</p>
+  {% endif %}
+</div>

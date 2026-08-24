@@ -1,0 +1,62 @@
+{# FILA RabbitMQ rica (dashboard; polling 10s) — Management API + DLQ peek
+   + histórico agregado da telemetria. Partial auto-substituível. #}
+<div class="fila-live" id="fila-live"
+     hx-get="/hx/fila" hx-trigger="every 10s" hx-swap="outerHTML">
+  <div style="display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; margin-bottom:.5rem;">
+    <span class="selo {{ 'tipo-ingest' if fila.online else 'alerta' }}">
+      🐇 RabbitMQ {{ "online" if fila.online else "offline (threads)" }}</span>
+    {% if fila.online %}
+    <span class="mini">{{ fila.get("pendentes", 0) }} na fila ·
+      {{ fila.get("mortas", 0) }} na DLQ</span>
+    {% endif %}
+    {% for tipo, d in por_tipo.items() %}
+    <span class="mini" title="{{ d.ok }} ok · {{ d.erro }} erro(s)">
+      {{ tipo }}: {{ d.total }} <span style="color:var(--ok)">{{ d.ok }}✓</span>{% if d.erro %} <span style="color:var(--erro)">{{ d.erro }}✕</span>{% endif %}</span>
+    {% endfor %}
+  </div>
+
+  {% if fila.filas %}
+  <table class="tabela-dados" style="margin-bottom:.6rem;">
+    <thead><tr><th>fila</th><th class="num">mensagens</th><th class="num">prontas</th>
+      <th class="num">não-ack</th><th class="num">consumidores</th>
+      <th class="num">publicadas</th><th class="num">entregues</th><th class="num">pub/s</th></tr></thead>
+    <tbody>
+      {% for q in fila.filas %}
+      <tr>
+        <td class="mini" style="overflow-wrap:anywhere;">{{ q.nome }}</td>
+        <td class="num">{{ q.mensagens }}</td>
+        <td class="num">{{ q.prontas }}</td>
+        <td class="num">{{ q.nao_ack }}</td>
+        <td class="num">{{ q.consumidores }}</td>
+        <td class="num">{{ q.publicadas }}</td>
+        <td class="num">{{ q.entregues }}</td>
+        <td class="num">{{ q.taxa_pub }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% elif fila.get("mgmt_erro") %}
+  <p class="mini" style="opacity:.75;">Management API indisponível ({{ fila.mgmt_erro }}) —
+    mostrando só as profundidades.</p>
+  {% endif %}
+
+  {% if fila.dlq_msgs %}
+  <details class="raciocinio-vivo">
+    <summary>☠️ DLQ — {{ fila.dlq_msgs | length }} mensagem(ns) morta(s) recentes</summary>
+    <div class="log">
+      {% for m in fila.dlq_msgs %}
+      <div><span class="hora">{{ m.kind }}</span>{{ m.job }} {% if m.erro %}· {{ m.erro }}{% endif %}</div>
+      {% endfor %}
+    </div>
+  </details>
+  {% endif %}
+
+  {% if fila.telemetria and fila.telemetria.kinds %}
+  <div class="mini" style="margin-top:.4rem; opacity:.8;">
+    📜 histórico (telemetria):
+    {% for kind, k in fila.telemetria.kinds.items() %}
+    {{ kind }}: {{ k.publicados }} pub{% if k.outros %} · {{ k.outros }} evento(s){% endif %}{{ " · " if not loop.last }}
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>

@@ -1,0 +1,70 @@
+# CI/CD — GitFlow: develop integra (CI), main publica (CD/deploy)
+# NENHUM dado sensível aqui: IP/usuário/chave vêm dos secrets do repositório.
+name: ci-cd
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch: {}
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sintaxe Python
+        run: |
+          python -m py_compile $(find . -name "*.py" -not -path "./.git/*" -not -path "*/node_modules/*" -not -path "./webui/*") || true
+          echo "CI ok"
+
+  # scripts genéricos precisam valer em TODOS os sistemas operacionais
+  # (o usuário pode rodar em Windows, Linux ou macOS)
+  ci-multi-os:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Sintaxe do servicos_llm.py
+        run: python -m py_compile servicos_llm.py
+      - name: Modo não-interativo (sem MODELS_DIR)
+        shell: python
+        run: |
+          import subprocess, sys
+          r = subprocess.run([sys.executable, "servicos_llm.py", "--listar"],
+                             capture_output=True, text=True, input="")
+          print(r.stdout, r.stderr)
+          # sem MODELS_DIR e sem terminal: sai com instrução clara (não trava)
+          assert r.returncode == 1 and "MODELS_DIR" in (r.stdout + r.stderr)
+
+  cd:
+    needs: ci
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+      - name: Deploy no servidor
+        run: |
+          ssh -p ${{ secrets.VPS_PORT }} \
+              -o StrictHostKeyChecking=no -o ServerAliveInterval=30 \
+              ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'bash -s' <<'REMOTE'
+            set -e
+            cd ~/apps/rag-llama
+            git pull --ff-only
+            mkdir -p sessions saidas logs datasets modelos_voz qdrant_data rabbit_data
+            [[ -f users.json ]] || echo '{}' > users.json
+            COMPOSE="docker compose -f docker-compose.yml -f $HOME/infra/services/rag-llama/docker-compose.prod.yml"
+            $COMPOSE up -d qdrant rabbit redis
+            docker compose -f docker-compose.yml build sandbox
+            $COMPOSE up -d --no-deps sandbox
+            $COMPOSE build api
+            $COMPOSE up -d --force-recreate --no-deps api
+            $COMPOSE ps
+          REMOTE

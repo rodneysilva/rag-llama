@@ -1,0 +1,155 @@
+{
+  "versao": 1,
+  "nota": "Catálogo de servidores MCP conhecidos. A instalação registra no mcp_servers.json — os servidores npx/uvx baixam suas dependências na primeira execução. Campos {{param}} são preenchidos pelo operador na instalação.",
+  "servidores": [
+    {
+      "nome": "filesystem",
+      "rotulo": "Arquivos locais",
+      "descricao": "Ler/criar/editar arquivos dentro de uma pasta permitida.",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "{{pasta_permitida}}"],
+      "params": [{"chave": "pasta_permitida", "rotulo": "Pasta permitida (obrigatória — sem ela o servidor nega todo caminho)", "exemplo": "C:\\Users\\voce\\projetos"}]
+    },
+    {
+      "nome": "fetch",
+      "rotulo": "Navegação web",
+      "descricao": "Buscar páginas e APIs na web e devolver conteúdo limpo (sem navegador).",
+      "transport": "stdio",
+      "command": "uvx",
+      "args": ["mcp-server-fetch"],
+      "params": []
+    },
+    {
+      "nome": "git",
+      "rotulo": "Repositórios Git",
+      "descricao": "Operações de git (status, diff, log, branches) num repositório local.",
+      "transport": "stdio",
+      "command": "uvx",
+      "args": ["mcp-server-git", "--repository", "{{repositorio}}"],
+      "params": [{"chave": "repositorio", "rotulo": "Caminho do repositório", "exemplo": "C:\\projetos\\meu-repo"}]
+    },
+    {
+      "nome": "memory",
+      "rotulo": "Memória persistente",
+      "descricao": "Grafo de conhecimento do operador (entidades e relações) que persiste entre conversas.",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "params": []
+    },
+    {
+      "nome": "sequential-thinking",
+      "rotulo": "Raciocínio passo a passo",
+      "descricao": "Raciocínio estruturado em etapas para problemas complexos.",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "params": []
+    },
+    {
+      "nome": "sqlite",
+      "rotulo": "Banco SQLite",
+      "descricao": "Consultar e modificar um banco SQLite local.",
+      "transport": "stdio",
+      "command": "uvx",
+      "args": ["mcp-server-sqlite", "--db-path", "{{banco}}"],
+      "params": [{"chave": "banco", "rotulo": "Caminho do arquivo .db", "exemplo": "C:\\dados\\app.db"}]
+    },
+    {
+      "nome": "postgres",
+      "rotulo": "Banco PostgreSQL",
+      "descricao": "Esquemas e consultas SQL num PostgreSQL (string de conexão).",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "{{conn}}"],
+      "params": [{"chave": "conn", "rotulo": "Connection string (postgresql://…)", "exemplo": "postgresql://user:pass@localhost:5432/db"}]
+    },
+    {
+      "nome": "puppeteer",
+      "rotulo": "Navegador controlado",
+      "descricao": "Automação de navegador (capturas, cliques, navegação em SPAs).",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
+      "params": []
+    },
+    {
+      "nome": "brave-search",
+      "rotulo": "Busca Brave",
+      "descricao": "Busca na web via Brave Search API (requer chave).",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+      "params": [],
+      "atencao": "Define a variável de ambiente BRAVE_API_KEY antes de usar."
+    },
+    {
+      "nome": "github",
+      "rotulo": "GitHub",
+      "descricao": "Issues, PRs e repositórios do GitHub (requer token).",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "params": [],
+      "atencao": "Define a variável de ambiente GITHUB_PERSONAL_ACCESS_TOKEN antes de usar."
+    },
+    {
+      "nome": "everything",
+      "rotulo": "Busca de arquivos (Windows)",
+      "descricao": "Busca instantânea de arquivos no Windows via Everything (requer Everything instalado).",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-everything"],
+      "params": []
+    },
+    {
+      "nome": "gdrive",
+      "rotulo": "Google Drive",
+      "descricao": "Ler/pesquisar arquivos do Google Drive (OAuth na 1ª execução).",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-gdrive"],
+      "params": []
+    },
+    {
+      "nome": "slack",
+      "rotulo": "Slack",
+      "descricao": "Ler canais e enviar mensagens no Slack (requer token de bot).",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-slack"],
+      "params": [],
+      "atencao": "Define SLACK_BOT_TOKEN xoxb-… e SLACK_TEAM_ID antes de usar."
+    },
+    {
+      "nome": "google-maps",
+      "rotulo": "Google Maps",
+      "descricao": "Geocodificação, rotas e lugares via Google Maps (requer chave).",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-google-maps"],
+      "params": [],
+      "atencao": "Define GOOGLE_MAPS_API_KEY antes de usar."
+    },
+    {
+      "nome": "pesquisa-web",
+      "rotulo": "🔎 Busca web (NATIVA do RagAroy)",
+      "descricao": "Nativa — não instala: o motor de busca do RagAroy (Serper → DuckDuckGo → Wikipedia → GitHub, spec pesquisa_web.md) já serve o chat no modo auto, o seed e a pesquisa com evidências.",
+      "transport": "nativo",
+      "command": "",
+      "args": [],
+      "params": [],
+      "nativo": true
+    },
+    {
+      "nome": "pandoc",
+      "rotulo": "Conversor de documentos",
+      "descricao": "Converte documentos entre formatos (md, docx, pdf, html…) via pandoc.",
+      "transport": "stdio",
+      "command": "uvx",
+      "args": ["mcp-pandoc"],
+      "params": []
+    }
+  ]
+}

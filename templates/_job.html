@@ -1,0 +1,71 @@
+{# job GENÉRICO (pesquisa/ingestão/preview/limpeza/tarefa): log inline com resultado.
+   ?r=N no hx-get = CONTADOR de reconexão ao agente (o card segue polando
+   enquanto o agente da GPU volta; após 12 tentativas desiste de verdade). #}
+<div id="job-{{ job }}" class="cartao" style="padding:.8rem;" {% if running %}hx-get="/hx/job/{{ kind }}/{{ job }}{% if r %}?r={{ r }}{% endif %}" hx-trigger="every 1500ms" hx-swap="outerHTML"{% endif %}>
+  <div class="resumo-job">
+    {% if running %}
+      <span class="ponto" style="display:inline-block;"></span> {{ rotulo }}
+      {# UMA barra só, para TODOS os comportamentos: com % REAL do motor
+         (difusão/whisper/chatRAG etc.) ela é determinada com etapa/ETA;
+         sem %, indeterminada fina — nunca as duas empilhadas. #}
+      {% if progresso is not none %}
+      <div class="prog-info">
+        <div class="pbar real"><i style="width: {{ progresso }}%;"></i></div>
+        <span class="mini">{{ progresso }}%{% if etapa_atual %} · {{ etapa_atual }}{% endif %}{% if eta_s %} · ~{{ eta_s }}s restante(s){% endif %}</span>
+      </div>
+      {% else %}
+      <div class="pbar-job {% if reconectando %}rec{% else %}run{% endif %}"><i></i></div>
+      <span class="mini">{% if reconectando %}reconectando…{% else %}em andamento · {{ linhas | length }} linha(s){% endif %}</span>
+      {% endif %}
+    {% elif erro %}
+      <span class="erro">✕ falhou</span> — {{ rotulo }}
+      <div class="erro-texto">{{ erro }}</div>
+    <div class="pbar-job err"><i></i></div>
+    {% else %}
+      <span class="ok">✓ concluído</span> — {{ rotulo }}
+      {% if segundos %}
+        <span class="mini">· levou {% if segundos >= 90 %}{{ (segundos / 60) | round(1) }} min{% else %}{{ segundos }}s{% endif %}</span>
+      {% endif %}
+      {% if resumo_texto %}<span class="mini"> · {{ resumo_texto }}</span>{% endif %}
+    {% endif %}
+  </div>
+  {% if resultado_midia and not running and not erro %}
+    {% if resultado_midia.tipo == "video" %}
+      <video class="midia" controls src="/api/midia/video/{{ resultado_midia.arquivo | basename }}"></video>
+    {% else %}
+      <img class="midia clicavel" src="/api/midia/{{ resultado_midia.tipo }}/{{ resultado_midia.arquivo | basename }}" alt="{{ rotulo }}"
+           onclick="abrirLightbox(this.src, '{{ rotulo | e }}')">
+    {% endif %}
+  {% endif %}
+  {% if resultado_midia and not running and not erro %}
+  <div>
+    <button type="button" onclick="window.mostrarMidiaNoPainel && mostrarMidiaNoPainel('{{ resultado_midia.tipo }}', '{{ resultado_midia.arquivo | basename | e }}', '{{ rotulo | e }}')" style="margin:.3rem 0; padding:.2rem .55rem; border:1px solid var(--borda); border-radius:7px; background:none; color:var(--suave); cursor:pointer; font-size:.72rem;">&#9726; abrir no painel da conversa</button>
+  </div>
+  {# garantia: a mídia ENTRA no painel sozinha ao concluir (o coletor
+     também varre, mas o script torna o ingresso imune a ordem de swap) #}
+  <script>
+    if (window.mostrarMidiaNoPainel)
+      mostrarMidiaNoPainel('{{ resultado_midia.tipo }}',
+                           '{{ resultado_midia.arquivo | basename | e }}',
+                           '{{ rotulo | e }}');
+  </script>
+  {% endif %}
+  {% if linhas %}
+  {# 🧠 RACIOCÍNIO do job (como o chat — pedido do dono): expansível/
+      recolhível; a escolha sobrevive ao re-render de 1,5 s pelo mecanismo
+      ÚNICO do base.html (chave estável: id do card + summary). #}
+  <details class="raciocinio-vivo" open>
+    <summary>raciocínio · {{ linhas | length }} linha(s)</summary>
+    <div class="log">
+      {% for l in linhas %}<div>{% if l.ts %}<span class="hora">{{ l.ts }}</span>{% endif %}{{ l.msg }}</div>{% endfor %}
+    </div>
+  </details>
+  {% elif running and not reconectando %}
+  <div class="log"><div>aguardando as primeiras linhas…</div></div>
+  {% endif %}
+  {% if preview_pid and not running and not erro %}
+  <div style="margin-top:.6rem;">
+    <a class="botao primario" href="/revisao/{{ preview_pid }}">revisar e aprovar {{ resumo_texto }}</a>
+  </div>
+  {% endif %}
+</div>

@@ -1,0 +1,83 @@
+# ═══════════════════════════════════════════════════════════════
+# RagAroy — Compose de PRODUÇÃO (auto-contido, usado pelo Portal/CD)
+# ═══════════════════════════════════════════════════════════════
+# Este arquivo é consumido pelo dashboard de controle (stack com git).
+# NENHUM segredo/host aqui: valores sensíveis via variáveis do stack
+# (definidas no dashboard) ou do .env do servidor.
+# Caminhos de estado: /home/<user>/apps/rag-llama (persistência no host).
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.12.5
+    container_name: ragaroy-qdrant
+    restart: always
+    volumes:
+      - ${APP_DATA_DIR:-${APP_DATA_DIR:-/srv/rag-llama}}/qdrant_data:/qdrant/storage
+
+  rabbit:
+    image: rabbitmq:3.13-management
+    container_name: ragaroy-rabbit
+    restart: always
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBIT_USER:-ragaroy}
+      RABBITMQ_DEFAULT_PASS: ${RABBIT_PASS:-ragaroy}
+      RABBITMQ_DEFAULT_VHOST: /
+    volumes:
+      - ${APP_DATA_DIR:-${APP_DATA_DIR:-/srv/rag-llama}}/rabbit_data:/var/lib/rabbitmq
+
+  redis:
+    image: redis:7-alpine
+    container_name: ragaroy-redis
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  api:
+    image: ragaroy-api:prod
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ragaroy-api
+    restart: always
+    depends_on:
+      qdrant:
+        condition: service_started
+      rabbit:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    environment:
+      RAGAROY_CONTAINER: "1"
+      QDRANT_URL: http://qdrant:6333
+      RABBIT_URL: ${RABBIT_URL}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      # LLM/embedding via túnel zero-trust da estação — URLs e chave do stack
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      EMBED_BASE_URL: ${LLM_EMBED_BASE_URL}
+      LLM_API_KEY: ${LLM_API_KEY}
+      AGENTE_HOST_URL: http://host.docker.internal:8010
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ${APP_DATA_DIR:-${APP_DATA_DIR:-/srv/rag-llama}}/.env:/app/.env
+      - ${APP_DATA_DIR:-${APP_DATA_DIR:-/srv/rag-llama}}/users.json:/app/users.json
+      - ${APP_DATA_DIR:-${APP_DATA_DIR:-/srv/rag-llama}}/usuarios_permitidos.txt:/app/usuarios_permitidos.txt
+      - ${APP_DATA_DIR:-${APP_DATA_DIR:-/srv/rag-llama}}/mcp_servers.json:/app/mcp_servers.json
+      - ${APP_DATA_DIR:-${APP_DATA_DIR:-/srv/rag-llama}}/mcp_conhecidos.json:/app/mcp_conhecidos.json
+      - ${APP_DATA_DIR:-${APP_DATA_DIR:-/srv/rag-llama}}/sessions:/app/sessions
+      - ${APP_DATA_DIR:-${APP_DATA_DIR:-/srv/rag-llama}}/saidas:/app/saidas
+      - ${APP_DATA_DIR:-${APP_DATA_DIR:-/srv/rag-llama}}/logs:/app/logs
+      - ${APP_DATA_DIR:-${APP_DATA_DIR:-/srv/rag-llama}}/datasets:/app/datasets
+      - ${APP_DATA_DIR:-${APP_DATA_DIR:-/srv/rag-llama}}/modelos_voz:/app/modelos_voz
+    networks:
+      - default
+      - traefik_net
+
+networks:
+  traefik_net:
+    external: true
+    name: traefik_net

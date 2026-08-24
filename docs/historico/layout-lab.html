@@ -1,0 +1,1486 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Layout Lab — 10 padrões do mercado (aplicados ao RagAroy)</title>
+<!--
+  LAYOUT LAB — laboratório interativo de layouts que NÃO QUEBRAM
+  • Arquivo único, zero dependências — abra direto no navegador
+  • 10 padrões reais do mercado (ChatGPT, Linear, Stripe, Vercel…)
+    aplicados ao contexto do RagAroy
+  • Simulador de largura (320/768/1280/full/4K) por CONTAINER QUERY
+  • Botão ☠️ "estressar texto" injeta rótulos patológicos
+-->
+<style>
+/* ═══════ 1. TOKENS (identidade do webui RagAroy) ═══════ */
+:root{
+  --background: oklch(0.13 0.028 261.7);
+  --card:       oklch(0.19 0.03 261.7);
+  --muted:      oklch(0.24 0.03 261.7);
+  --fg:         oklch(0.93 0.01 261.7);
+  --fg-muted:   oklch(0.65 0.02 261.7);
+  --primary:    oklch(0.62 0.19 260);
+  --primary-fg: oklch(0.98 0 0);
+  --accent:     oklch(0.28 0.03 261.7);
+  --danger:     oklch(0.6 0.2 25);
+  --ok:         oklch(0.7 0.15 155);
+  --warn:       oklch(0.78 0.14 85);
+  --border:     oklch(0.30 0.03 261.7);
+  --input:      oklch(0.30 0.03 261.7);
+  --ring:       oklch(0.62 0.19 260);
+  --popover:    oklch(0.21 0.03 261.7);
+  --radius: 0.6rem;
+  --shadow: 0 10px 30px -10px oklch(0 0 0 / .5);
+}
+html[data-theme="light"]{
+  --background: oklch(0.975 0.005 261.7);
+  --card:       oklch(1 0 0);
+  --muted:      oklch(0.93 0.008 261.7);
+  --fg:         oklch(0.18 0.02 261.7);
+  --fg-muted:   oklch(0.45 0.02 261.7);
+  --primary:    oklch(0.5 0.19 260);
+  --accent:     oklch(0.9 0.012 261.7);
+  --border:     oklch(0.87 0.01 261.7);
+  --input:      oklch(0.83 0.012 261.7);
+  --popover:    oklch(1 0 0);
+  --shadow: 0 10px 30px -12px oklch(0.3 0.02 261.7 / .25);
+}
+
+/* ═══════ 2. BASE — escala fluida igual ao webui ═══════ */
+*{box-sizing:border-box;margin:0;padding:0}
+html{font-size: clamp(15px, calc(10px + 0.42vw), 24px)}
+body{background:var(--background);color:var(--fg);
+  font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,Inter,sans-serif;line-height:1.45}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,select,textarea{font:inherit;color:inherit}
+svg{flex-shrink:0}               /* regra de ouro: ícone nunca comprime */
+:focus-visible{outline:2px solid var(--ring);outline-offset:1px;border-radius:4px}
+::selection{background:var(--primary);color:var(--primary-fg)}
+kbd{font-family:ui-monospace,Consolas,monospace;font-size:.7rem;background:var(--muted);
+  border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:.1rem .4rem}
+
+/* ═══════ 3. ESTRUTURA DO LAB ═══════ */
+.app{display:grid;grid-template-columns:15rem 1fr;min-height:100vh}
+.nav{position:sticky;top:0;height:100vh;overflow-y:auto;border-right:1px solid var(--border);
+  background:color-mix(in oklab,var(--card) 60%,transparent);padding:1rem .75rem;
+  display:flex;flex-direction:column;gap:.25rem}
+.nav h1{font-size:.95rem;display:flex;align-items:center;gap:.5rem;padding:.25rem .5rem .9rem}
+.nav h1 .logo{width:1.6rem;height:1.6rem;border-radius:6px;
+  background:linear-gradient(135deg,var(--primary),oklch(0.7 0.15 300));display:grid;place-items:center;font-size:.9rem}
+.nav a{display:flex;gap:.6rem;align-items:center;padding:.5rem .6rem;border-radius:8px;
+  color:var(--fg-muted);text-decoration:none;font-size:.85rem;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}  /* nav item SEMPRE trunca */
+.nav a:hover{background:var(--accent);color:var(--fg)}
+.nav a.on{background:color-mix(in oklab,var(--primary) 18%,transparent);color:var(--fg);font-weight:600}
+.nav a .n{width:1.3rem;text-align:right;opacity:.6;font-variant-numeric:tabular-nums}
+.nav .foot{margin-top:auto;padding:.8rem .5rem 0;border-top:1px solid var(--border)}
+
+.main{display:flex;flex-direction:column;min-width:0}   /* cadeia flex autoriza encolher */
+.topbar{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;
+  padding:.7rem 1.2rem;border-bottom:1px solid var(--border);
+  background:color-mix(in oklab,var(--background) 85%,transparent);backdrop-filter:blur(8px)}
+.topbar h2{font-size:.95rem;min-width:0}
+.topbar h2 span{color:var(--fg-muted);font-weight:400}
+.topbar .sp{flex:1}
+.tools{display:flex;gap:.35rem;align-items:center;flex-wrap:wrap}
+.tools .sep{width:1px;height:1.4rem;background:var(--border);margin:0 .3rem}
+
+.stage{padding:1.4rem;flex:1}
+.demo{display:none;max-width:72rem;margin:0 auto;animation:fade .25s ease}
+.demo.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1}}
+.demo-head{display:flex;flex-wrap:wrap;gap:.8rem;align-items:flex-start;margin-bottom:.4rem}
+.demo-head h3{font-size:1.35rem;letter-spacing:-.01em}
+.demo-head .ref{color:var(--fg-muted);font-size:.8rem;margin-top:.15rem}
+.demo-head .sp{flex:1;min-width:1rem}
+.tags{display:flex;gap:.35rem;flex-wrap:wrap;margin:.3rem 0 .6rem}
+.tag{font-size:.68rem;padding:.15rem .55rem;border-radius:99px;border:1px solid var(--border);
+  color:var(--fg-muted);font-family:ui-monospace,Consolas,monospace}
+.nota{color:var(--fg-muted);font-size:.88rem;max-width:52rem;margin-bottom:1rem}
+.nota b{color:var(--fg)}
+.nota code{background:var(--muted);padding:.05rem .3rem;border-radius:4px;font-size:.8em}
+
+/* ── O FRAME: palco do exemplo — container-type faz as @container
+   responderem à LARGURA DO FRAME, não da janela ═══════ */
+.frame{container-type:inline-size;border:1px dashed var(--border);border-radius:var(--radius);
+  background:var(--card);padding:1rem;overflow:hidden;   /* nada escapa do frame */
+  --fs:1; font-size:calc(1rem * var(--fs));transition:max-width .25s ease}
+.stage.w-320  .frame{max-width:20rem;margin-inline:auto;--fs:.8}
+.stage.w-768  .frame{max-width:48rem;margin-inline:auto;--fs:.9}
+.stage.w-1280 .frame{max-width:80rem;margin-inline:auto;--fs:1}
+.stage.w-full .frame{max-width:none;--fs:1}
+.stage.w-4k   .frame{max-width:none;--fs:1.3}    /* simula 4K: +30% */
+.width-tag{font-size:.7rem;color:var(--fg-muted);text-align:center;margin-top:.4rem;
+  font-family:ui-monospace,Consolas,monospace}
+
+/* ═══════ 4. COMPONENTES do design system ═══════ */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.45rem;
+  padding:.5rem .9rem;border-radius:8px;font-size:.85rem;font-weight:500;
+  border:1px solid transparent;transition:filter .15s,background .15s;min-width:0}
+.btn:hover{filter:brightness(1.1)}
+.btn-p{background:var(--primary);color:var(--primary-fg)}
+.btn-s{background:var(--muted);color:var(--fg)}
+.btn-o{border-color:var(--border)}
+.btn-g{background:transparent;color:var(--fg-muted)}
+.btn-g:hover{background:var(--accent);color:var(--fg);filter:none}
+.btn-d{background:var(--danger);color:#fff}
+.btn-sm{padding:.3rem .6rem;font-size:.78rem}
+.btn-icon{padding:.5rem;width:2.2rem}     /* só ícone: largura FIXA */
+.btn .lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.badge{display:inline-flex;align-items:center;gap:.3rem;font-size:.7rem;font-weight:600;
+  padding:.15rem .55rem;border-radius:99px;border:1px solid var(--border);color:var(--fg-muted)}
+.badge.ok{color:var(--ok);border-color:color-mix(in oklab,var(--ok) 40%,transparent)}
+.badge.warn{color:var(--warn);border-color:color-mix(in oklab,var(--warn) 40%,transparent)}
+.badge.err{color:var(--danger);border-color:color-mix(in oklab,var(--danger) 40%,transparent)}
+.badge .dot{width:.45rem;height:.45rem;border-radius:99px;background:currentColor}
+
+.input{width:100%;min-width:0;background:var(--background);border:1px solid var(--input);
+  border-radius:8px;padding:.5rem .75rem;font-size:.85rem}
+.input:focus{outline:none;border-color:var(--primary);
+  box-shadow:0 0 0 2px color-mix(in oklab,var(--ring) 30%,transparent)}
+
+.code-note{margin-top:1rem;border:1px solid var(--border);border-radius:var(--radius);background:var(--card)}
+.code-note summary{cursor:pointer;padding:.6rem .9rem;font-size:.85rem;color:var(--fg-muted);user-select:none}
+.code-note summary:hover{color:var(--fg)}
+.code-note pre{padding:0 1rem 1rem;overflow-x:auto;font-size:.75rem;line-height:1.6;
+  font-family:ui-monospace,Consolas,monospace;color:var(--fg-muted)}
+.code-note pre b{color:var(--primary);font-weight:600}
+
+/* ═════ EX 1 — CHAT (composer resiliente) ═════ */
+.chat{display:flex;flex-direction:column;height:30rem;border-radius:var(--radius);
+  border:1px solid var(--border);overflow:hidden;background:var(--background)}
+.chat-h{display:flex;align-items:center;gap:.5rem;padding:.6rem .8rem;
+  border-bottom:1px solid var(--border);min-width:0}
+.chat-h .ttl{font-weight:600;font-size:.9rem;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;min-width:0}
+.pills{display:flex;gap:.35rem;overflow-x:auto;scrollbar-width:none;padding:.5rem .8rem 0;min-width:0}
+.pills::-webkit-scrollbar{display:none}
+.pill2{display:inline-flex;align-items:center;gap:.35rem;font-size:.75rem;white-space:nowrap;
+  padding:.25rem .6rem;border-radius:99px;background:var(--accent);
+  border:1px solid var(--border);max-width:11rem}
+.pill2 .t{overflow:hidden;text-overflow:ellipsis}    /* nome da coleção trunca */
+.pill2 .x{opacity:.6}.pill2 .x:hover{opacity:1}
+.msgs{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:.9rem}
+.msg{display:flex;gap:.7rem;max-width:100%;min-width:0}
+.msg .av{width:2rem;height:2rem;border-radius:99px;flex-shrink:0;display:grid;
+  place-items:center;font-size:.8rem;background:var(--muted)}
+.msg .bd{min-width:0;display:flex;flex-direction:column;gap:.25rem}
+.msg .who{font-size:.75rem;font-weight:600;color:var(--fg-muted)}
+.msg .tx{font-size:.88rem;overflow-wrap:break-word}  /* palavras gigantes quebram */
+.msg .src{font-size:.72rem;color:var(--primary);cursor:pointer}
+.composer{border-top:1px solid var(--border);padding:.7rem .8rem;
+  display:flex;flex-direction:column;gap:.5rem}
+.c-row1{display:flex;flex-wrap:wrap;gap:.45rem;align-items:center} /* toolbar QUEBRA, não vaza */
+.attach{display:inline-flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--fg-muted);
+  background:var(--accent);border:1px solid var(--border);border-radius:8px;
+  padding:.3rem .6rem;max-width:100%;min-width:0}
+.attach .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.c-row2{display:flex;gap:.5rem;align-items:flex-end}
+.c-row2 .input{flex:1;min-width:0;resize:none;min-height:2.4rem;max-height:7rem}
+@container (max-width: 480px){
+  #ex1 .btn .lbl{display:none}     /* rótulo some, ícone fica */
+  #ex1 .btn-p{width:2.4rem}
+}
+
+/* ═════ EX 2 — FILTROS com chips ═════ */
+.filters{display:flex;gap:.6rem;align-items:center;min-width:0;flex-wrap:wrap}
+.chips{display:flex;gap:.35rem;min-width:0;overflow-x:auto;scrollbar-width:none;
+  scroll-snap-type:x proximity;flex:1}
+.chips::-webkit-scrollbar{display:none}
+.chip{scroll-snap-align:start;display:inline-flex;align-items:center;gap:.35rem;
+  white-space:nowrap;padding:.35rem .75rem;border-radius:99px;
+  border:1px solid var(--border);font-size:.8rem;min-width:0}
+.chip .t{overflow:hidden;text-overflow:ellipsis;max-width:9rem}
+.chip .n{background:var(--accent);border-radius:99px;padding:0 .4rem;
+  font-size:.7rem;color:var(--fg-muted)}
+.chip.on{background:color-mix(in oklab,var(--primary) 20%,transparent);border-color:var(--primary)}
+.filters .input{max-width:14rem;flex:1}
+
+/* ═════ EX 3 — DASHBOARD ═════ */
+.stats{display:grid;gap:.8rem;grid-template-columns:repeat(auto-fit,minmax(13rem,1fr))}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:.9rem;min-width:0}
+.stat .k{font-size:.75rem;color:var(--fg-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stat .v{font-size:1.7rem;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.stat .d{font-size:.72rem;display:flex;gap:.3rem;align-items:center}
+.up{color:var(--ok)}.down{color:var(--danger)}
+.chart{grid-column:1/-1;background:var(--card);border:1px solid var(--border);
+  border-radius:var(--radius);padding:1rem}
+.chart .bars{display:flex;gap:.45rem;align-items:flex-end;height:8rem;margin-top:.8rem}
+.chart .bar{flex:1;background:linear-gradient(180deg,var(--primary),
+  color-mix(in oklab,var(--primary) 40%,transparent));border-radius:4px 4px 0 0;
+  min-width:.35rem;transition:height .5s ease;position:relative}
+.chart .bar:hover::after{content:attr(data-v);position:absolute;bottom:calc(100% + 4px);
+  left:50%;transform:translateX(-50%);font-size:.65rem;background:var(--popover);
+  border:1px solid var(--border);padding:.15rem .4rem;border-radius:5px;white-space:nowrap}
+
+/* ═════ EX 4 — TABELA responsiva → cards ═════ */
+.tblwrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);min-width:0}
+table{width:100%;border-collapse:collapse;font-size:.85rem;min-width:36rem} /* tabela escrola, não esmaga */
+th{font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--fg-muted);
+  text-align:left;padding:.6rem .8rem;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:.6rem .8rem;border-bottom:1px solid color-mix(in oklab,var(--border) 45%,transparent);min-width:0}
+tr:last-child td{border-bottom:0}
+td .name{display:flex;align-items:center;gap:.5rem;min-width:0}
+td .name .ic{width:1.6rem;height:1.6rem;border-radius:5px;background:var(--accent);
+  display:grid;place-items:center;font-size:.8rem;flex-shrink:0}
+td .name .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+td .desc{color:var(--fg-muted);font-size:.75rem;max-width:22rem;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+td .num{font-variant-numeric:tabular-nums}
+.rowactions{display:flex;gap:.25rem;justify-content:flex-end}
+@container (max-width: 640px){          /* linha vira CARD */
+  #ex4 table,#ex4 thead,#ex4 tbody,#ex4 tr,#ex4 td{display:block}
+  #ex4 table{min-width:0}
+  #ex4 thead{display:none}
+  #ex4 tr{border:1px solid var(--border);border-radius:var(--radius);
+    padding:.4rem;margin-bottom:.6rem;background:var(--card)}
+  #ex4 td{display:flex;justify-content:space-between;gap:1rem;border:0;padding:.35rem .6rem}
+  #ex4 td::before{content:attr(data-l);font-size:.68rem;color:var(--fg-muted);
+    text-transform:uppercase;flex-shrink:0;padding-top:.15rem}
+  #ex4 td:last-child{justify-content:flex-end}
+  #ex4 .desc{max-width:none;white-space:normal;display:-webkit-box;
+    -webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-align:right}
+}
+
+/* ═════ EX 5 — GALERIA ═════ */
+.gal{display:grid;gap:.7rem;grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))}
+.thumb{position:relative;border-radius:var(--radius);overflow:hidden;cursor:zoom-in;
+  aspect-ratio:1/1;border:1px solid var(--border);background:var(--card)} /* nunca deforma */
+.thumb .im{position:absolute;inset:0;display:grid;place-items:center;font-size:2.2rem}
+.thumb .cap{position:absolute;left:0;right:0;bottom:0;padding:1.4rem .5rem .45rem;
+  font-size:.68rem;background:linear-gradient(transparent,oklch(0 0 0/.75));color:#fff;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden} /* máx 2 linhas */
+.thumb .kind{position:absolute;top:.4rem;left:.4rem;font-size:.62rem;
+  background:oklch(0 0 0/.55);color:#fff;padding:.1rem .4rem;border-radius:5px;backdrop-filter:blur(4px)}
+.g1{background:linear-gradient(135deg,oklch(.7 .18 20),oklch(.45 .2 330))}
+.g2{background:linear-gradient(135deg,oklch(.75 .14 200),oklch(.4 0 0))}
+.g3{background:linear-gradient(160deg,oklch(.8 .16 130),oklch(.35 .12 260))}
+.g4{background:linear-gradient(45deg,oklch(.85 .1 90),oklch(.5 0 0))}
+.g5{background:linear-gradient(135deg,oklch(.6 0 0),oklch(.85 .12 20))}
+.g6{background:linear-gradient(200deg,oklch(.7 .2 300),oklch(.3 .1 200))}
+
+/* ═════ EX 6 — COMMAND PALETTE ═════ */
+.cmdk-mask{position:fixed;inset:0;background:oklch(0 0 0/.6);backdrop-filter:blur(3px);
+  display:none;place-items:start center;padding:12vh 1rem;z-index:100}
+.cmdk-mask.on{display:grid}
+.cmdk{width:min(34rem,100%);background:var(--popover);border:1px solid var(--border);
+  border-radius:.9rem;box-shadow:var(--shadow);overflow:hidden}
+.cmdk .in{display:flex;gap:.6rem;align-items:center;padding:.8rem 1rem;
+  border-bottom:1px solid var(--border)}
+.cmdk input{flex:1;min-width:0;background:none;border:0;outline:none;font-size:1rem;color:var(--fg)}
+.cmdk .list{max-height:20rem;overflow-y:auto;padding:.4rem}
+.cmdk .grp{font-size:.65rem;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--fg-muted);padding:.5rem .6rem .2rem}
+.cmdk .it{display:flex;gap:.7rem;align-items:center;width:100%;text-align:left;
+  padding:.5rem .6rem;border-radius:8px;font-size:.88rem;min-width:0}
+.cmdk .it:hover,.cmdk .it.sel{background:var(--accent)}
+.cmdk .it .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cmdk .it .h{font-size:.65rem;color:var(--fg-muted)}
+.cmdk .foot{display:flex;gap:1rem;padding:.5rem .9rem;border-top:1px solid var(--border);
+  font-size:.68rem;color:var(--fg-muted)}
+
+/* ═════ EX 7 — SPLIT master-detail ═════ */
+.split{display:grid;grid-template-columns:minmax(11rem,15rem) 1fr;gap:0;height:26rem;
+  border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--background)}
+.split .side{border-right:1px solid var(--border);overflow-y:auto;background:var(--card);min-width:0}
+.side .h{padding:.7rem .8rem;font-size:.75rem;font-weight:700;color:var(--fg-muted)}
+.sess{display:flex;gap:.6rem;align-items:center;padding:.55rem .7rem;cursor:pointer;min-width:0}
+.sess:hover{background:var(--accent)}
+.sess.on{background:color-mix(in oklab,var(--primary) 16%,transparent)}
+.sess .av{width:1.7rem;height:1.7rem;border-radius:99px;background:var(--muted);
+  display:grid;place-items:center;font-size:.7rem;flex-shrink:0}
+.sess .bd{min-width:0}
+.sess .t{font-size:.8rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sess .p{font-size:.7rem;color:var(--fg-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.split .det{display:flex;flex-direction:column;min-width:0}
+.det .hd{display:flex;gap:.5rem;align-items:center;padding:.7rem .9rem;
+  border-bottom:1px solid var(--border);min-width:0}
+.det .hd .t{font-weight:600;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;min-width:0}
+@container (max-width: 560px){
+  #ex7 .split{grid-template-columns:3rem 1fr}   /* sidebar colapsa p/ avatares */
+  #ex7 .sess .bd{display:none}
+  #ex7 .side .h{display:none}
+}
+
+/* ═════ EX 8 — JOBS com logs ═════ */
+.jobs{display:flex;flex-direction:column;gap:.7rem}
+.job{border:1px solid var(--border);border-radius:var(--radius);background:var(--card);overflow:hidden}
+.job .hd{display:flex;gap:.6rem;align-items:center;padding:.7rem .8rem;flex-wrap:wrap;min-width:0}
+.job .t{font-weight:600;font-size:.88rem;min-width:0;flex:1;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.job .meta{font-size:.7rem;color:var(--fg-muted);font-variant-numeric:tabular-nums}
+.pbar{height:.4rem;background:var(--muted);border-radius:99px;overflow:hidden;margin:0 .8rem .6rem}
+.pbar i{display:block;height:100%;background:var(--primary);border-radius:99px;transition:width .4s ease}
+.job .log{font-family:ui-monospace,Consolas,monospace;font-size:.72rem;color:var(--fg-muted);
+  background:var(--background);border-top:1px solid var(--border);padding:.6rem .8rem;
+  max-height:9rem;overflow-y:auto;display:none;white-space:pre-wrap;overflow-wrap:break-word}
+.job.open .log{display:block}
+.job .hd .chev{transition:transform .2s}
+.job.open .chev{transform:rotate(180deg)}
+
+/* ═════ EX 9 — SETTINGS ═════ */
+.setgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(18rem,1fr));gap:1rem}
+.field{display:flex;flex-direction:column;gap:.3rem;min-width:0}
+.field label{font-size:.78rem;font-weight:600}
+.field .hint{font-size:.7rem;color:var(--fg-muted)}
+.fwrap{display:flex;min-width:0;border:1px solid var(--input);border-radius:8px;
+  background:var(--background);overflow:hidden}
+.fwrap:focus-within{border-color:var(--primary);
+  box-shadow:0 0 0 2px color-mix(in oklab,var(--ring) 30%,transparent)}
+.fwrap .fix{padding:.5rem .6rem;font-size:.75rem;color:var(--fg-muted);background:var(--accent);
+  border-right:1px solid var(--border);white-space:nowrap;flex-shrink:0}
+.fwrap .input{border:0;background:none;box-shadow:none;border-radius:0}
+.fwrap .input:focus{box-shadow:none}
+.switch{position:relative;width:2.4rem;height:1.35rem;border-radius:99px;background:var(--muted);
+  transition:background .2s;flex-shrink:0;border:1px solid var(--border);cursor:pointer}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:1rem;height:1rem;
+  border-radius:99px;background:#fff;transition:left .2s}
+.switch.on{background:var(--primary)}
+.switch.on::after{left:calc(100% - 1.15rem)}
+.setrow{display:flex;gap:.8rem;align-items:center;padding:.8rem;border:1px solid var(--border);
+  border-radius:var(--radius);min-width:0}
+.setrow .bd{min-width:0;flex:1}
+.setrow .t{font-size:.85rem;font-weight:600}
+.setrow .d{font-size:.72rem;color:var(--fg-muted)}
+
+/* ═════ EX 10 — AUTH ═════ */
+.authwrap{display:grid;place-items:center;min-height:26rem;
+  background:radial-gradient(60rem 30rem at 50% -10%,
+  color-mix(in oklab,var(--primary) 14%,transparent),transparent)}
+.auth{width:min(24rem,100%);background:var(--card);border:1px solid var(--border);
+  border-radius:1rem;padding:1.6rem;box-shadow:var(--shadow)}
+.auth .lg{width:2.6rem;height:2.6rem;border-radius:9px;margin:0 auto .8rem;
+  background:linear-gradient(135deg,var(--primary),oklch(0.7 0.15 300));
+  display:grid;place-items:center;font-size:1.3rem}
+.auth h4{text-align:center;font-size:1.1rem}
+.auth .sub{text-align:center;font-size:.78rem;color:var(--fg-muted);margin:.3rem 0 1.1rem}
+.auth .btn{width:100%}
+.or{display:flex;gap:.8rem;align-items:center;color:var(--fg-muted);font-size:.72rem;margin:.9rem 0}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--border)}
+.soc{display:flex;gap:.5rem;align-items:center;justify-content:center;width:100%;
+  padding:.55rem;border:1px solid var(--border);border-radius:8px;font-size:.85rem;min-width:0}
+.soc .t{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center}
+
+/* ═════ OVERLAYS ═════ */
+.lb{position:fixed;inset:0;background:oklch(0 0 0/.85);backdrop-filter:blur(6px);z-index:120;
+  display:none;place-items:center;padding:2rem}
+.lb.on{display:grid}
+.lb .box{max-width:min(46rem,100%);display:flex;flex-direction:column;gap:.7rem;width:100%}
+.lb .im{border-radius:var(--radius);overflow:hidden;aspect-ratio:16/10;
+  display:grid;place-items:center;font-size:4rem}
+.lb .cap{color:#fff;font-size:.85rem;display:flex;gap:.8rem;align-items:center;min-width:0}
+.lb .cap .t{flex:1;min-width:0;-webkit-line-clamp:2;display:-webkit-box;
+  -webkit-box-orient:vertical;overflow:hidden}
+.lb .x{position:absolute;top:1.2rem;right:1.4rem;font-size:1.4rem;color:#fff;opacity:.7}
+.lb .x:hover{opacity:1}
+.toasts{position:fixed;bottom:1.2rem;right:1.2rem;display:flex;flex-direction:column;
+  gap:.5rem;z-index:200}
+.toast{background:var(--popover);border:1px solid var(--border);border-radius:9px;
+  padding:.6rem .9rem;font-size:.82rem;box-shadow:var(--shadow);animation:tin .25s ease;
+  display:flex;gap:.5rem;align-items:center;max-width:22rem}
+@keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ═══════════ NAVEGAÇÃO ═══════════ -->
+  <aside class="nav">
+    <h1><span class="logo">◧</span> Layout Lab</h1>
+    <a href="#ex1" class="on"><span class="n">01</span> Chat resiliente</a>
+    <a href="#ex2"><span class="n">02</span> Filtros com chips</a>
+    <a href="#ex3"><span class="n">03</span> Dashboard de métricas</a>
+    <a href="#ex4"><span class="n">04</span> Tabela → cards</a>
+    <a href="#ex5"><span class="n">05</span> Galeria de mídia</a>
+    <a href="#ex6"><span class="n">06</span> Command palette ⌘K</a>
+    <a href="#ex7"><span class="n">07</span> Split master-detail</a>
+    <a href="#ex8"><span class="n">08</span> Jobs com logs</a>
+    <a href="#ex9"><span class="n">09</span> Formulário settings</a>
+    <a href="#ex10"><span class="n">10</span> Auth / onboarding</a>
+    <div class="foot">
+      <button class="btn btn-g btn-sm" onclick="toggleTheme()" id="themeBtn" style="width:100%">☀️ Tema claro</button>
+    </div>
+  </aside>
+
+  <!-- ═══════════ CONTEÚDO ═══════════ -->
+  <main class="main">
+    <header class="topbar">
+      <h2 id="titulo">01 · Chat resiliente <span>— composer que nunca quebra</span></h2>
+      <div class="sp"></div>
+      <div class="tools">
+        <span style="font-size:.7rem;color:var(--fg-muted)">largura:</span>
+        <button class="btn btn-o btn-sm wbtn" onclick="setW(this,'w-320')">📱 320</button>
+        <button class="btn btn-o btn-sm wbtn" onclick="setW(this,'w-768')">📔 768</button>
+        <button class="btn btn-o btn-sm wbtn" onclick="setW(this,'w-1280')">💻 1280</button>
+        <button class="btn btn-o btn-sm wbtn" onclick="setW(this,'w-full')">🖥 full</button>
+        <button class="btn btn-o btn-sm wbtn" onclick="setW(this,'w-4k')">🦅 4K+30%</button>
+        <span class="sep"></span>
+        <button class="btn btn-d btn-sm" id="stressBtn">☠️ estressar texto</button>
+      </div>
+    </header>
+
+    <div class="stage w-1280" id="stage">
+
+      <!-- ═══════════ EXEMPLO 1 — CHAT ═══════════ -->
+      <section class="demo on" id="ex1" data-t="01 · Chat resiliente" data-sub="— composer que nunca quebra">
+        <div class="demo-head">
+          <div>
+            <h3>Chat com composer resiliente</h3>
+            <p class="ref">Padrão de mercado: ChatGPT · Claude · Gemini — aplicado ao chat do RagAroy</p>
+          </div>
+          <div class="sp"></div>
+        </div>
+        <div class="tags">
+          <span class="tag">flex-wrap</span><span class="tag">truncate</span>
+          <span class="tag">@container 480px</span><span class="tag">rótulo some → ícone fica</span>
+        </div>
+        <p class="nota">
+          O composer carrega <b>dado dinâmico</b> (nomes de coleções, MCPs, anexos). A regra:
+          a toolbar <b>quebra linha</b> (<code>flex-wrap</code>), cada item <b>trunca</b> por dentro,
+          e quando o palco fica estreito o rótulo do botão principal <b>desaparece</b> restando só o ícone.
+          Arraste o simulador para <b>320</b> e clique em <b>☠️</b> para ver.
+        </p>
+
+        <div class="frame">
+          <div class="chat">
+            <div class="chat-h">
+              <span style="font-size:1.1rem">💬</span>
+              <span class="ttl s-t">Conversa sobre arquitetura hexagonal</span>
+              <div style="flex:1"></div>
+              <span class="badge ok"><span class="dot"></span>qwen2.5-coder</span>
+              <button class="btn btn-g btn-sm btn-icon" title="Nova conversa">＋</button>
+            </div>
+
+            <div class="pills">
+              <span class="pill2" title="arquitetura_unificada — coleção de sistema">
+                📚 <span class="t s-t">arquitetura_unificada</span>
+                <button class="x" title="remover">✕</button>
+              </span>
+              <span class="pill2" title="dotnet_csharp">
+                📚 <span class="t">dotnet_csharp</span> <button class="x">✕</button>
+              </span>
+              <span class="pill2" title="filesystem — MCP">
+                🔌 <span class="t">filesystem</span> <button class="x">✕</button>
+              </span>
+            </div>
+
+            <div class="msgs">
+              <div class="msg">
+                <div class="av">🧑</div>
+                <div class="bd">
+                  <span class="who">Você</span>
+                  <span class="tx">Me explique a diferença entre ports &amp; adapters e a arquitetura em camadas tradicional.</span>
+                </div>
+              </div>
+              <div class="msg">
+                <div class="av" style="background:color-mix(in oklab,var(--primary) 30%,transparent)">🤖</div>
+                <div class="bd">
+                  <span class="who">Assistente · híbrido</span>
+                  <span class="tx">
+                    A arquitetura hexagonal (ports &amp; adapters) inverte a dependência do clássico
+                    em camadas: o <b>domínio fica no centro</b> e define interfaces (ports)…
+                    <span class="src">[2 fontes · arquitetura_unificada]</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="composer">
+              <div class="c-row1">
+                <button class="btn btn-o btn-sm">📎 <span class="lbl">Anexar</span></button>
+                <span class="attach" title="diagrama_hexagonal.png">
+                  🖼 <span class="t s-t">diagrama_hexagonal.png</span> <button class="x">✕</button>
+                </span>
+                <button class="btn btn-o btn-sm">🔌 <span class="lbl">MCPs</span></button>
+                <span class="badge" style="margin-left:auto">⚡ cache</span>
+              </div>
+              <div class="c-row2">
+                <button class="btn btn-g btn-icon" title="Ditar (STT)">🎤</button>
+                <textarea class="input" rows="1" placeholder="Pergunte algo… (⏎ envia · ⇧⏎ nova linha)"></textarea>
+                <button class="btn btn-p btn-icon" title="Enviar">➤</button>
+              </div>
+            </div>
+          </div>
+          <div class="width-tag">↔ arraste a janela ou use o simulador acima — o composer se adapta</div>
+        </div>
+
+        <details class="code-note">
+          <summary>▸ Ver as técnicas deste exemplo</summary>
+<pre>
+<b>1. Toolbar quebra, não vaza</b>
+.c-row1 { display:flex; <b>flex-wrap:wrap</b>; gap:.45rem }
+
+<b>2. Nome dinâmico trunca (nunca estica o pill)</b>
+.pill2    { max-width:11rem; display:inline-flex }
+.pill2 .t { <b>overflow:hidden; text-overflow:ellipsis</b> }
+.pill2 .x { flex-shrink:0 }        /* o ✕ nunca é comprimido */
+
+<b>3. Container query: rótulo some, ícone fica</b>
+<b>@container (max-width: 480px)</b> {
+  .btn .lbl { display:none }   /* "Anexar" some, 📎 fica */
+}
+
+<b>Por que @container e não @media?</b>
+O chat pode estar numa coluna de 380px dentro de uma janela
+de 1920px — @media (largura da JANELA) mentiria;
+@container responde à largura REAL do componente.
+</pre>
+        </details>
+      </section>
+
+      <!-- ═══════════ EXEMPLO 2 — FILTROS ═══════════ -->
+      <section class="demo" id="ex2" data-t="02 · Filtros com chips" data-sub="— toolbar de filtros estilo Gmail/Linear">
+        <div class="demo-head">
+          <div>
+            <h3>Toolbar de filtros com chips</h3>
+            <p class="ref">Padrão de mercado: Gmail · Linear · Jira — filtros de coleções do RagAroy</p>
+          </div>
+          <div class="sp"></div>
+        </div>
+        <div class="tags">
+          <span class="tag">scroll-snap</span><span class="tag">truncate no chip</span>
+          <span class="tag">tabular-nums</span>
+        </div>
+        <p class="nota">
+          Chips com <b>contadores dinâmicos</b> e rótulos que vêm do servidor (categorias da LLM).
+          Quando não cabem: a trilha <b>rola horizontalmente</b> com snap (padrão Gmail mobile)
+          em vez de quebrar o layout. A busca assume <code>flex:1</code> — ocupa o que sobrar.
+        </p>
+
+        <div class="frame">
+          <div class="filters">
+            <button class="chip on"><span class="t s-t">Todas as coleções</span><span class="n">12</span></button>
+            <button class="chip"><span class="t">Tecnologia</span><span class="n">7</span></button>
+            <button class="chip"><span class="t">Medicina</span><span class="n">2</span></button>
+            <button class="chip"><span class="t">Psicologia</span><span class="n">1</span></button>
+            <button class="chip"><span class="t">Notícias</span><span class="n">2</span></button>
+            <input class="input" placeholder="🔎 filtrar por nome…">
+            <button class="btn btn-p btn-sm">Aplicar</button>
+          </div>
+          <div class="width-tag">a trilha de chips rola (snap) · a busca encolhe até sumir do foco</div>
+
+          <br>
+          <p style="font-size:.75rem;color:var(--fg-muted);margin-bottom:.4rem">
+            Variação — categorias geradas pela LLM na ingestão (rótulos imprevisíveis e longos):
+          </p>
+          <div class="filters">
+            <button class="chip"><span class="t s-t">engenharia de prompts para geração de imagem fotorrealista</span></button>
+            <button class="chip"><span class="t s-t">diagnóstico diferencial em cardiologia pediátrica</span><span class="n">14</span></button>
+            <button class="chip"><span class="t s-t">refatoração de legado</span><span class="n">3</span></button>
+          </div>
+        </div>
+
+        <details class="code-note">
+          <summary>▸ Ver as técnicas deste exemplo</summary>
+<pre>
+<b>1. Trilha de chips: scroll com snap (não quebra, não vaza)</b>
+.chips { display:flex; <b>overflow-x:auto; scrollbar-width:none;
+         scroll-snap-type:x proximity</b> }
+.chip  { <b>scroll-snap-align:start</b>; white-space:nowrap }
+
+<b>2. Rótulo do chip pode vir da LLM (imprevisível):</b>
+.chip .t { max-width:9rem; <b>overflow:hidden; text-overflow:ellipsis</b> }
+
+<b>3. Busca flexível:</b> .filters .input { flex:1; max-width:14rem; <b>min-width:0</b> }
+
+<b>4. Contadores não dançam:</b> .chip .n { <b>font-variant-numeric:tabular-nums</b> }
+(sem isso, "9→10" muda a largura e o layout "pula")
+</pre>
+        </details>
+      </section>
+
+      <!-- ═══════════ EXEMPLO 3 — DASHBOARD ═══════════ -->
+      <section class="demo" id="ex3" data-t="03 · Dashboard de métricas" data-sub="— grid auto-fit estilo Vercel/Grafana">
+        <div class="demo-head">
+          <div>
+            <h3>Dashboard de métricas</h3>
+            <p class="ref">Padrão de mercado: Vercel · Grafana · Stripe — painel "Pulso" do RagAroy</p>
+          </div>
+          <div class="sp"></div>
+        </div>
+        <div class="tags">
+          <span class="tag">auto-fit minmax</span><span class="tag">tabular-nums</span>
+          <span class="tag">grid-column 1/-1</span>
+        </div>
+        <p class="nota">
+          O card de estatística clássico: <b>label + número + variação</b>. O grid usa
+          <code>repeat(auto-fit, minmax(13rem,1fr))</code> — os cards se reorganizam sozinhos
+          (4 → 2 → 1 coluna) <b>sem media query nenhuma</b>. O gráfico ocupa sempre a linha
+          inteira com <code>grid-column: 1/-1</code>.
+        </p>
+
+        <div class="frame">
+          <div class="stats">
+            <div class="stat">
+              <div class="k s-t">Tokens enviados (🔻 prompt)</div>
+              <div class="v">1.284.309</div>
+              <div class="d up">▲ 12% vs. semana passada</div>
+            </div>
+            <div class="stat">
+              <div class="k">Tokens gerados (🔺 completion)</div>
+              <div class="v">402.117</div>
+              <div class="d up">▲ 4,2%</div>
+            </div>
+            <div class="stat">
+              <div class="k">Cache semântico — acertos ⚡</div>
+              <div class="v">87</div>
+              <div class="d up">▲ 31% (economia de LLM)</div>
+            </div>
+            <div class="stat">
+              <div class="k">Jobs falhos (DLQ 🐇)</div>
+              <div class="v">3</div>
+              <div class="d down">▼ 2 — revisar worker</div>
+            </div>
+            <div class="chart">
+              <div style="display:flex;align-items:center;gap:.6rem;min-width:0">
+                <b style="font-size:.85rem">Consultas por dia</b>
+                <span class="badge ok" style="margin-left:auto">● api online</span>
+              </div>
+              <div class="bars" id="bars"></div>
+            </div>
+          </div>
+        </div>
+
+        <details class="code-note">
+          <summary>▸ Ver as técnicas deste exemplo</summary>
+<pre>
+<b>1. Grid que se reorganiza SOZINHO (sem media query):</b>
+.stats { display:grid;
+  <b>grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr))</b> }
+  auto-fit → cria quantas colunas COUBEREM
+  minmax   → card nunca menor que 13rem (não esmaga o número)
+  1fr      → sobrou espaço? cards esticam por igual
+
+<b>2. Card largo ocupa a linha inteira:</b>
+.chart { <b>grid-column: 1 / -1</b> }
+
+<b>3. Números SEMPRE tabulares:</b>
+.stat .v { <b>font-variant-numeric: tabular-nums</b> }
+→ "1.234" e "1.000" têm a MESMA largura (colunas alinham)
+
+<b>4. Label trunca, número nunca:</b>
+.stat .k { overflow:hidden; text-overflow:ellipsis }
+</pre>
+        </details>
+      </section>
+
+      <!-- ═══════════ EXEMPLO 4 — TABELA ═══════════ -->
+      <section class="demo" id="ex4" data-t="04 · Tabela → cards" data-sub="— responsiva de verdade, padrão Stripe/GitHub">
+        <div class="demo-head">
+          <div>
+            <h3>Tabela responsiva que vira cards</h3>
+            <p class="ref">Padrão de mercado: Stripe · GitHub · DataTables modernas — aba Coleções do RagAroy</p>
+          </div>
+          <div class="sp"></div>
+        </div>
+        <div class="tags">
+          <span class="tag">@container 640px</span><span class="tag">data-label</span>
+          <span class="tag">min-width na table</span><span class="tag">line-clamp</span>
+        </div>
+        <p class="nota">
+          Tabela com <b>colunas demais</b> tem duas saídas de mercado: <b>desktop</b> = scroll
+          horizontal (a tabela tem largura mínima digna); <b>palco estreito</b> = cada linha vira
+          um <b>card</b> com <code>data-label</code>. Tudo com UMA container query — teste em <b>320</b>.
+        </p>
+
+        <div class="frame">
+          <div class="tblwrap">
+            <table>
+              <thead>
+                <tr><th>Coleção</th><th>Descrição (LLM)</th><th>Pontos</th><th>Área</th><th style="text-align:right">Ações</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td data-l="Coleção"><div class="name"><span class="ic">⚛</span><span class="t s-t">dotnet_fundamentos</span></div></td>
+                  <td data-l="Descrição"><div class="desc s-t">Runtime, publicação, GC, diagnóstico e performance do .NET moderno</div></td>
+                  <td data-l="Pontos" class="num">8.412</td>
+                  <td data-l="Área"><span class="badge">tecnologia</span></td>
+                  <td data-l="Ações">
+                    <div class="rowactions">
+                      <button class="btn btn-g btn-sm btn-icon" title="🔎 varredura">🔎</button>
+                      <button class="btn btn-g btn-sm btn-icon" title="✨ higienizar">✨</button>
+                      <button class="btn btn-g btn-sm btn-icon" title="🗑 apagar">🗑</button>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td data-l="Coleção"><div class="name"><span class="ic">🐍</span><span class="t s-t">py_ia_langchain_docs_completos_v2</span></div></td>
+                  <td data-l="Descrição"><div class="desc">LangChain v1, LangGraph, deep agents, MCP, RAG agêntico e integrações oficiais</div></td>
+                  <td data-l="Pontos" class="num">12.907</td>
+                  <td data-l="Área"><span class="badge">tecnologia</span></td>
+                  <td data-l="Ações">
+                    <div class="rowactions">
+                      <button class="btn btn-g btn-sm btn-icon">🔎</button>
+                      <button class="btn btn-g btn-sm btn-icon">✨</button>
+                      <button class="btn btn-g btn-sm btn-icon">🗑</button>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td data-l="Coleção"><div class="name"><span class="ic">🧠</span><span class="t">prompts_midia</span></div></td>
+                  <td data-l="Descrição"><div class="desc">34 prompts exemplares de imagem/vídeo para ancorar o pipeline do estúdio</div></td>
+                  <td data-l="Pontos" class="num">34</td>
+                  <td data-l="Área"><span class="badge">sistema</span></td>
+                  <td data-l="Ações">
+                    <div class="rowactions">
+                      <button class="btn btn-g btn-sm btn-icon">🔎</button>
+                      <button class="btn btn-g btn-sm btn-icon">✨</button>
+                      <button class="btn btn-g btn-sm btn-icon">🗑</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="width-tag">desktop: scroll horizontal digno · &lt;640px: cada linha vira um card</div>
+        </div>
+
+        <details class="code-note">
+          <summary>▸ Ver as técnicas deste exemplo</summary>
+<pre>
+<b>1. A tabela tem uma largura MÍNIMA honesta — nunca esmaga:</b>
+table { <b>min-width:36rem</b> }        /* menos que isso: SCROLL */
+.tblwrap { overflow-x:auto }
+
+<b>2. Nome de coleção (dado dinâmico do Qdrant):</b>
+td .name .t { <b>overflow:hidden; text-overflow:ellipsis; white-space:nowrap</b> }
+
+<b>3. A mágica: linha vira CARD no palco estreito</b>
+<b>@container (max-width: 640px)</b> {
+  table, thead, tbody, tr, td { display:block }
+  thead { display:none }               /* sem cabeçalho */
+  tr    { border:1px solid; border-radius:.6rem; margin-bottom:.6rem }
+  td    { display:flex; justify-content:space-between; gap:1rem }
+  td::before { <b>content:attr(data-l)</b> }  /* o label reaparece! */
+}
+
+<b>4. Descrição longa no card: máx 2 linhas</b>
+.desc { <b>display:-webkit-box; -webkit-line-clamp:2;
+        -webkit-box-orient:vertical; overflow:hidden</b> }
+</pre>
+        </details>
+      </section>
+
+      <!-- ═══════════ EXEMPLO 5 — GALERIA ═══════════ -->
+      <section class="demo" id="ex5" data-t="05 · Galeria de mídia" data-sub="— grid de thumbs estilo Midjourney/Adobe">
+        <div class="demo-head">
+          <div>
+            <h3>Galeria de mídia (estúdio)</h3>
+            <p class="ref">Padrão de mercado: Midjourney · Adobe Firefly · Pinterest — galeria do Estúdio RagAroy</p>
+          </div>
+          <div class="sp"></div>
+        </div>
+        <div class="tags">
+          <span class="tag">aspect-ratio</span><span class="tag">line-clamp 2</span>
+          <span class="tag">lightbox</span><span class="tag">auto-fill</span>
+        </div>
+        <p class="nota">
+          Thumbs de mídia gerada: quadrados perfeitos com <code>aspect-ratio</code> (a imagem
+          <b>nunca deforma</b>), legenda com <b>máximo 2 linhas</b> (o prompt completo vai no
+          lightbox ao clicar). Clique em qualquer thumb — o lightbox abre com o prompt inteiro.
+        </p>
+
+        <div class="frame">
+          <div class="gal">
+            <div class="thumb" onclick="lb(this)" data-p="Close-up cinematográfico de uma raposa artesã soldando componentes eletrônicos em uma bancada de oficina aconchegante, luz quente de fim de tarde entrando pela janela, poeira suspensa no ar, lente 85mm f/1.4, fotorrealista">
+              <span class="kind">🎨 t2i · Flux dev</span>
+              <div class="im g1">🦊</div>
+              <div class="cap s-t">Close-up cinematográfico de uma raposa artesã soldando componentes eletrônicos…</div>
+            </div>
+            <div class="thumb" onclick="lb(this)" data-p="Aerial drone shot of a neon-lit data center floating above clouds at dusk, cinematic color grading, volumetric fog, ultra wide angle">
+              <span class="kind">🎨 t2i</span>
+              <div class="im g2">☁️</div>
+              <div class="cap s-t">Aerial drone shot of a neon-lit data center floating above clouds at dusk…</div>
+            </div>
+            <div class="thumb" onclick="lb(this)" data-p="Timelapse de uma planta crescendo do solo até florescer, ciclo completo em 8 segundos, fundo de estufa com luz suave">
+              <span class="kind">🎬 t2v · Wan2.2</span>
+              <div class="im g3">🌱</div>
+              <div class="cap s-t">Timelapse de uma planta crescendo do solo até florescer…</div>
+            </div>
+            <div class="thumb" onclick="lb(this)" data-p="Retrato editorial minimalista de uma engenheira de software brasileira sorrindo, fundo cinza neutro, iluminação Rembrandt, meio corpo">
+              <span class="kind">🎨 t2i</span>
+              <div class="im g4">👩‍💻</div>
+              <div class="cap s-t">Retrato editorial minimalista de uma engenheira de software…</div>
+            </div>
+            <div class="thumb" onclick="lb(this)" data-p="An old lighthouse in a stormy sea, giant waves crashing, dramatic skies, oil painting style with thick brush strokes">
+              <span class="kind">🎨 t2i</span>
+              <div class="im g5">🌊</div>
+              <div class="cap s-t">An old lighthouse in a stormy sea, giant waves crashing…</div>
+            </div>
+            <div class="thumb" onclick="lb(this)" data-p="Cidade flutuante futurista sustentada por balões de ar quente ao amanhecer, estilo Ghibli, cores pastel">
+              <span class="kind">🎨 t2i</span>
+              <div class="im g6">🎈</div>
+              <div class="cap s-t">Cidade flutuante futurista sustentada por balões…</div>
+            </div>
+          </div>
+          <div class="width-tag">clique numa thumb → lightbox com o prompt completo</div>
+        </div>
+
+        <details class="code-note">
+          <summary>▸ Ver as técnicas deste exemplo</summary>
+<pre>
+<b>1. Grid que preenche (auto-FILL):</b>
+.gal { <b>grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr))</b> }
+
+<b>2. Thumb sempre quadrada, imagem nunca deforma:</b>
+.thumb { <b>aspect-ratio: 1/1</b>; overflow:hidden }
+(a mídia usa object-fit:cover dentro — corta, não estica)
+
+<b>3. Legenda = prompt da LLM (imprevisível): máx 2 LINHAS</b>
+.cap { <b>display:-webkit-box; -webkit-line-clamp:2;
+        -webkit-box-orient:vertical; overflow:hidden</b> }
+(truncate de 1 linha esconde demais; 2 linhas é o padrão Midjourney)
+
+<b>4. Contraste garantido:</b> o .cap tem padding-top maior
+compensando o degradê escuro por baixo do texto.
+</pre>
+        </details>
+      </section>
+
+      <!-- ═══════════ EXEMPLO 6 — COMMAND PALETTE ═══════════ -->
+      <section class="demo" id="ex6" data-t="06 · Command palette ⌘K" data-sub="— padrão Raycast/Linear/Cursor">
+        <div class="demo-head">
+          <div>
+            <h3>Command palette (⌘K / Ctrl+K)</h3>
+            <p class="ref">Padrão de mercado: Raycast · Linear · Cursor · Vercel — ⌘K do RagAroy</p>
+          </div>
+          <div class="sp"></div>
+        </div>
+        <div class="tags">
+          <span class="tag">Ctrl+K real</span><span class="tag">↑↓ navega</span>
+          <span class="tag">⏎ executa</span><span class="tag">max-height scroll</span>
+        </div>
+        <p class="nota">
+          O padrão de navegação por comando que virou referência de mercado. Está
+          <b>funcional aqui</b>: pressione <kbd>Ctrl</kbd>+<kbd>K</kbd> (ou o botão) — filtre,
+          navegue com <kbd>↑</kbd> <kbd>↓</kbd>, execute com <kbd>⏎</kbd>. Rótulos truncam
+          e cada item mostra um hint de teclado.
+        </p>
+
+        <div class="frame" style="min-height:14rem;display:grid;place-items:center">
+          <div style="text-align:center;display:flex;flex-direction:column;gap:.8rem;align-items:center">
+            <button class="btn btn-p" onclick="cmdk(true)">
+              🔍 Abrir paleta de comandos
+              <kbd style="background:rgba(0,0,0,.25);border-color:transparent;color:inherit">⌘K</kbd>
+            </button>
+            <span style="font-size:.78rem;color:var(--fg-muted)">ou pressione Ctrl+K agora</span>
+          </div>
+        </div>
+
+        <details class="code-note">
+          <summary>▸ Ver as técnicas deste exemplo</summary>
+<pre>
+<b>1. Overlay centrado com largura CAPADA (nunca estica):</b>
+.cmdk { <b>width:min(34rem, 100%)</b> }    /* min(): a menor das duas */
+
+<b>2. Lista com altura máxima — o resto faz scroll:</b>
+.cmdk .list { <b>max-height:20rem; overflow-y:auto</b> }
+
+<b>3. Item: rótulo trunca, hint fica:</b>
+.it    { display:flex; gap:.7rem; <b>min-width:0</b> }
+.it .t { flex:1; <b>overflow:hidden; text-overflow:ellipsis</b> }
+.it .h { flex-shrink:0 }         /* o kbd nunca é comprimido */
+
+<b>4. Acessível de verdade:</b> ↑/↓ move, ⏎ executa, Esc fecha,
+foco automático no input — é o contrato do usuário de ⌘K.
+
+<b>5. No RagAroy real:</b> CommandK.tsx usa CustomEvent global
+("ragaroy:cmdk") — qualquer tecla/botão abre a mesma paleta.
+</pre>
+        </details>
+      </section>
+
+      <!-- ═══════════ EXEMPLO 7 — SPLIT ═══════════ -->
+      <section class="demo" id="ex7" data-t="07 · Split master-detail" data-sub="— sidebar colapsável estilo Gmail/VS Code">
+        <div class="demo-head">
+          <div>
+            <h3>Split view master-detail</h3>
+            <p class="ref">Padrão de mercado: Gmail · VS Code · Slack — sessões do chat RagAroy</p>
+          </div>
+          <div class="sp"></div>
+        </div>
+        <div class="tags">
+          <span class="tag">grid minmax</span><span class="tag">@container colapso</span>
+          <span class="tag">preview truncate</span>
+        </div>
+        <p class="nota">
+          Sidebar de sessões + painel de leitura. A coluna usa <code>minmax(11rem,15rem)</code>.
+          Quando o palco aperta (&lt;560px) a sidebar <b>colapsa para 3rem</b> — só os avatares —
+          e volta a expandir sozinha. Cada item tem <b>título + preview truncados</b>.
+        </p>
+
+        <div class="frame">
+          <div class="split">
+            <div class="side">
+              <div class="h">Conversas</div>
+              <div class="sess on">
+                <div class="av">🏗</div>
+                <div class="bd">
+                  <div class="t s-t">Arquitetura hexagonal no .NET</div>
+                  <div class="p">Você: me explique ports &amp; adapters…</div>
+                </div>
+              </div>
+              <div class="sess">
+                <div class="av">🐍</div>
+                <div class="bd">
+                  <div class="t s-t">Debug de asyncio.gather com timeout em produção</div>
+                  <div class="p">Assistente: o problema é o cancelamento…</div>
+                </div>
+              </div>
+              <div class="sess">
+                <div class="av">🎬</div>
+                <div class="bd">
+                  <div class="t">Prompt de vídeo para o estúdio</div>
+                  <div class="p">Você: timelapse de uma planta…</div>
+                </div>
+              </div>
+              <div class="sess">
+                <div class="av">📄</div>
+                <div class="bd">
+                  <div class="t">Resumir contrato de API</div>
+                  <div class="p">Assistente: [sem fontes na base]</div>
+                </div>
+              </div>
+            </div>
+            <div class="det">
+              <div class="hd">
+                <span>🏗</span>
+                <span class="t s-t">Arquitetura hexagonal no .NET</span>
+                <div style="flex:1"></div>
+                <span class="badge ok"><span class="dot"></span>híbrido</span>
+                <button class="btn btn-g btn-sm btn-icon" title="Opções">⋯</button>
+              </div>
+              <div class="msgs" style="padding:1rem">
+                <div class="msg">
+                  <div class="av">🧑</div>
+                  <div class="bd">
+                    <span class="who">Você</span>
+                    <span class="tx">Como organizo os adapters de persistência num projeto médio?</span>
+                  </div>
+                </div>
+                <div class="msg">
+                  <div class="av" style="background:color-mix(in oklab,var(--primary) 30%,transparent)">🤖</div>
+                  <div class="bd">
+                    <span class="who">Assistente</span>
+                    <span class="tx">Um adapter por tecnologia de infraestrutura… <span class="src">[3 fontes]</span></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="width-tag">&lt;560px: sidebar colapsa para 3rem (só avatares)</div>
+        </div>
+
+        <details class="code-note">
+          <summary>▸ Ver as técnicas deste exemplo</summary>
+<pre>
+<b>1. Colunas com limites (respira, não quebra):</b>
+.split { <b>grid-template-columns: minmax(11rem, 15rem) 1fr</b> }
+
+<b>2. Colapso da sidebar por container query:</b>
+<b>@container (max-width: 560px)</b> {
+  .split { grid-template-columns: <b>3rem</b> 1fr }  /* só avatares */
+  .sess .bd { display:none }
+}
+
+<b>3. Item de lista de e-mails (título + preview):</b>
+.sess .t, .sess .p { <b>white-space:nowrap; overflow:hidden;
+                      text-overflow:ellipsis</b> }
+.sess .av { <b>flex-shrink:0</b> }    /* avatar nunca comprime */
+
+<b>4. Detalhe à direita nunca esmasha:</b>
+.det { <b>min-width:0</b> }           /* autoriza a coluna 1fr a encolher */
+</pre>
+        </details>
+      </section>
+
+      <!-- ═══════════ EXEMPLO 8 — JOBS ═══════════ -->
+      <section class="demo" id="ex8" data-t="08 · Jobs com logs" data-sub="— fila de tarefas estilo Vercel/CI">
+        <div class="demo-head">
+          <div>
+            <h3>Jobs com progresso e log ao vivo</h3>
+            <p class="ref">Padrão de mercado: Vercel deployments · GitHub Actions — jobs do RagAroy (RabbitMQ)</p>
+          </div>
+          <div class="sp"></div>
+        </div>
+        <div class="tags">
+          <span class="tag">título truncate</span><span class="tag">progress bar</span>
+          <span class="tag">log colapsável</span><span class="tag">overflow-wrap</span>
+        </div>
+        <p class="nota">
+          O card de job é o lugar mais fácil de quebrar: título dinâmico + badge + ações +
+          log monoespaçado com linhas gigantes. A regra: <b>título trunca</b> (com flex:1),
+          <b>log colapsa</b> e rola, e linhas sem espaço <b>quebram</b> com
+          <code>overflow-wrap:break-word</code> (um path de 300 caracteres não pode criar scroll
+          horizontal). Clique nos cartões para expandir.
+        </p>
+
+        <div class="frame">
+          <div class="jobs">
+            <div class="job open">
+              <div class="hd" onclick="this.parentElement.classList.toggle('open')" style="cursor:pointer">
+                <span class="badge ok"><span class="dot"></span>rodando</span>
+                <span class="t s-t">🌱 seed profundo — "distributed systems consensus algorithms raft paxos"</span>
+                <span class="meta">ETA 42s</span>
+                <span class="chev">▾</span>
+              </div>
+              <div class="pbar"><i style="width:64%"></i></div>
+              <div class="log">🔎 rodada 1/5 — DuckDuckGo: "raft consensus explained"
+📄 baixando https://raft.github.io/raft.pdf (score 9)
+📄 recurso interno: /tutorial (score 8)
+📁 clone esparso: github.com/etcd-io/raft (docs/)
+🧹 limpando texto — 14 recursos, 3 descartados (score &lt; 6)
+📐 embedding: 1.204 chunks · coleção: distributed_systems
+✅ catálogo atualizado — 1 nova entrada</div>
+            </div>
+
+            <div class="job">
+              <div class="hd" onclick="this.parentElement.classList.toggle('open')" style="cursor:pointer">
+                <span class="badge warn"><span class="dot"></span>fila</span>
+                <span class="t s-t">📂 ingestão — C:\Users\rodne\projetosia\rag-llama\datasets\dotnet-docs (2.712 arquivos)</span>
+                <span class="meta">posição 2</span>
+                <span class="chev">▾</span>
+              </div>
+              <div class="pbar"><i style="width:0%"></i></div>
+              <div class="log">aguardando worker livre…</div>
+            </div>
+
+            <div class="job">
+              <div class="hd" onclick="this.parentElement.classList.toggle('open')" style="cursor:pointer">
+                <span class="badge err"><span class="dot"></span>erro → DLQ</span>
+                <span class="t s-t">🔧 mcp install — @modelcontextprotocol/server-filesystem</span>
+                <span class="meta">3 tentativas</span>
+                <span class="chev">▾</span>
+              </div>
+              <div class="log">npx: instalando @modelcontextprotocol/server-filesystem…
+❌ spawn npx ENOENT — node não está no PATH do container
+   dica: instale o Node 20+ no host ou use o agente (:8010)</div>
+            </div>
+          </div>
+          <div class="width-tag">clique num job para expandir/colapsar o log</div>
+        </div>
+
+        <details class="code-note">
+          <summary>▸ Ver as técnicas deste exemplo</summary>
+<pre>
+<b>1. Header do job: título come o espaço que sobrar e TRUNCA:</b>
+.job .hd { display:flex; flex-wrap:wrap }
+.job .t  { <b>flex:1; min-width:0; overflow:hidden;
+            text-overflow:ellipsis; white-space:nowrap</b> }
+
+<b>2. Badge e meta NUNCA comprimem:</b> quem absorve o
+encolhimento é o .t com min-width:0
+
+<b>3. Log monoespaçado — a linha sem espaço é o assassino:</b>
+.job .log { white-space:pre-wrap; <b>overflow-wrap:break-word</b> }
+   → C:\...\arquivo_longo_sem_espaco.txt QUEBRA linha
+     (sem isso: scroll horizontal infinito)
+
+<b>4. Log colapsável:</b> max-height:9rem; overflow-y:auto
+   (exibido só com .job.open — o header alterna)
+
+<b>5. Barra de progresso:</b> transição .4s suave —
+   polimento percebido como "mais rápido".
+</pre>
+        </details>
+      </section>
+
+      <!-- ═══════════ EXEMPLO 9 — SETTINGS ═══════════ -->
+      <section class="demo" id="ex9" data-t="09 · Formulário settings" data-sub="— padrão Linear/Notion settings">
+        <div class="demo-head">
+          <div>
+            <h3>Formulário de configurações</h3>
+            <p class="ref">Padrão de mercado: Linear · Notion · Vercel — aba ⚙️ Sistema do RagAroy</p>
+          </div>
+          <div class="sp"></div>
+        </div>
+        <div class="tags">
+          <span class="tag">input com sufixo</span><span class="tag">switch toggle</span>
+          <span class="tag">grid auto-fit</span>
+        </div>
+        <p class="nota">
+          Formulário técnico: URLs, números, flags. O <b>input com sufixo</b> (padrão
+          <code>.env</code>) usa <code>flex + min-width:0</code> — o sufixo nunca é comprimido
+          e o campo encolhe. Toggles à direita de labels longos. Grid reorganiza 2→1 coluna sozinho.
+        </p>
+
+        <div class="frame">
+          <div class="setgrid">
+            <div class="field">
+              <label for="u1">URL da LLM</label>
+              <div class="fwrap">
+                <span class="fix">LLM_BASE_URL=</span>
+                <input id="u1" class="input" value="http://localhost:8090/v1" spellcheck="false">
+              </div>
+              <span class="hint">llama-server com 4 slots (-np 4)</span>
+            </div>
+            <div class="field">
+              <label for="u2">Modelo ativo</label>
+              <div class="fwrap">
+                <span class="fix">LLM_MODEL=</span>
+                <input id="u2" class="input s-t" value="qwen2.5-coder-7b-instruct-q4_k_m" spellcheck="false">
+              </div>
+              <span class="hint">trocar GGUF exige reinício do serviço</span>
+            </div>
+            <div class="field">
+              <label for="u3">Top-K da busca</label>
+              <div class="fwrap">
+                <span class="fix">TOP_K=</span>
+                <input id="u3" class="input" type="number" value="4">
+              </div>
+              <span class="hint">documentos por coleção no prompt</span>
+            </div>
+            <div class="field">
+              <label for="u4">Score mínimo</label>
+              <div class="fwrap">
+                <span class="fix">SCORE_MIN=</span>
+                <input id="u4" class="input" type="number" step="0.05" value="0.35">
+              </div>
+              <span class="hint">abaixo disso: sem contexto (evita ruído)</span>
+            </div>
+            <div class="setrow" style="grid-column:1/-1">
+              <div class="bd">
+                <div class="t">Reranker cross-encoder (CPU)</div>
+                <div class="d">Reordena os top achados com bge-reranker — degrada em silêncio sem torch</div>
+              </div>
+              <div class="switch on" onclick="this.classList.toggle('on')" role="switch" aria-checked="true" tabindex="0"></div>
+            </div>
+            <div class="setrow" style="grid-column:1/-1">
+              <div class="bd">
+                <div class="t">Pausar chat durante geração de mídia</div>
+                <div class="d">Libera VRAM para a difusão; restaura sozinho ao fim</div>
+              </div>
+              <div class="switch on" onclick="this.classList.toggle('on')" role="switch" aria-checked="true" tabindex="0"></div>
+            </div>
+            <div style="grid-column:1/-1;display:flex;gap:.5rem;justify-content:flex-end;flex-wrap:wrap">
+              <button class="btn btn-o">Descartar</button>
+              <button class="btn btn-p" onclick="toast('✅ Configurações salvas no .env')">💾 Salvar</button>
+            </div>
+          </div>
+        </div>
+
+        <details class="code-note">
+          <summary>▸ Ver as técnicas deste exemplo</summary>
+<pre>
+<b>1. Input com prefixo (padrão .env) — o clássico que quebra:</b>
+.fwrap  { display:flex; <b>min-width:0</b> }      /* cadeia autoriza encolher */
+.fwrap .fix { <b>flex-shrink:0</b>; white-space:nowrap } /* sufixo intacto */
+.fwrap .input { <b>min-width:0</b>; flex:1 }     /* campo encolhe */
+
+<b>2. Grid 2→1 coluna sem media query:</b>
+.setgrid { <b>grid-template-columns: repeat(auto-fit, minmax(18rem,1fr))</b> }
+
+<b>3. Linha de toggle: label flexível, switch fixo:</b>
+.setrow { display:flex; align-items:center; <b>min-width:0</b> }
+.setrow .bd { <b>flex:1; min-width:0</b> }       /* o texto cede */
+.switch { <b>flex-shrink:0</b> }                 /* o toggle nunca */
+
+<b>4. Barra de ações sempre acessível:</b> flex-wrap
+   + justify-content:flex-end (Salvar nunca sai da tela).
+</pre>
+        </details>
+      </section>
+
+      <!-- ═══════════ EXEMPLO 10 — AUTH ═══════════ -->
+      <section class="demo" id="ex10" data-t="10 · Auth / onboarding" data-sub="— card centrado padrão Vercel/Supabase">
+        <div class="demo-head">
+          <div>
+            <h3>Auth / onboarding centrado</h3>
+            <p class="ref">Padrão de mercado: Vercel · Supabase · Linear — login do RagAroy</p>
+          </div>
+          <div class="sp"></div>
+        </div>
+        <div class="tags">
+          <span class="tag">width:min()</span><span class="tag">place-items:center</span>
+          <span class="tag">texto de botão trunca</span>
+        </div>
+        <p class="nota">
+          O card de login usa <code>width:min(24rem,100%)</code> — nunca passa de 24rem e
+          nunca estoura o palco. Botões de provedor social com <b>nome dinâmico que trunca
+          no centro</b> (ícones nas pontas sempre visíveis). Clique em <b>☠️</b> para ver
+          o botão com nome de provedor gigante.
+        </p>
+
+        <div class="frame">
+          <div class="authwrap">
+            <div class="auth">
+              <div class="lg">◧</div>
+              <h4>Entrar no RagAroy</h4>
+              <p class="sub">RAG local · Qdrant + Qwen + BGE-M3</p>
+
+              <div style="display:flex;flex-direction:column;gap:.7rem">
+                <div class="field">
+                  <label for="au">Usuário</label>
+                  <input id="au" class="input" placeholder="admin" autocomplete="username">
+                </div>
+                <div class="field">
+                  <label for="ap">Senha</label>
+                  <input id="ap" class="input" type="password" placeholder="••••••••" autocomplete="current-password">
+                </div>
+                <button class="btn btn-p" onclick="toast('🔓 logado — perfil isolado por conta')">Entrar</button>
+
+                <div class="or">ou continue com</div>
+
+                <button class="soc" onclick="toast('🌐 provedor fictício')">
+                  <span>🪪</span><span class="t s-t">Continuar com SSO corporativo</span><span>→</span>
+                </button>
+                <button class="soc" onclick="toast('🔑 chave local fictícia')">
+                  <span>🔑</span><span class="t">Chave de API local</span><span>→</span>
+                </button>
+
+                <p class="sub" style="margin:.4rem 0 0">
+                  Sem conta? <a href="#" style="color:var(--primary)" onclick="toast('👤 registro — sessões isoladas');return false">Criar perfil</a>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <details class="code-note">
+          <summary>▸ Ver as técnicas deste exemplo</summary>
+<pre>
+<b>1. Card centrado com largura CAPADA — a fórmula do mercado:</b>
+.auth { <b>width:min(24rem, 100%)</b> }
+.authwrap { display:grid; <b>place-items:center</b>; min-height:26rem }
+
+<b>2. Botão social com nome dinâmico:</b>
+.soc { display:flex; <b>min-width:0</b> }
+.soc .t { flex:1; <b>overflow:hidden; text-overflow:ellipsis</b> }
+      ↑ ícone 🪪 e seta → ficam NAS PONTAS sempre visíveis
+
+<b>3. Fundo com brilho radial (toque premium barato):</b>
+background:radial-gradient(60rem 30rem at 50% -10%,
+            color-mix(primary 14%, transparent), transparent)
+
+<b>4. Nunca esqueça:</b> autocomplete="username"/"current-password"
+   — gerenciadores de senha dependem disso.
+</pre>
+        </details>
+      </section>
+
+    </div><!-- /stage -->
+  </main>
+</div><!-- /app -->
+
+<!-- ═══════════ OVERLAY: LIGHTBOX ═══════════ -->
+<div class="lb" id="lb" onclick="if(event.target===this)lb(false)">
+  <button class="x" onclick="lb(false)">✕</button>
+  <div class="box">
+    <div class="im" id="lbim">🦊</div>
+    <div class="cap">
+      <b style="flex-shrink:0">Prompt</b>
+      <span class="t" id="lbcap">—</span>
+      <button class="btn btn-s btn-sm" style="flex-shrink:0" onclick="toast('📋 prompt copiado')">📋 copiar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ OVERLAY: COMMAND PALETTE ═══════════ -->
+<div class="cmdk-mask" id="ckmask" onclick="if(event.target===this)cmdk(false)">
+  <div class="cmdk">
+    <div class="in">
+      <span>🔍</span>
+      <input id="ckq" placeholder="Digite um comando ou busca…" autocomplete="off">
+      <kbd>esc</kbd>
+    </div>
+    <div class="list" id="cklist"></div>
+    <div class="foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> navegar</span>
+      <span><kbd>⏎</kbd> executar</span>
+      <span><kbd>esc</kbd> fechar</span>
+    </div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+/* ═══════════ MOTOR DO LAB — vanilla JS, sem dependências ═══════════ */
+
+/* ── 1. Roteamento por hash (#ex1..#ex10) ── */
+const demos = [...document.querySelectorAll('.demo')];
+const navLinks = [...document.querySelectorAll('.nav a')];
+const titulo = document.getElementById('titulo');
+
+function rotear() {
+  const id = (location.hash || '#ex1').slice(1);
+  const alvo = document.getElementById(id) || document.getElementById('ex1');
+  demos.forEach(d => d.classList.toggle('on', d === alvo));
+  navLinks.forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + alvo.id));
+  titulo.innerHTML = alvo.dataset.t + ' <span>' + alvo.dataset.sub + '</span>';
+  window.scrollTo({ top: 0 });
+}
+window.addEventListener('hashchange', rotear);
+rotear();
+
+/* ── 2. Simulador de largura do palco ──
+   Troca a classe do .stage → o .frame limita max-width E a --fs
+   (escala interna) → as @container de DENTRO respondem. */
+function setW(btn, modo) {
+  document.querySelectorAll('.wbtn').forEach(b => b.style.background = '');
+  btn.style.background = 'var(--primary)';
+  btn.style.color = 'var(--primary-fg)';
+  document.getElementById('stage').className = 'stage ' + modo;
+  const tag = { 'w-320':'320px — celular', 'w-768':'768px — tablet',
+                'w-1280':'1280px — desktop', 'w-full':'largura total',
+                'w-4k':'4K simulado (+30% de escala)' }[modo];
+  toast('📐 ' + tag);
+}
+
+/* ── 3. ☠️ ESTRESSAR TEXTO — injeta rótulo patológico na seção ativa ── */
+const TEXTOO = 'nome_de_colecao_gerado_pela_llm_na_ingestao_com_muito_detalhe_e_sem_espaco_1234567890';
+let estressado = {};
+document.getElementById('stressBtn').addEventListener('click', () => {
+  const ativa = document.querySelector('.demo.on');
+  const id = ativa.id;
+  const alvos = ativa.querySelectorAll('.s-t');
+  estressado[id] = !estressado[id];
+  alvos.forEach(el => {
+    if (estressado[id]) {
+      if (!el.dataset.orig) el.dataset.orig = el.textContent;
+      el.textContent = TEXTOO;
+    } else if (el.dataset.orig) {
+      el.textContent = el.dataset.orig;
+    }
+  });
+  const btn = document.getElementById('stressBtn');
+  btn.textContent = estressado[id] ? '↩️ restaurar texto' : '☠️ estressar texto';
+  toast(estressado[id]
+    ? '☠️ texto patológico injetado — nada deve vazar/quebrar'
+    : '✅ textos originais restaurados');
+});
+
+/* ── 4. Tema claro/escuro (persiste) ── */
+function toggleTheme() {
+  const html = document.documentElement;
+  const claro = html.dataset.theme === 'light';
+  html.dataset.theme = claro ? 'dark' : 'light';
+  localStorage.setItem('lab.tema', html.dataset.theme);
+  document.getElementById('themeBtn').textContent = claro ? '☀️ Tema claro' : '🌙 Tema escuro';
+}
+if (localStorage.getItem('lab.tema') === 'light') {
+  document.documentElement.dataset.theme = 'light';
+  document.getElementById('themeBtn').textContent = '🌙 Tema escuro';
+}
+
+/* ── 5. Toasts ── */
+function toast(msg) {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; }, 2200);
+  setTimeout(() => el.remove(), 2600);
+}
+
+/* ── 6. Lightbox da galeria (EX5) ── */
+function lb(thumb) {
+  const box = document.getElementById('lb');
+  if (thumb === false) { box.classList.remove('on'); return; }
+  const im = thumb.querySelector('.im');
+  const lbim = document.getElementById('lbim');
+  lbim.className = 'im ' + im.className.replace('im ', '').trim();
+  lbim.textContent = im.textContent;
+  document.getElementById('lbcap').textContent = thumb.dataset.p;
+  box.classList.add('on');
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { lb(false); cmdk(false); }
+});
+
+/* ── 7. Command palette funcional (EX6) ── */
+const COMANDOS = [
+  { g:'Navegação', ic:'💬', t:'Ir para o Chat (home)', h:'G C', fn:() => location.hash='#ex1' },
+  { g:'Navegação', ic:'📊', t:'Abrir painel: Dashboard / Pulso', h:'G D', fn:() => location.hash='#ex3' },
+  { g:'Navegação', ic:'📚', t:'Abrir painel: Biblioteca de coleções', h:'G B', fn:() => location.hash='#ex4' },
+  { g:'Navegação', ic:'🎬', t:'Abrir painel: Estúdio de mídia', h:'G E', fn:() => location.hash='#ex5' },
+  { g:'Ações', ic:'➕', t:'Nova conversa', h:'⌘N', fn:() => toast('➕ nova conversa — seleções zeradas') },
+  { g:'Ações', ic:'🎤', t:'Alternar modo voz (TTS piper)', h:'⌘V', fn:() => toast('🎙 modo voz alternado') },
+  { g:'Ações', ic:'💀', t:'Estressar textos do exemplo atual', h:'', fn:() => document.getElementById('stressBtn').click() },
+  { g:'Ações', ic:'📐', t:'Simular largura 320px (celular)', h:'', fn:() => setW(document.querySelectorAll('.wbtn')[0],'w-320') },
+  { g:'Sistema', ic:'🧠', t:'Trocar modelo de conversa (qwen3-8b)', h:'', fn:() => toast('🧠 troca de GGUF — trava de VRAM checada') },
+  { g:'Sistema', ic:'⚡', t:'Limpar cache semântico', h:'', fn:() => toast('🧹 cache limpo') },
+  { g:'Sistema', ic:'🐰', t:'Inspecionar DLQ do RabbitMQ', h:'', fn:() => toast('🐇 3 mensagens na DLQ') },
+  { g:'Aparência', ic:'🌓', t:'Alternar tema claro/escuro', h:'⌘L', fn:toggleTheme },
+];
+let ckSel = 0;
+const ckEl = document.getElementById('ckmask'),
+      ckQ  = document.getElementById('ckq'),
+      ckList = document.getElementById('cklist');
+
+function visiveis() {
+  const f = ckQ.value.trim().toLowerCase();
+  return COMANDOS.filter(c => c.t.toLowerCase().includes(f));
+}
+function renderCK() {
+  const vis = visiveis();
+  ckSel = Math.min(ckSel, Math.max(vis.length - 1, 0));
+  let html = '', grp = '';
+  vis.forEach((c, i) => {
+    if (c.g !== grp) { html += '<div class="grp">' + c.g + '</div>'; grp = c.g; }
+    html += '<button class="it ' + (i === ckSel ? 'sel' : '') + '" data-i="' + COMANDOS.indexOf(c) + '">' +
+      '<span>' + c.ic + '</span><span class="t">' + c.t + '</span>' +
+      (c.h ? '<span class="h">' + c.h + '</span>' : '') + '</button>';
+  });
+  ckList.innerHTML = html || '<p style="padding:.8rem;color:var(--fg-muted);font-size:.85rem">nada encontrado</p>';
+  ckList.querySelectorAll('.it').forEach(b => {
+    b.onclick = () => { cmdk(false); COMANDOS[+b.dataset.i].fn(); };
+  });
+}
+function cmdk(on) {
+  ckEl.classList.toggle('on', on);
+  if (on) { ckQ.value = ''; ckSel = 0; renderCK(); setTimeout(() => ckQ.focus(), 30); }
+}
+ckQ.addEventListener('input', () => { ckSel = 0; renderCK(); });
+ckQ.addEventListener('keydown', e => {
+  const vis = visiveis();
+  if (e.key === 'ArrowDown') { e.preventDefault(); ckSel = (ckSel + 1) % vis.length; renderCK(); }
+  if (e.key === 'ArrowUp')   { e.preventDefault(); ckSel = (ckSel - 1 + vis.length) % vis.length; renderCK(); }
+  if (e.key === 'Enter' && vis[ckSel]) { cmdk(false); vis[ckSel].fn(); }
+});
+/* Ctrl+K / Cmd+K global (mesmo contrato do CommandK.tsx do webui) */
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault(); cmdk(!ckEl.classList.contains('on'));
+  }
+});
+renderCK();
+
+/* ── 8. Barras do gráfico (EX3) — dados com cara de real ── */
+(() => {
+  const dias = [34,51,44,68,59,87,76,95,71,88,102,118,97,133];
+  const max = Math.max(...dias);
+  const bars = document.getElementById('bars');
+  if (!bars) return;
+  dias.forEach((v, i) => {
+    const b = document.createElement('div');
+    b.className = 'bar';
+    b.style.height = '0%';
+    b.dataset.v = v + ' consultas';
+    b.title = ['seg','ter','qua','qui','sex','sáb','dom'][i % 7] + ' · ' + v;
+    bars.appendChild(b);
+    setTimeout(() => b.style.height = (v / max * 100) + '%', 60 * i);
+  });
+})();
+
+/* ── 9. Progresso fake do job 1 (EX8) ── */
+(() => {
+  const bar = document.querySelector('.job .pbar i');
+  if (!bar) return;
+  let p = 64;
+  setInterval(() => {
+    p = Math.min(p + Math.random() * 4, 96);
+    bar.style.width = p + '%';
+  }, 1800);
+})();
+
+/* ── 10. Boot ── */
+setTimeout(() => toast('👋 Bem-vindo! Ctrl+K abre a paleta · ☠️ estressa os textos'), 600);
+
+</script>
+</body>
+</html>

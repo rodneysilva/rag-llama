@@ -1,0 +1,793 @@
+/* RagAroy — UI simples (HTMX + Jinja). Um arquivo. Sem framework. */
+:root {
+  --bg: #f6f7f9; --card: #ffffff; --texto: #1a1d21; --suave: #5b6470;
+  --borda: #d9dee4; --acento: #0f62fe; --acento-suave: #e8f0ff;
+  --ok: #0e8345; --erro: #c2410c; --aviso: #b45309; --fundo-codigo: #f0f2f5;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101418; --card: #171d24; --texto: #e8eaed; --suave: #9aa4b1;
+    --borda: #2a323c; --acento: #6ea0ff; --acento-suave: #1b2a44;
+    --ok: #34d399; --erro: #f87171; --aviso: #fbbf24; --fundo-codigo: #0d1117;
+  }
+}
+* { box-sizing: border-box; }
+html {
+  scroll-behavior: smooth;
+  /* ESCALA FLUIDA: ~15px em 1080p (visual atual preservado), 13.5px em
+     celulares, até 18px em 4K — tudo que usa rem cresce junto (inputs,
+     log, tabelas, mensagens). iOS não infla o texto girando a tela. */
+  font-size: clamp(13.5px, calc(12px + 0.16vw), 18px);
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  margin: 0; background: var(--bg); color: var(--texto);
+  font: 1rem/1.55 system-ui, "Segoe UI", Roboto, sans-serif;
+}
+
+/* ═══ FULLSCREEN: o app ocupa a tela inteira (header fixo + main flex) ═══ */
+body { min-height: 100dvh; display: flex; flex-direction: column; }
+header.topo { flex: none; }
+main { flex: 1; width: 100%; min-height: 0; max-width: none; }
+
+/* ═══ SCROLLBAR estilizada (fina, segue o tema, realça no hover) ═══ */
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--suave) 45%, transparent) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--suave) 40%, transparent);
+  border-radius: 99px;
+  border: 2.5px solid transparent;
+  background-clip: content-box;   /* a borda transparente afina o polegar */
+}
+*::-webkit-scrollbar-thumb:hover { background-color: var(--acento); }
+.log::-webkit-scrollbar-thumb, .msg pre::-webkit-scrollbar-thumb { width: 7px; }
+table::-webkit-scrollbar { height: 8px; }   /* scroll horizontal da tabela */
+
+a { color: var(--acento); }
+header.topo {
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  padding: .65rem 1rem; background: var(--card); border-bottom: 1px solid var(--borda);
+  position: sticky; top: 0; z-index: 10;
+}
+header.topo b.marca { font-size: 1.05rem; }
+/* marca = LOGO clicável (img + nome) */
+a.marca { display: flex; align-items: center; gap: .45rem; text-decoration: none;
+  color: var(--texto); font-weight: 700; font-size: 1.02rem; }
+a.marca img { display: block; border-radius: 7px; }
+/* LLM carregada no topbar (sutil) */
+.llm-tag { color: var(--suave); font-size: .74rem;
+  border: 1px solid var(--borda); border-radius: 99px; padding: .05rem .45rem;
+  font-family: ui-monospace, Consolas, monospace; }
+header.topo nav { display: flex; gap: .25rem; flex-wrap: wrap; }
+header.topo nav a {
+  padding: .35rem .7rem; border-radius: 8px; text-decoration: none; color: var(--suave);
+}
+header.topo nav a.ativo { background: var(--acento-suave); color: var(--texto); font-weight: 600; }
+header.topo .direita { margin-left: auto; display: flex; gap: .5rem; align-items: center;
+  font-size: .8rem; color: var(--suave); }
+/* ═══ FULLSCREEN IGUAL AO TOPBAR: main ocupa 100% da viewport (como o
+   header) — o CONTEÚDO de cada página é que se limita proporcionalmente
+   (régua única clamp), centrado. Bordas alinhadas em todas as abas. ═══ */
+main {
+  max-width: none; width: 100%; margin: 0;
+  padding: 1rem clamp(1rem, 3vw, 3rem);   /* respiro lateral proporcional */
+}
+/* régua do conteúdo interno (cards/tabelas) — proporcional e centrada */
+.pagina-conteudo {
+  max-width: none;
+  margin: 0 auto;
+}
+section.cartao {
+  background: var(--card); border: 1px solid var(--borda); border-radius: 12px;
+  padding: 1rem; margin-bottom: 1rem;
+}
+h1 { font-size: 1.25rem; margin: .2rem 0 .8rem; }
+h2 { font-size: 1rem; margin: 0 0 .6rem; }
+p.descricao, p.mut { color: var(--suave); font-size: .82rem; margin: .2rem 0 .8rem; }
+label { display: block; font-size: .8rem; color: var(--suave); margin: .5rem 0 .15rem; }
+input[type=text], input[type=password], input[type=number], select, textarea {
+  width: 100%; padding: .5rem .6rem; border: 1px solid var(--borda); border-radius: 8px;
+  background: var(--bg); color: var(--texto); font: inherit;
+}
+textarea { min-height: 3.2rem; resize: vertical; }
+button, .botao {
+  padding: .5rem .9rem; border: 1px solid var(--borda); border-radius: 8px;
+  background: var(--card); color: var(--texto); font: inherit; cursor: pointer;
+  text-decoration: none; display: inline-block;
+  /* ═══ BOTÕES: feedback vivo (elevação suave + transição) ═══ */
+  transition: background .15s ease, border-color .15s ease,
+              transform .1s ease, box-shadow .15s ease, color .15s ease;
+  user-select: none; -webkit-tap-highlight-color: transparent;
+}
+button:hover, .botao:hover {
+  border-color: color-mix(in srgb, var(--acento) 55%, var(--borda));
+  background: color-mix(in srgb, var(--acento) 6%, var(--card));
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--texto) 8%, transparent);
+}
+button:active, .botao:active { transform: translateY(1px) scale(.99); }
+button:focus-visible, .botao:focus-visible {
+  outline: 2px solid var(--acento); outline-offset: 1px;
+}
+button.primario { background: var(--acento); border-color: var(--acento); color: #fff; }
+button.primario:hover {
+  background: color-mix(in srgb, var(--acento) 88%, #000);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--acento) 40%, transparent);
+}
+button.primario:active { transform: translateY(1px); }
+button.perigo { border-color: var(--erro); color: var(--erro); }
+button.perigo:hover {
+  background: color-mix(in srgb, var(--erro) 10%, var(--card));
+  border-color: var(--erro);
+}
+button:disabled { opacity: .5; cursor: default; transform: none; box-shadow: none; }
+.linha { display: flex; gap: .6rem; flex-wrap: wrap; align-items: flex-end; }
+/* min(100%, Xrem): ocupa Xrem quando cabe; quando o campo não cabe mais,
+   assume 100% e QUEBRA PARA A PRÓXIMA LINHA (em vez de espremer no celular) */
+.linha > div { flex: 1; min-width: min(100%, 10rem); }
+.linha > div.estreito { flex: 0 0 auto; min-width: min(100%, 6rem); }
+/* TABELA RESPONSIVA: display:block + overflow-x = a tabela ROLA DENTRO do
+   card em telas estreitas (técnica clássica) — a página NUNCA ganha scroll
+   horizontal. Cabeçalho nunca quebra em duas linhas; textos longos
+   (nomes/caminhos) quebram com anywhere em vez de estourar. */
+table {
+  display: block; width: 100%; max-width: 100%;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  border-collapse: collapse; font-size: .85rem;
+}
+th, td { text-align: left; padding: .45rem .5rem; border-bottom: 1px solid var(--borda); vertical-align: top; }
+th { color: var(--suave); font-weight: 600; font-size: .75rem; text-transform: uppercase; white-space: nowrap; }
+td { overflow-wrap: anywhere; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.grade { display: grid; gap: .8rem; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); }
+.kpi { background: var(--card); border: 1px solid var(--borda); border-radius: 12px; padding: .8rem; }
+.kpi .rotulo { font-size: .72rem; color: var(--suave); text-transform: uppercase; }
+.kpi .valor { font-size: 1.35rem; font-weight: 650; margin-top: .15rem; }
+.kpi .sub { font-size: .72rem; color: var(--suave); }
+
+/* chat — PADRÃO ÚNICO DE MENSAGENS: histórico (#conversa) e área ao vivo
+   (#pensando, onde a bolha NASCE ao enviar) são o MESMO container flex.
+   Toda .msg.usuario alinha à DIREITA em qualquer um dos dois; .msg
+   .assistente ocupa a largura total. NÃO criar regras de conversa fora
+   daqui (a duplicação era a causa de layouts divergentes). */
+#conversa, #pensando { display: flex; flex-direction: column; gap: .9rem; margin-bottom: 1rem; }
+/* ═══ CHAT = PÁGINA NORMAL (pedido do dono): scroll LIVRE do documento —
+   a página inteira rola como qualquer outra; nada de viewport travado
+   (100dvh/overflow:hidden), palco com scroll próprio ou composer fixo.
+   As mensagens APARECEM; quem rola é o usuário. ═══ */
+body.pagina-chat main {
+  display: block;
+  padding: .8rem 1rem 1.2rem;
+  /* FULLSCREEN TOTAL: o chat NÃO tem coluna de leitura — ocupa a
+     tela inteira (as outras páginas mantêm os 60rem de leitura) */
+  max-width: none; width: 100%;
+}
+/* conversa centrada PROPORCIONAL: larga em tela larga, sem limite duro —
+   em 1080p ~ 62rem, em 4K cresce junto (clamp), nunca coluna apertada */
+body.pagina-chat #conversa {
+  width: 100%;
+  /* ⚠️ margin-bottom AQUI: `margin: 0 auto` zerava o espaçamento da regra
+     unificada e a bolha nova (que nasce no #pensando) COLAVA na última
+     mensagem ao vivo — no refresh o gap voltava (tudo dentro do #conversa). */
+  margin: 0 auto 1rem;
+}
+
+/* ═══════════ CHAT-SHELL: drawer conversas | coluna | split docs ═══════════
+   Altura NATURAL: as colunas crescem com o conteúdo (a página rola). */
+.chat-shell { display: flex; align-items: flex-start; gap: .7rem; }
+.chat-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+/* composer no FLUXO do documento e COLADO NO RODAPÉ (pedido do dono): a
+   página rola livre e o campo de pergunta fica SEMPRE visível embaixo —
+   sticky bottom com o mesmo fundo da página (não vira "flutuante"). */
+body.pagina-chat #composer {
+  position: sticky; bottom: 0; z-index: 6;
+  width: 100%; margin: 0 auto;
+  background: var(--bg);
+  border-bottom: none;
+  box-shadow: 0 -6px 14px -10px rgba(0, 0, 0, .35);
+}
+.chat-sub { display: flex; gap: .5rem; align-items: center; padding: 0 .1rem .5rem; }
+.badge-cache { font-size: .7rem; color: var(--suave); border: 1px solid var(--borda);
+  border-radius: 99px; padding: .12rem .55rem; white-space: nowrap; }
+.toggle-voz { display: inline-flex; gap: .35rem; align-items: center; font-size: .72rem;
+  color: var(--suave); cursor: pointer; user-select: none; }
+.toggle-voz input { accent-color: var(--acento); }
+
+/* drawer de conversas (esquerda — SEMPRE VISÍVEL estilo Open WebUI).
+   Com o SCROLL LIVRE da página: colunas flutuam (sticky) com altura
+   máxima própria — a página rola inteira, as listas internas rolam nelas. */
+.drawer-conversas { width: 16rem; flex: 0 0 auto; border: 1px solid var(--borda);
+  border-radius: 12px; background: var(--card); display: flex; flex-direction: column;
+  overflow: hidden; position: sticky; top: 3.6rem;
+  max-height: calc(100dvh - 4.2rem); }
+.conv-nova { margin: .55rem .55rem .3rem; padding: .5rem .7rem; border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--acento) 45%, transparent);
+  color: var(--acento); font-weight: 600; font-size: .85rem; cursor: pointer;
+  background: none; text-align: left;
+  transition: background .15s, border-color .15s; }
+.conv-nova:hover { background: var(--acento-suave); box-shadow: none; }
+.drawer-cab { display: flex; gap: .4rem; align-items: center; padding: .55rem .65rem;
+  border-bottom: 1px solid var(--borda); flex-wrap: wrap; }
+.drawer-corpo { flex: 1; overflow-y: auto; padding: .4rem; min-height: 0; }
+.conv-item { display: flex; gap: .3rem; align-items: stretch; border-radius: 9px; }
+.conv-item:hover { background: var(--acento-suave); }
+.conv-item.atual { background: var(--acento-suave); outline: 1px solid color-mix(in srgb, var(--acento) 35%, transparent); }
+.conv-abrir { cursor: pointer; flex: 1; min-width: 0; text-align: left; padding: .45rem .55rem;
+  background: none; border: 0; cursor: pointer; display: flex; flex-direction: column; gap: .1rem; }
+.conv-abrir:hover { background: none; box-shadow: none; }
+.conv-titulo { font-size: .8rem; font-weight: 600; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.conv-slug { font-size: .62rem; color: var(--suave); opacity: .85;
+  font-family: var(--mono, monospace); display: block; line-height: 1.1; }
+.conv-meta { font-size: .66rem; color: var(--suave); }
+.conv-x { flex: 0 0 auto; border: 0; background: none; color: var(--suave);
+  padding: 0 .5rem; cursor: pointer; border-radius: 7px; }
+.conv-x:hover { color: var(--erro); background: color-mix(in srgb, var(--erro) 12%, transparent); }
+/* ⏳ exclusão em curso (job na fila): item desabilitado com pulso sutil —
+   a lista auto-pola até o item sumir */
+.conv-item.apagando { opacity: .62; }
+.conv-item.apagando .conv-abrir { cursor: progress; }
+.conv-item.apagando .conv-abrir:hover { background: none; }
+.conv-x.apg { cursor: progress; font-size: .7rem; display: grid; place-items: center;
+  animation: pulsar-apg 1.2s ease-in-out infinite; }
+@keyframes pulsar-apg { 50% { opacity: .35; } }
+/* hover/click EXPLÍCITOS no botão (não só no .conv-item): o botão ocupa
+   o item todo — antes o primeiro parecia "morto" ao hover */
+.conv-abrir:hover, .conv-abrir:focus-visible { background: color-mix(in srgb, var(--acento) 10%, transparent); }
+.conv-abrir:active { background: color-mix(in srgb, var(--acento) 20%, transparent); }
+/* alça de redimensionar a COLUNA de conversas (borda direita) */
+.drawer-conversas { position: relative; }
+.conv-alca { right: 0; left: auto; top: 0; bottom: 0; width: 7px; }
+
+/* split de documentos (direita) */
+.split-docs { width: 25.2rem; flex: 0 0 auto; border: 1px solid var(--borda);
+  border-radius: 12px; background: var(--card); display: flex; flex-direction: column;
+  overflow: hidden; position: sticky; top: 3.6rem;
+  max-height: calc(100dvh - 4.2rem); }
+/* alça de redimensionar (arrasta a borda esquerda do painel) */
+.split-alca { position: absolute; left: 0; top: 0; bottom: 0; width: 7px;
+  cursor: col-resize; z-index: 5; touch-action: none; }
+.split-alca:hover, .split-alca:active { background: color-mix(in srgb, var(--acento) 30%, transparent); }
+/* abas do painel (arquivos · mídia · fontes) — SVG + texto */
+.painel-abas { display: flex; gap: .25rem; flex-wrap: wrap; }
+.painel-abas .aba { font-size: .72rem; padding: .18rem .55rem; cursor: pointer;
+  border: 1px solid var(--borda); border-radius: 99px; background: none;
+  color: var(--suave); display: inline-flex; align-items: center; gap: .25rem;
+  flex-shrink: 0; white-space: nowrap; }
+.painel-abas .aba.ativa { color: var(--acento); border-color: var(--acento); }
+.painel-abas .aba .n { font-size: .64rem; opacity: .75; }
+/* AÇÕES do painel: grupo único à direita na MESMA linha das abas */
+.painel-acoes { margin-left: auto; display: flex; gap: .3rem;
+  align-items: center; flex-wrap: nowrap; }
+.painel-acoes .mini-btn { white-space: nowrap; }
+.mini-btn:disabled { opacity: .38; cursor: not-allowed; }
+/* ═══ AÇÕES COM RÓTULO (retrair/fechar/zip): .mini-btn é botão QUADRADO de
+   ÍCONE (1.9rem, inline-grid) — ícone+texto nele espremem num quadradinho
+   (o bug "botões quebrados"). Ação rotulada usa .acao-btn: pill com
+   padding, largura AUTOMÁTICA pelo conteúdo. ═══ */
+.acao-btn { display: inline-flex; align-items: center; gap: .3rem;
+  flex-shrink: 0; white-space: nowrap; cursor: pointer;
+  font-size: .74rem; padding: .3rem .6rem;
+  border: 1px solid var(--borda); border-radius: 99px;
+  background: var(--card); color: var(--suave);
+  transition: border-color .15s, color .15s; }
+.acao-btn:hover { border-color: var(--acento); color: var(--acento); }
+.acao-btn.largo { width: 100%; justify-content: center; border-radius: 9px;
+  padding: .45rem .6rem; }
+/* cabeçalho do PAINEL (não confundir com .drawer-cab das conversas):
+   UMA linha — abas rolam horizontalmente, ação fixa à direita (nunca quebra
+   linha nem espreme) */
+.painel-cab { display: flex; gap: .4rem; align-items: center;
+  padding: .45rem .55rem; border-bottom: 1px solid var(--borda); }
+.painel-cab .painel-abas { flex: 1 1 auto; min-width: 0;
+  overflow-x: auto; flex-wrap: nowrap; scrollbar-width: thin; }
+/* RODAPÉ do painel: o zip vive AQUI (lugar fixo, longe das abas) */
+.painel-rodape { border-top: 1px solid var(--borda); padding: .45rem .55rem; }
+/* ORELHA LATERAL: botão vertical fixo na borda direita — aparece SÓ quando
+   o painel está retraído; 1 clique reabre (o painel nunca fica órfão) */
+.painel-orelha { position: fixed; right: 0; top: 42%;
+  transform: translateY(-50%); z-index: 30;
+  writing-mode: vertical-rl; text-orientation: mixed;
+  display: flex; align-items: center; gap: .4rem;
+  padding: .7rem .3rem; border: 1px solid var(--borda);
+  border-right: 0; border-radius: 9px 0 0 9px;
+  background: var(--card); color: var(--suave); cursor: pointer;
+  font-size: .72rem; box-shadow: -4px 0 10px -6px rgba(0,0,0,.3); }
+.painel-orelha:hover { color: var(--acento); border-color: var(--acento); }
+.painel-orelha b { color: var(--acento); font-weight: 600; }
+/* AÇÕES do card de código (mensagem): testar + copiar juntos */
+.cod-acoes { margin-left: auto; display: inline-flex; gap: .3rem; }
+.cod-btn { font-size: .68rem; padding: .15rem .55rem;
+  border: 1px solid var(--borda); border-radius: 7px; background: none;
+  color: var(--suave); cursor: pointer; }
+.cod-btn:hover { color: var(--acento); border-color: var(--acento); }
+/* chip da mídia incluída no contexto (composer) */
+.chip-contexto { display: flex; gap: .4rem; align-items: center; margin-top: .45rem;
+  padding: .22rem .55rem; border: 1px dashed var(--acento); border-radius: 8px;
+  font-size: .74rem; color: var(--acento); overflow-wrap: anywhere; }
+/* ações do item de mídia (incluir no contexto) */
+.midia-acoes { margin-left: auto; display: flex; gap: .3rem; }
+.midia-acoes .incluir-ctx { font-size: .66rem; padding: .12rem .45rem;
+  border: 1px solid var(--borda); border-radius: 7px; background: none;
+  color: var(--suave); cursor: pointer; }
+.midia-acoes .incluir-ctx:hover { color: var(--acento); border-color: var(--acento); }
+img.midia.clicavel, .split-corpo img.midia.clicavel { cursor: zoom-in; }
+/* lightbox: imagem ampliada em tela cheia (clique fecha) */
+.lightbox { position: fixed; inset: 0; z-index: 999; background: rgba(0,0,0,.82);
+  display: flex; align-items: center; justify-content: center; cursor: zoom-out;
+  padding: 2rem; }
+.lightbox img { max-width: 100%; max-height: 100%; border-radius: 10px; }
+/* barra de progresso REAL do motor (sd-cli/whisper) nos jobs de mídia */
+.prog-info { margin-top: .4rem; display: flex; align-items: center; gap: .5rem;
+  flex-wrap: wrap; }
+.pbar { flex: 1 1 8rem; height: .5rem; border-radius: 99px; overflow: hidden;
+  border: 1px solid var(--borda); background: var(--bg); min-width: 6rem; }
+.pbar i { display: block; height: 100%; width: 0;
+  background: linear-gradient(90deg, var(--acento), color-mix(in srgb, var(--acento) 55%, transparent));
+  transition: width .6s ease; }
+/* job "reconectando ao agente": indeterminado e amarelado */
+.pbar-job.rec i { background: var(--aviso); }
+/* ACCORDION de documentos DENTRO do card da coleção (o drawer fixo
+   quebrava a tela e o fechar não funcionava — agora é inline, fecha
+   sozinho ao clicar de novo, sem overlay) */
+.docs-slot { margin-top: .5rem; border-top: 1px dashed var(--borda);
+  padding-top: .5rem; max-height: 22rem; overflow-y: auto; }
+/* MODAL de documento (dialog nativo — acessível, ESC fecha) */
+.doc-modal { border: 1px solid var(--borda); border-radius: 14px;
+  background: var(--card); color: var(--texto); padding: 0;
+  width: min(46rem, 92vw); max-height: 84vh; }
+.doc-modal::backdrop { background: rgba(0, 0, 0, .55); backdrop-filter: blur(2px); }
+.doc-modal-cab { display: flex; align-items: center; gap: .5rem;
+  padding: .6rem .8rem; border-bottom: 1px solid var(--borda); }
+.doc-modal-corpo { padding: .8rem; overflow-y: auto; max-height: calc(84vh - 3rem); }
+.split-corpo { flex: 1; overflow-y: auto; padding: .55rem; min-height: 0; }
+.doc-chunk { border: 1px solid var(--borda); border-radius: 10px; padding: .55rem .65rem;
+  margin-bottom: .55rem; background: var(--bg); }
+.doc-hd { display: flex; gap: .45rem; align-items: center; flex-wrap: wrap; margin-bottom: .3rem; }
+.doc-hd b { color: var(--acento); font-size: .75rem; }
+.doc-arq { font-family: ui-monospace, Consolas, monospace; font-size: .7rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.doc-col { font-size: .64rem; color: var(--suave); border: 1px solid var(--borda);
+  border-radius: 99px; padding: .05rem .45rem; }
+.fonte-item { border-bottom: 1px dashed var(--borda); padding-bottom: .45rem;
+  margin-bottom: .45rem; }
+.fonte-item:last-child { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
+.fonte-item .doc-col[title*="similaridade"] { color: var(--acento);
+  border-color: color-mix(in srgb, var(--acento) 40%, transparent); }
+.doc-tx { font-size: .74rem; color: var(--suave); line-height: 1.5;  display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ═══ PAINEL DA CONVERSA (auto-alimentado): itens acumulam ═══
+   Arquivos de código (clone do pre da mensagem) e mídia gerada entram
+   sozinhos; cada item é um card com cabeçalho (.doc-hd) + conteúdo. */
+.painel-item { display: flex; flex-direction: column; gap: .3rem; }
+.painel-item .doc-hd { margin-bottom: 0; }
+.painel-item .doc-hd .copiar-btn { position: static; }
+/* clone do pre FORA do figure.cod precisa do estilo próprio (o seletor
+   "figure.cod pre" não o alcança) — e o padding-top:2rem herdado da regra
+   ".split-corpo pre" (espaço do botão absoluto do split antigo) sai */
+.painel-pre { background: var(--fundo-codigo); border: 1px solid var(--borda);
+  border-radius: 8px; padding: .55rem .65rem; margin: 0; overflow-x: auto;
+  white-space: pre; font-size: .76rem; line-height: 1.5; position: static; }
+.painel-pre code { background: none; padding: 0; font-size: inherit; }
+
+/* botão-fontes nas mensagens */
+.btn-fontes { font-size: .74rem; text-decoration: none;
+  border: 1px solid color-mix(in srgb, var(--acento) 40%, transparent);
+  border-radius: 99px; padding: .12rem .6rem; }
+.btn-fontes:hover { background: var(--acento-suave); }
+
+/* microfone */
+.mic-zona { display: flex; gap: .45rem; align-items: center; }
+.mic-btn { font-size: 1rem; }
+.mic-btn.gravando { color: #fff; background: var(--erro);
+  border-color: var(--erro); animation: pulso 1s infinite alternate; }
+.mini-btn { border: 1px solid var(--borda); border-radius: 8px; background: var(--card);
+  width: 1.9rem; height: 1.9rem; display: inline-grid; place-items: center; cursor: pointer;
+  transition: background .15s, border-color .15s; }
+.mini-btn:hover { border-color: var(--acento); background: var(--acento-suave); }
+
+/* ═══════════ MARKDOWN RICO (renderizado no cliente: marked+DOMPurify) ═══ */
+.resposta.md h1, .resposta.md h2, .resposta.md h3 {
+  margin: .8rem 0 .35rem; line-height: 1.25;
+}
+.resposta.md h1 { font-size: 1.15rem; } .resposta.md h2 { font-size: 1.05rem; }
+.resposta.md h3 { font-size: .95rem; }
+.resposta.md p { margin: .35rem 0; }
+.resposta.md ul, .resposta.md ol { margin: .35rem 0 .35rem 1.2rem; }
+.resposta.md li { margin: .15rem 0; }
+.resposta.md blockquote { border-left: 3px solid var(--borda); margin: .5rem 0;
+  padding: .2rem .8rem; color: var(--suave); }
+.resposta.md table { border: 1px solid var(--borda); border-radius: 8px; }
+.resposta.md th, .resposta.md td { border-bottom: 1px solid var(--borda); }
+.resposta.md code { background: var(--fundo-codigo); border-radius: 4px;
+  padding: .08rem .32rem; font-size: .85em;
+  font-family: ui-monospace, Consolas, monospace; }
+.resposta.md pre { background: var(--fundo-codigo); border: 1px solid var(--borda);
+  border-radius: 9px; padding: .7rem .8rem; overflow-x: auto; margin: .5rem 0; }
+.resposta.md pre code { background: none; padding: 0; font-size: .8rem; line-height: 1.55; }
+.resposta.md a { word-break: break-all; }
+.resposta.md hr { border: 0; border-top: 1px solid var(--borda); margin: .7rem 0; }
+.msg { max-width: 100%; border-radius: 12px; padding: .7rem .9rem; border: 1px solid var(--borda); background: var(--card); white-space: normal; }
+.msg.usuario { align-self: flex-end; max-width: min(88%, 46rem); background: var(--acento-suave); border-color: transparent; }
+.msg.assistente { width: 100%; }   /* resposta em LARGURA TOTAL (pedido do dono) */
+.msg .quem { font-size: .68rem; color: var(--suave); margin-bottom: .3rem; text-transform: uppercase; letter-spacing: .03em; }
+.msg .rodape { font-size: .7rem; color: var(--suave); margin-top: .5rem; display: flex; gap: .8rem; flex-wrap: wrap; }
+.msg pre { background: var(--fundo-codigo); border: 1px solid var(--borda); border-radius: 8px; padding: .6rem; overflow-x: auto; font-size: .8rem; }
+.msg code { background: var(--fundo-codigo); border-radius: 4px; padding: .05rem .3rem; font-size: .85em; }
+.msg .resposta { overflow-wrap: anywhere; }
+/* pre-wrap so no TEXTO PURO (msg do usuario); o markdown tem <br>/<p>
+   proprios — pre-wrap no HTML renderizado virava os \n estruturais da
+   lib em quebras EXTRAS (os espacos gigantes entre blocos) */
+.msg.usuario .resposta { white-space: pre-wrap; }
+
+/* log de job — CONCRETO: cada linha com hora, monoespaçada */
+/* ═══ REGRA GLOBAL CRÍTICA: [hidden] PRECISA vencer qualquer display ═══
+   Elementos com display:flex/.grid na própria classe (painel-item,
+   split-docs, drawer…) ignoravam o atributo hidden do HTML — filtro de
+   abas "não funcionava", fechar painel/drawer não fechava NADA. */
+[hidden] { display: none !important; }
+
+/* ═══ LOG: box próprio EXPANSÍVEL — fechado mostra o sumário; aberto o
+   box cresce até 60vh com scroll INTERNO (o conteúdo nunca vaza para
+   fora da moldura; sem auto-scroll da página) ═══ */
+.log {
+  background: var(--bg);
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  padding: .55rem .65rem;
+  margin: .35rem 0;
+  max-height: 60vh;
+  overflow-y: auto;          /* scroll DENTRO do box, nunca da página */
+  overscroll-behavior: contain;
+}
+details:not([open]) .log { max-height: 10rem; }
+/* ═══ RACIOCÍNIO SINTETIZADO: cada PASSO tem seu título (linha central do
+   grupo, pelo embedding) e as linhas completas a um clique ═══ */
+.log .passo { padding: .18rem 0; border-bottom: 1px dashed color-mix(in srgb, var(--borda) 60%, transparent);
+  white-space: normal; }   /* o container NÃO herda pre-wrap do .log div —
+                              a indentação do template virava espaços literais */
+.log .passo:last-child { border-bottom: none; }
+.log .passo-titulo { color: var(--texto); white-space: pre-wrap; }
+.log details.passo-mais { margin: .1rem 0 .25rem 2.6rem; }
+.log details.passo-mais summary {
+  cursor: pointer; color: var(--suave); font-size: .7rem; user-select: none;
+}
+.log details.passo-mais[open] summary { margin-bottom: .15rem; }
+/* ═══ CONTEÚDO DO CACHE (resposta veio do cache): detalhe expansível logo
+   abaixo do rodapé ⚡ — pergunta guardada, similaridade, quando, resumo ═══ */
+.cache-conteudo { margin: .15rem 0 .35rem; }
+.cache-conteudo summary {
+  cursor: pointer; color: var(--suave); font-size: .72rem; user-select: none;
+}
+.log div {
+  white-space: pre-wrap;          /* quebra linha longa em várias */
+  overflow-wrap: anywhere;        /* URLs/tabelas sem espaço também */
+  font-size: .74rem;
+  line-height: 1.5;
+}
+.log .hora {
+  color: var(--suave); opacity: .75; margin-right: .45rem;
+  display: inline-block; min-width: 3.6rem;
+  font-variant-numeric: tabular-nums;
+}
+.log div { font-family: ui-monospace, Consolas, monospace; }
+.log .linha-atual { color: var(--acento); }
+.pensando-cab { display: flex; align-items: center; gap: .5rem; font-size: .82rem; color: var(--suave); margin-bottom: .4rem; }
+.ponto { width: .5rem; height: .5rem; border-radius: 50%; background: var(--acento); animation: pulso 1s infinite alternate; }
+@keyframes pulso { to { opacity: .35; } }
+.resumo-job { font-size: .8rem; margin-bottom: .4rem; }
+.resumo-job .ok { color: var(--ok); font-weight: 600; }
+.resumo-job .erro { color: var(--erro); font-weight: 600; }
+
+/* revisão */
+.doc-item { border: 1px solid var(--borda); border-radius: 10px; padding: .6rem .8rem; margin-bottom: .5rem; background: var(--card); }
+.doc-item header { display: flex; gap: .6rem; align-items: baseline; flex-wrap: wrap; cursor: pointer; }
+.doc-item .titulo { font-weight: 600; font-size: .88rem; }
+.selo { font-size: .68rem; padding: .1rem .45rem; border-radius: 99px; border: 1px solid var(--borda); color: var(--suave); }
+.selo.alerta { border-color: var(--aviso); color: var(--aviso); }
+.doc-item pre { background: var(--fundo-codigo); border-radius: 8px; padding: .6rem; font-size: .75rem; overflow-x: auto; max-height: none; }
+.mini { font-size: .72rem; color: var(--suave); }
+
+details > summary { cursor: pointer; color: var(--suave); font-size: .82rem; padding: .2rem 0; }
+details[open] > summary { color: var(--texto); }
+.fita { border: 1px solid var(--aviso); background: color-mix(in srgb, var(--aviso) 12%, transparent);
+  color: var(--texto); border-radius: 10px; padding: .5rem .8rem; font-size: .82rem; margin-bottom: 1rem; }
+audio { width: 100%; max-width: 26rem; }
+.erro-texto { color: var(--erro); font-size: .85rem; }
+img.midia, video.midia { max-width: 100%; border-radius: 10px; border: 1px solid var(--borda); }
+
+/* ═══════════ RESPONSIVO — camada extra (nada muda no desktop) ═══════════ */
+
+/* iOS: fonte <16px em input faz o Safari dar ZOOM ao focar — 16px na
+   faixa mobile elimina o surto; o resto da UI segue na escala fluida */
+@media (max-width: 40rem) {
+  input[type=text], input[type=password], input[type=number],
+  input[type=file], select, textarea { font-size: 16px; }
+}
+
+/* header em celulares: gaps menores + respeita o notch (safe-area) */
+@media (max-width: 34rem) {
+  header.topo {
+    gap: .4rem .75rem;
+    padding: .55rem max(.75rem, env(safe-area-inset-left));
+  }
+  header.topo .direita { font-size: .75rem; gap: .4rem; }
+}
+
+/* toque: alvos de dedo (~44px) sem mudar o visual com mouse */
+@media (pointer: coarse) {
+  button, .botao { min-height: 2.4rem; }
+  header.topo nav a { padding: .45rem .75rem; }
+}
+
+/* celular estreito: respiro menor, mensagens compactas e o select de
+   coleções não domina a tela (max-height; continua rolando internamente) */
+@media (max-width: 30rem) {
+  main { padding: .75rem; }
+  .msg { padding: .55rem .65rem; border-radius: 10px; }
+  select[multiple] { max-height: 7.5rem; }
+}
+
+/* ═══ painéis do chat em telas menores ═══ */
+@media (max-width: 56rem) {
+  .split-docs { width: min(20rem, 42vw); }     /* split cede espaço */
+  .drawer-conversas { width: min(13rem, 40vw); }
+}
+@media (max-width: 48rem) {
+  /* tablet/celular: sidebar vira OVERLAY (padrão Open WebUI mobile) */
+  .so-mobile { display: inline-grid; }
+  .drawer-conversas {
+    position: fixed; top: 3.2rem; bottom: .6rem; left: .6rem; width: min(15rem, 70vw);
+    z-index: 40; box-shadow: 0 10px 40px rgb(0 0 0 / .25);
+  }
+  .drawer-conversas[hidden] { display: none; }
+  .split-docs {
+    position: fixed; top: 3.2rem; bottom: .6rem; right: .6rem; width: min(20rem, 80vw);
+    z-index: 40; box-shadow: 0 10px 40px rgb(0 0 0 / .25);
+  }
+}
+@media (min-width: 48.02rem) {
+  .so-mobile { display: none; }   /* desktop: botão 💬 do header não precisa */
+}
+@media (max-width: 40rem) {
+  .badge-cache { display: none; }              /* celular: só o essencial */
+}
+
+/* telas muito largas (1440p/4K): a régua proporcional já cobre (clamp até
+   110rem); nada a ajustar aqui */
+
+
+/* == MARKDOWN REAL (lib markdown): blocos com espacamento proprio == */
+.resposta h2, .resposta h3, .resposta h4 {
+  margin: .9rem 0 .35rem; line-height: 1.25;
+}
+.resposta h2 { font-size: 1.12rem; } .resposta h3 { font-size: 1.02rem; }
+.resposta h4 { font-size: .95rem; }
+.resposta p { margin: .4rem 0; }
+.resposta ul, .resposta ol { margin: .4rem 0 .4rem 1.3rem; }
+.resposta li { margin: .18rem 0; }
+.resposta pre { background: var(--fundo-codigo); border: 1px solid var(--borda);
+  border-radius: 9px; padding: .7rem .8rem; overflow-x: auto; margin: .6rem 0; }
+.resposta pre code { background: none; padding: 0; font-size: .82rem; }
+.resposta table { border: 1px solid var(--borda); border-radius: 8px; margin: .6rem 0; }
+.resposta blockquote { border-left: 3px solid var(--borda); margin: .5rem 0;
+  padding: .15rem .8rem; color: var(--suave); }
+.resposta hr { border: 0; border-top: 1px solid var(--borda); margin: .8rem 0; }
+
+
+/* == TOPBAR: contadores em tempo real == */
+.tok-live { font-size: .74rem; color: var(--suave); font-variant-numeric: tabular-nums;
+  white-space: nowrap; }
+
+/* == JOBSBAR global (segundo plano) == */
+.jobsbar { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: .7rem; }
+.jobchip { display: inline-flex; gap: .45rem; align-items: center; font-size: .76rem;
+  border: 1px solid color-mix(in srgb, var(--acento) 45%, transparent);
+  background: color-mix(in srgb, var(--acento) 8%, transparent);
+  border-radius: 99px; padding: .28rem .75rem; }
+.jobchip a { font-size: .7rem; }
+
+/* == BARRA DE PROGRESSO dos jobs (indeterminada -> verde ao concluir) == */
+.pbar-job { height: .35rem; border-radius: 99px; overflow: hidden; margin: .45rem 0;
+  background: var(--fundo-codigo); }
+.pbar-job i { display: block; height: 100%; border-radius: 99px; }
+.pbar-job.run i { width: 38%; background: var(--acento);
+  animation: pbar-run 1.4s ease-in-out infinite; }
+.pbar-job.ok i { width: 100%; background: var(--ok); transition: width .4s; }
+.pbar-job.err i { width: 100%; background: var(--erro); }
+@keyframes pbar-run { 0% { margin-left: -38%; } 100% { margin-left: 100%; } }
+
+
+/* == GRID de coleções/MCP (checkboxes no composer) == */
+.colecoes-grid {
+  display: grid; gap: .3rem .5rem;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  max-height: 9.5rem; overflow-y: auto; padding: .45rem .55rem;
+  border: 1px solid var(--borda); border-radius: 9px; background: var(--bg);
+}
+/* CAMPO DE PESQUISA (coleções/MCP) — TEMA do layout (antes: fundo branco
+   nativo gritando no escuro; pedido do dono) */
+.colecoes-box input[type="search"] {
+  width: 100%; margin: .35rem 0 .3rem; padding: .3rem .6rem;
+  border: 1px solid var(--borda); border-radius: 8px;
+  background: var(--bg); color: var(--texto);
+  font: inherit; font-size: .78rem;
+}
+.colecoes-box input[type="search"]::placeholder { color: var(--suave); opacity: .85; }
+.colecoes-box input[type="search"]:focus {
+  outline: none; border-color: var(--acento);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--acento) 22%, transparent);
+}
+/* ITEM selecionável (coleção/servidor MCP): pill com estado VISÍVEL —
+   hover acena, marcado ganha cor do tema (antes: checkbox solto sem
+   affordance nenhuma) */
+.colecao-check {
+  display: flex; gap: .4rem; align-items: center; font-size: .78rem;
+  cursor: pointer; min-width: 0; overflow-wrap: anywhere;
+  padding: .28rem .5rem; border-radius: 8px;
+  border: 1px solid transparent;
+  transition: background .15s ease, border-color .15s ease;
+}
+.colecao-check:hover { border-color: color-mix(in srgb, var(--acento) 45%, var(--borda)); }
+.colecao-check:has(input:checked) {
+  border-color: color-mix(in srgb, var(--acento) 55%, var(--borda));
+  background: var(--acento-suave);
+}
+.colecao-check input { accent-color: var(--acento); flex: none; }
+.colecao-check span.mini { font-size: .66rem; }
+@media (max-width: 40rem) {
+  .colecoes-grid { max-height: 7rem; grid-template-columns: 1fr 1fr; }
+}
+/* CHIP da imagem anexada (📎 subir imagem do composer): nome do arquivo
+   com clique para remover */
+.chip-ref {
+  font-size: .72rem; color: var(--acento); cursor: pointer; user-select: none;
+  border: 1px dashed var(--acento); border-radius: 8px; padding: .18rem .5rem;
+  max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chip-ref:hover { color: var(--erro); border-color: var(--erro); }
+/* CHIP DE DICA DE PROMPT (guia de mídia): clique insere no campo */
+.chip-prompt {
+  display: inline-block; margin: .12rem .18rem .12rem 0; padding: .14rem .5rem;
+  border: 1px solid var(--borda); border-radius: 99px; background: var(--bg);
+  color: var(--texto); font: inherit; font-size: .72rem; cursor: pointer;
+  transition: border-color .15s ease, color .15s ease, background .15s ease;
+}
+.chip-prompt:hover { border-color: var(--acento); color: var(--acento); }
+.chip-prompt:active { background: var(--acento-suave); }
+
+/* ═══ PAINEL: grupos POR RESPOSTA + registros de EXECUÇÃO (aba arquivos) ═══ */
+.painel-grupo {
+  font-size: .68rem; font-weight: 700; color: var(--suave);
+  text-transform: uppercase; letter-spacing: .05em;
+  padding: .55rem .15rem .3rem; margin-top: .45rem;
+  border-bottom: 1px dashed var(--borda);
+  display: flex; align-items: center; gap: .5rem;
+}
+.painel-grupo:first-child { margin-top: 0; }
+.painel-grupo .grp-testar { position: static; font-size: .64rem;
+  text-transform: none; letter-spacing: 0; padding: .12rem .5rem;
+  color: var(--acento); border-color: color-mix(in srgb, var(--acento) 35%, transparent); }
+.painel-grupo .grp-testar:hover { background: var(--acento-suave); }
+.painel-exec { padding: .3rem .15rem .45rem; }
+.painel-exec .doc-hd { display: flex; gap: .55rem; align-items: baseline;
+  font-size: .76rem; }
+.painel-exec .ok { color: var(--ok); font-weight: 600; }
+.painel-exec .erro { color: var(--erro); font-weight: 600; }
+.painel-exec .doc-tx { font-family: var(--mono, monospace); font-size: .68rem;
+  color: var(--suave); white-space: pre-wrap; overflow-wrap: anywhere;
+  max-height: 6.5rem; overflow-y: auto; }
+/* ═══ POPOVER do CACHE (badge ⚡ do topbar): entradas carregadas ═══ */
+.cache-popover { position: relative; }
+.cache-popover > summary { list-style: none; cursor: pointer; }
+.cache-popover > summary::-webkit-details-marker { display: none; }
+.cache-popover-corpo {
+  position: absolute; top: calc(100% + .4rem); left: 0; z-index: 60;
+  width: min(30rem, 88vw); max-height: 22rem; overflow-y: auto;
+  background: var(--card); border: 1px solid var(--borda); border-radius: 10px;
+  padding: .6rem .7rem; box-shadow: 0 8px 24px rgba(0,0,0,.28);
+}
+/* ═══ TOAST (feedback de ações: salvar configurações etc.) ═══ */
+#toast-global {
+  position: fixed; bottom: 1.2rem; left: 50%; transform: translateX(-50%);
+  z-index: 999; padding: .55rem 1rem; border-radius: 10px;
+  border: 1px solid var(--borda); background: var(--card); color: var(--texto);
+  box-shadow: 0 8px 24px rgba(0,0,0,.3); font-size: .84rem;
+  opacity: 0; pointer-events: none; transition: opacity .25s ease;
+  max-width: min(34rem, 90vw);
+}
+#toast-global.mostrar { opacity: 1; }
+#toast-global.ok { border-color: color-mix(in srgb, var(--ok) 55%, var(--borda)); }
+#toast-global.erro { border-color: color-mix(in srgb, var(--erro) 55%, var(--borda)); }
+
+
+/* ═══════════ COMPOSER: entrada em linha (mic | textarea | enviar) ═══════════ */
+.entrada-linha { display: flex; gap: .55rem; align-items: flex-end; }
+.entrada-linha textarea {
+  /* nasce em 1 linha; o JS cresce com o texto até 12rem (ajustarAlturaTA) */
+  flex: 1; min-width: 0; resize: none; min-height: 2.6rem; max-height: 12rem;
+  padding: .55rem .75rem; font-size: 1rem; line-height: 1.45;
+}
+.mic-btn, .enviar-btn { flex: 0 0 auto; width: 2.7rem; height: 2.7rem;
+  border-radius: 10px; display: grid; place-items: center; font-size: 1.05rem; }
+.enviar-btn { padding: 0; }
+.controles-linha { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .5rem; }
+.controles-linha select { width: auto; min-width: 7rem; }
+.colecoes-box summary { cursor: pointer; font-size: .78rem; color: var(--suave);
+  padding: .3rem 0; }
+
+/* ═══ STREAM ao vivo (texto sendo escrito) ═══ */
+.msg.stream-ao-vivo { border-left: 3px solid var(--acento); }
+.msg.stream-ao-vivo .quem { display: flex; gap: .35rem; align-items: center; }
+.raciocinio-vivo summary { cursor: pointer; color: var(--suave); font-size: .78rem;
+  padding: .3rem 0; }
+
+/* ═══ COPIAR por bloco (no split) ═══ */
+.copiar-btn { position: absolute; top: .45rem; right: .45rem; font-size: .68rem;
+  padding: .18rem .5rem; border: 1px solid var(--borda); border-radius: 7px;
+  background: var(--card); color: var(--suave); cursor: pointer; }
+.resposta pre, .split-corpo pre { position: relative; padding-top: 2rem; }
+.split-corpo pre { background: var(--fundo-codigo); border-radius: 9px;
+  padding: 2rem .8rem .7rem; overflow-x: auto; white-space: pre-wrap;
+  overflow-wrap: anywhere; font-size: .8rem; }
+
+/* ═══ CARD de código (fence markdown) — rótulo + copiar + realce ═══
+   O servidor (Pygments inline) já colore; aqui só o "quote": moldura,
+   cabeçalho com a linguagem e botão, código com rolagem horizontal. */
+figure.cod { margin: .55rem 0; border: 1px solid var(--borda);
+  border-radius: 10px; overflow: hidden; background: var(--fundo-codigo); }
+figure.cod figcaption { display: flex; justify-content: space-between;
+  align-items: center; gap: .5rem; padding: .26rem .6rem;
+  border-bottom: 1px solid var(--borda); background: var(--card); }
+.cod-ling { font-size: .66rem; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--suave); font-family: ui-monospace, Consolas, monospace; }
+.cod-copiar { font-size: .68rem; padding: .15rem .55rem;
+  border: 1px solid var(--borda); border-radius: 7px; background: none;
+  color: var(--suave); cursor: pointer; }
+.cod-copiar:hover { color: var(--acento); border-color: var(--acento); }
+figure.cod pre { margin: 0; padding: .6rem .75rem; overflow-x: auto;
+  white-space: pre; border: 0; border-radius: 0; background: none;
+  position: static; }
+figure.cod code { background: none; padding: 0; border: 0;
+  font-size: .8rem; line-height: 1.55; }
+/* card dentro da mensagem: a regra ".resposta pre { padding-top: 2rem }"
+   (botão absoluto do split) NÃO vale aqui — o botão vive no figcaption */
+
+
+/* ═══ COLEÇÕES em CARDS responsivos (sem tabela cortada) ═══ */
+.colecoes-cards { display: grid; gap: .7rem;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); }
+.colecao-card { border: 1px solid var(--borda); border-radius: 11px;
+  background: var(--card); padding: .75rem .85rem; display: flex;
+  flex-direction: column; gap: .3rem; min-width: 0; }
+.cc-topo { display: flex; gap: .5rem; align-items: baseline; justify-content: space-between; }
+.cc-nome { font-family: ui-monospace, Consolas, monospace; font-size: .86rem;
+  overflow-wrap: anywhere; min-width: 0; }
+.cc-pts { font-size: .68rem; color: var(--acento); white-space: nowrap;
+  font-variant-numeric: tabular-nums; }
+.cc-cat { font-size: .7rem; color: var(--suave); text-transform: uppercase;
+  letter-spacing: .03em; margin: 0; }
+.cc-desc { font-size: .76rem; color: var(--suave); margin: 0; flex: 1;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cc-acoes { display: flex; gap: .4rem; margin-top: .3rem; }
+.cc-acoes button { font-size: .72rem; padding: .3rem .6rem; }
+
+/* == RESUMO PT da aquisicao (revisao) == */
+.resumo-pt { margin-top:.6rem; padding:.6rem .8rem; border-radius:9px;
+  background: var(--acento-suave); font-size:.88rem; }
+
+/* == TROCAS de chat: avatar + separador + leitura == */
+.cab-msg { display:flex; align-items:center; gap:.5rem; margin-bottom:.35rem; }
+.av-msg { width:1.75rem; height:1.75rem; border-radius:99px; display:grid;
+  place-items:center; font-size:.9rem; background:var(--muted); flex:none; }
+.msg.assistente .av-msg { background:color-mix(in srgb, var(--acento) 22%, var(--card)); }
+.msg.usuario .av-msg { background:var(--acento-suave); }
+.msg.assistente { border-left:3px solid color-mix(in srgb, var(--acento) 35%, transparent); }
+.msg.usuario { border-left:3px solid transparent; }
+
+/* == barra de acoes da resposta (arquivos/resposta/copiar/ouvir) == */
+.acoes-msg { display:flex; gap:.35rem; flex-wrap:wrap; margin:.45rem 0; }
+.acao { font-size:.7rem; padding:.22rem .6rem; border-radius:99px;
+  border:1px solid var(--borda); color:var(--suave); text-decoration:none;
+  background:transparent; cursor:pointer; }
+.acao:hover { border-color:var(--acento); color:var(--fg); background:var(--acento-suave); }

@@ -1,0 +1,123 @@
+﻿# ═══════════════════════════════════════════════════════════════
+# RagAroy — stack completa em um compose
+# ═══════════════════════════════════════════════════════════════
+#
+# Uso:  docker compose up -d --build   (ou .\setup.ps1 na 1ª vez)
+#
+# Serviços:
+#   qdrant   :6333            (vetores; dashboard /dashboard)
+#   rabbit   :5672 :15672     (fila de jobs DLX/DLQ; management web)
+#   redis    (rede interna)   (cache semântico + contagem de tokens)
+#   api      :8000            (FastAPI + webui; Traefik continua
+#                              enxergando host.docker.internal:8000)
+#
+# Os MODELOS (llama-server GPU, sd-cli, whisper) rodam NO HOST —
+# servicos_llm.py — e a API os alcança por host.docker.internal.
+# Estúdio/troca de modelo seguem no modo host (guards avisam).
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.12.5
+    container_name: ragaroy-qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - ./qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
+  rabbit:
+    image: rabbitmq:3.13-management
+    container_name: ragaroy-rabbit
+    ports:
+      - "5672:5672"
+      - "15672:15672"   # management web (usuário/senha: RABBIT_USER/RABBIT_PASS do .env)
+    environment:
+      # credenciais NUNCA no código (repo público): defaults de DEV apenas —
+      # production define RABBIT_USER/RABBIT_PASS no .env/host environment
+      RABBITMQ_DEFAULT_USER: ${RABBIT_USER:-ragaroy}
+      RABBITMQ_DEFAULT_PASS: ${RABBIT_PASS:-ragaroy}
+      RABBITMQ_DEFAULT_VHOST: /
+    volumes:
+      - ./rabbit_data:/var/lib/rabbitmq
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: ragaroy-redis
+    # sem porta publicada: uso interno da API (cache/tokens)
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build: .
+    container_name: ragaroy-api
+    ports:
+      - "8000:8000"
+    depends_on:
+      qdrant:
+        condition: service_started
+      rabbit:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    environment:
+      # infra da rede interna do compose (VENDE o .env montado — config
+      # usa override=False em container justamente por isso)
+      RAGAROY_CONTAINER: "1"
+      QDRANT_URL: http://qdrant:6333
+      RABBIT_URL: amqp://${RABBIT_USER:-ragaroy}:${RABBIT_PASS:-ragaroy}@rabbit:5672/%2F
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      # modelos no HOST (GPU/binários locais — servicos_llm.py)
+      LLM_BASE_URL: http://host.docker.internal:8090/v1
+      EMBED_BASE_URL: http://host.docker.internal:8081/v1
+      # GGUFs visíveis no container (listagem/tamanhos) — read-only;
+      # pasta dos modelos configurável no .env (MODELS_DIR)
+      MODELS_DIR: /models
+      # agente do HOST (:8010) faz as operações de GPU (troca de modelo,
+      # garantir embedding) que o container não pode. Local usa o host
+      # direto; a VPS aponta para o TÚNEL do agente via .env —
+      # com AGENTE_TOKEN (mesmo valor dos dois lados) quando público.
+      AGENTE_HOST_URL: ${AGENTE_HOST_URL:-http://host.docker.internal:8010}
+      AGENTE_TOKEN: ${AGENTE_TOKEN:-}
+      # sandbox de execução (testa códigos do chat; rede interna, sem porta)
+      SANDBOX_URL: ${SANDBOX_URL:-http://sandbox:8020}
+      SANDBOX_TOKEN: ${SANDBOX_TOKEN:-}
+    volumes:
+      # modelos: só leitura (o agente no host é quem ergue/servi os GGUFs);
+      # pasta configurável no .env — ex.: MODELS_DIR=D:/models (Windows)
+      # ou /home/user/models (Linux). Default local: ./models
+      - ${MODELS_DIR:-./models}:/models:ro
+      # cache do HuggingFace do reranker (bge-reranker-base ~1,1 GB) — sem
+      # o volume, todo rebuild/boot baixa de novo. CAMINHO DO USUÁRIO da
+      # imagem (ragaroy, não-root): é onde as libs HF gravam de verdade
+      - ./hf_cache:/home/ragaroy/.cache/huggingface
+      # estado persistente no HOST (mesmos caminhos do modo host)
+      - ./.env:/app/.env
+      - ./users.json:/app/users.json
+      - ./usuarios_permitidos.txt:/app/usuarios_permitidos.txt
+      - ./mcp_servers.json:/app/mcp_servers.json
+      - ./mcp_conhecidos.json:/app/mcp_conhecidos.json
+      - ./sessions:/app/sessions
+      - ./saidas:/app/saidas
+      - ./logs:/app/logs
+      - ./datasets:/app/datasets
+      # modelos de VOZ do chat (whisper small CPU + piper pt_BR) — baixados
+      # uma vez no host, reaproveitados pelo container
+      - ./modelos_voz:/app/modelos_voz
+    restart: unless-stopped
+
+  # ═══ SANDBOX: executa os códigos do chat para TESTE (multi-linguagem:
+  # dotnet/java/rust/ruby/php/go/node/python/dart). Sempre ativo, SEM
+  # porta publicada (só rede interna), usuário não-root, arquivos em
+  # /tmp/work (efêmero de propósito — cada teste é autossuficiente).
+  sandbox:
+    build: ./sandbox
+    container_name: ragaroy-sandbox
+    environment:
+      SANDBOX_TOKEN: ${SANDBOX_TOKEN:-}
+    restart: unless-stopped

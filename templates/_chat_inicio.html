@@ -1,0 +1,5 @@
+{# resposta INICIAL do POST /hx/chat: bolha do usuário + tail de polling.
+   MODO OTIMISTA (header X-Otimista do form): o browser já mostrou a bolha
+   NA HORA — aqui vem SÓ o card do job (sem duplicata). #}
+{% if not otimista %}{% include "_bolha_usuario.html" %}{% endif %}
+{% include "_chatjob.html" %}

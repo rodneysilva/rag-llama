@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{% block titulo %}Dashboard — RagAroy{% endblock %}
+{% block conteudo %}
+<div class="pagina-conteudo">
+
+<h1>Dashboard</h1>
+
+<div class="grade" style="margin-bottom:1rem;">
+  <div class="kpi"><div class="rotulo">coleções</div><div class="valor">{{ kpis.colecoes }}</div><div class="sub">{{ kpis.grupos }} grupo(s)</div></div>
+  <div class="kpi"><div class="rotulo">fragmentos indexados</div><div class="valor">{{ kpis.pontos }}</div><div class="sub">pontos no Qdrant</div></div>
+  <div class="kpi"><div class="rotulo">tokens (total)</div><div class="valor">{{ kpis.tokens_total }}</div><div class="sub">🔻{{ kpis.tokens_in }} · 🔺{{ kpis.tokens_out }} · {{ kpis.chamadas }} cham.</div></div>
+  <div class="kpi"><div class="rotulo">embedding (bge-m3)</div><div class="valor">{{ embed_resumo.documentos }}<small style="font-size:.6em;color:var(--suave);"> docs</small></div>
+    <div class="sub">{{ embed_resumo.chamadas }} chamada(s) · {{ "%.0f" | format(embed_resumo.segundos or 0) }}s de GPU</div></div>
+  <div class="kpi"><div class="rotulo">cache semântico</div><div class="valor">{{ cache_stats.hits }}<small style="font-size:.6em;color:var(--suave);"> hits</small></div>
+    <div class="sub">{{ cache_stats.stores }} gravado(s) · {{ cache_stats.misses }} miss(es) — hits = tokens poupados</div></div>
+  <div class="kpi"><div class="rotulo">VRAM em uso</div><div class="valor">{{ vram_mi if vram_mi is not none else "—" }}<small style="font-size:.6em;color:var(--suave);"> MiB</small></div>
+    <div class="sub">{% if servindo %}servindo: {{ servindo }}{% else %}— sem leitura —{% endif %}</div></div>
+</div>
+
+{# INFRA + FILA lado a lado em telas largas (pedido: aproveitar o espaço) #}
+<div class="dash-2col">
+<section class="cartao">
+  <h2>Infraestrutura</h2>
+  <div class="grade-infra">
+    <div class="infra-card">
+      <b>🗄️ Qdrant</b>
+      <div class="mini" style="margin:.25rem 0 .5rem;">{{ kpis.colecoes }} coleção(ões) · {{ kpis.pontos }} pontos</div>
+      <div class="log" style="max-height:11rem;">
+        {% for nome, v in colecoes_detalhe %}
+        <div class="mini" style="display:flex; justify-content:space-between; gap:.5rem;">
+          <span style="overflow:hidden; text-overflow:ellipsis;">{{ nome }}</span>
+          <span style="flex:none;">{{ v.points if v.points is not none else "—" }}{% if v.dim %} · {{ v.dim }}d{% endif %}</span>
+        </div>
+        {% endfor %}
+        {% if not colecoes_detalhe %}<div class="mini">sem coleções (Qdrant offline?)</div>{% endif %}
+      </div>
+    </div>
+    <div class="infra-card">
+      <b>⚡ Redis (cache)</b>
+      <div class="mini" style="margin:.25rem 0 .5rem;">
+        {% if cache_info.online %}
+        {{ cache_info.entradas }} entrada(s) · limiar {{ cache_info.limiar }} · máx {{ cache_info.max }}
+        {% else %}offline — buscas seguem normais, sem atalho{% endif %}
+      </div>
+      <div class="mini">
+        {{ cache_stats.hits }} hit(s) · {{ cache_stats.stores }} gravado(s) · {{ cache_stats.misses }} miss(es)
+        — hit = resposta na hora, zero token
+      </div>
+      <div class="mini" style="margin-top:.4rem;"><a href="#" onclick="fetch('/api/cache',{method:'DELETE'}).then(()=>location.reload()); return false;" class="doc-col" title="apaga TODAS as entradas do cache">🗑 limpar cache</a></div>
+    </div>
+    <div class="infra-card">
+      <b>🐇 RabbitMQ</b>
+      <div class="mini" style="margin:.25rem 0 .4rem;">
+        {{ kpis.fila }} (pendentes/mortas) — detalhe ao vivo na seção ao lado
+      </div>
+      <div class="mini">jobs re-executáveis pós-restart (fábrica por kind); DLQ = falhas para investigar.</div>
+    </div>
+  </div>
+</section>
+
+<section class="cartao">
+  <h2>Fila RabbitMQ — em tempo real</h2>
+  <div hx-get="/hx/fila" hx-trigger="load, every 10s" hx-swap="innerHTML">
+    <span class="mini">carregando…</span>
+  </div>
+</section>
+</div>
+
+<section class="cartao">
+  <h2>Modelos de linguagem</h2>
+  <p class="descricao">uso medido de CADA modelo (telemetria real das chamadas):
+     throughput = tokens de saída/s somados no tempo — não média de médias.</p>
+  <div class="grade-modelos">
+    {% for m in modelos_llm %}
+    <div class="modelo-card{{ ' ativo' if m.ativo }}">
+      <div class="mc-topo">
+        <b>{{ m.nome }}</b>
+        {% if m.ativo %}<span class="selo ativo-agora">● servindo</span>{% endif %}
+        {% if m.sem_uso %}<span class="selo">sem uso ainda</span>{% endif %}
+        {% if m.gb %}<span class="selo">{{ m.gb }} GB</span>{% endif %}
+      </div>
+      {% if m.chamadas %}
+      <div class="mc-toks">
+        <span class="mc-destaque">{{ m.tok_s if m.tok_s is not none else "—" }}<small> tok/s</small></span>
+      </div>
+      <div class="mc-linha">
+        <span>🔻 {{ m.entrada }}</span><span>🔺 {{ m.saida }}</span><span>{{ m.chamadas }} cham.</span>
+      </div>
+      <div class="mc-linha mini" title="tokens médios por chamada">
+        <span>~🔻{{ m.entrada // m.chamadas }}</span><span>~🔺{{ m.saida // m.chamadas }}/cham.</span>
+        <span>🪙 {{ (m.entrada + m.saida) // m.chamadas }} tot.</span>
+      </div>
+      <div class="mc-linha mini">
+        <span>{{ "%.0f" | format(m.segundos) }}s de LLM</span>
+        {% if m.ultima %}<span>últ. {{ m.ultima }}</span>{% endif %}
+      </div>
+      {% else %}
+      <div class="mc-linha mini" style="margin-top:.2rem;">— nenhuma chamada registrada
+        (a telemetria por nome começou em 23/08; use o modelo e ele aparece aqui).</div>
+      {% endif %}
+    </div>
+    {% else %}<p class="mut">nenhuma chamada registrada ainda (a telemetria começa com o primeiro uso).</p>{% endfor %}
+  </div>
+</section>
+
+<section class="cartao">
+  <h2>📜 Logs (tail ao vivo)</h2>
+  <p class="descricao">final do log de cada serviço — o mesmo que o servidor está escrevendo agora.</p>
+  <div class="hist-filtros" id="logs-fontes">
+    <button type="button" class="aba ativa" data-f="llm">chamadas LLM</button>
+    <button type="button" class="aba" data-f="geracao">gerações</button>
+    <button type="button" class="aba" data-f="eventos">todos os eventos</button>
+    <button type="button" class="aba" data-f="jobs">últimos jobs</button>
+  </div>
+  <div id="logs-corpo" class="log" style="max-height:14rem;" hx-get="/hx/logs/llm"
+       hx-trigger="load, every 5s" hx-swap="innerHTML"><span class="mini">carregando…</span></div>
+  <script>
+    // trocar o serviço monitorado = trocar a URL do polling (uma fonte por vez)
+    document.getElementById("logs-fontes").addEventListener("click", (ev) => {
+      const b = ev.target.closest(".aba"); if (!b) return;
+      document.querySelectorAll("#logs-fontes .aba").forEach(x => x.classList.toggle("ativa", x === b));
+      const alvo = document.getElementById("logs-corpo");
+      alvo.setAttribute("hx-get", "/hx/logs/" + b.dataset.f);
+      htmx.trigger(alvo, "hx-get");
+    });
+  </script>
+</section>
+
+<section class="cartao">
+  <h2>Tokens por serviço</h2>
+  <table class="tabela-dados">
+    <thead><tr><th>serviço</th><th class="num">🔻 entrada</th><th class="num">🔺 saída</th><th class="num">chamadas</th></tr></thead>
+    <tbody>
+      {% for nome, u in kpis.por_servico.items() %}
+      <tr><td>{{ nome }}</td><td class="num">{{ u.entrada }}</td><td class="num">{{ u.saida }}</td><td class="num">{{ u.chamadas }}</td></tr>
+      {% else %}<tr><td colspan="4" class="mut">nenhum uso ainda.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="cartao">
+  <h2>Histórico de solicitações</h2>
+  <p class="descricao">categorizado por tipo — clique no filtro; a linha abre o log completo gravado (logs/jobs).</p>
+
+  {# FILTROS por categoria (client-side, sem peso: só esconde linhas) #}
+  <div class="hist-filtros" id="hist-filtros">
+    <button type="button" class="aba ativa" data-f="todos">todos</button>
+    {% set tipos = execucoes | map(attribute='tipo') | unique | list %}
+    {% for t in tipos %}
+    <button type="button" class="aba" data-f="{{ t }}">{{ t }}</button>
+    {% endfor %}
+  </div>
+
+  {% set ultimo_dia = [none] %}
+  {% for e in execucoes %}
+    {% set dia = (e.ts or "?")[:10] %}
+    {% if dia != ultimo_dia[0] %}
+      {% if ultimo_dia[0] is not none %}</tbody></table>{% endif %}
+      <div class="dia-hist">📅 {{ dia }}</div>
+      <table class="tabela-dados tabela-hist">
+      <tbody>
+      {% if ultimo_dia.append(dia) %}{% endif %}
+    {% endif %}
+    <tr class="linha-hist" data-tipo="{{ e.tipo or 'outro' }}" {% if e.job %}onclick="const d = this.nextElementSibling?.querySelector('details'); if (d) d.open = !d.open;" title="clique para abrir/fechar o log"{% endif %}>
+      <td class="mini" style="white-space:nowrap;">{{ e.ts[11:19] if e.ts and e.ts|length > 19 else e.ts }}</td>
+      <td><span class="selo tipo-{{ (e.tipo or 'outro') }}">{{ e.tipo }}</span></td>
+      <td class="mini">{{ (e.titulo or "")[:70] }}</td>
+      <td style="text-align:center;">
+        {% if e.ok %}<span style="color:var(--ok)">✓</span>
+        {% else %}<span style="color:var(--erro)">✕</span>{% endif %}
+      </td>
+      <td class="num mini" style="white-space:nowrap;">
+        {{ e.duracao_s or 0 }}s
+        <span class="barra-dur" style="width: {{ [((e.duracao_s or 0) / ((execucoes[0].duracao_s or 1)) * 56) | round | int, 56] | min }}px;"></span>
+      </td>
+    </tr>
+    {% if e.job %}
+    <tr data-tipo="{{ e.tipo or 'outro' }}"><td colspan="5" style="padding:0 0 .5rem .6rem;">
+      <details>
+        <summary>ver log completo</summary>
+        {# carrega UMA vez ao abrir (toggle) — o alvo é o próprio details,
+           sempre resolvível (o antigo hx-target="next detail .log" nunca
+           achava o elemento: "ficava carregando" para sempre) #}
+        <div class="log" hx-get="/hx/histlog/{{ e.job }}"
+             hx-trigger="toggle once from:closest details" hx-swap="innerHTML">
+          <span class="mini">abra para carregar…</span>
+        </div>
+      </details>
+    </td></tr>
+    {% endif %}
+  {% else %}
+  <table><tbody><tr><td class="mut">nada executado ainda.</td></tr>
+  {% endfor %}
+  </tbody></table>
+  <script>
+    // filtro por categoria: uma classe no container + CSS esconde o resto
+    const hf = document.getElementById("hist-filtros");
+    hf.addEventListener("click", (ev) => {
+      const b = ev.target.closest(".aba");
+      if (!b) return;
+      hf.querySelectorAll(".aba").forEach(x => x.classList.toggle("ativa", x === b));
+      const f = b.dataset.f;
+      document.querySelectorAll(".tabela-hist tr[data-tipo]").forEach(tr => {
+        tr.style.display = (f === "todos" || tr.dataset.tipo === f) ? "" : "none";
+      });
+    });
+  </script>
+</section>
+
+<style>
+  /* ═══ Dashboard: grid de cards por modelo + tabelas legíveis (técnicas
+     conhecidas, zero framework): grid auto-fit, tabular-nums, zebra.
+     LARGURA: infra+fila lado a lado ≥70rem; KPIs densos (9rem) ═══ */
+  .dash-2col { display: grid; grid-template-columns: 1fr; gap: 0; }
+  @media (min-width: 70rem) {
+    .dash-2col { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 1rem; }
+    .dash-2col section.cartao { margin-bottom: 1rem; }
+  }
+  .pagina-conteudo .grade { grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr)); }
+  .grade-modelos { display: grid; grid-template-columns: repeat(auto-fill,
+    minmax(min(13rem, 100%), 1fr)); gap: .6rem; }
+  .grade-infra { display: grid; grid-template-columns: repeat(auto-fill,
+    minmax(min(17rem, 100%), 1fr)); gap: .6rem; margin-bottom: .4rem; }
+  .infra-card { border: 1px solid var(--borda); border-radius: 10px;
+    padding: .55rem .65rem; background: var(--bg); display: flex;
+    flex-direction: column; gap: .2rem; font-size: .8rem; min-width: 0; }
+  .infra-card > b { overflow-wrap: anywhere; }
+  .infra-card .log div { overflow-wrap: anywhere; }
+  .modelo-card { border: 1px solid var(--borda); border-radius: 10px;
+    padding: .55rem .65rem; background: var(--bg); display: flex;
+    flex-direction: column; gap: .3rem; min-width: 0; }
+  .mc-topo b { overflow-wrap: anywhere; min-width: 0; }
+  .mc-linha { overflow-wrap: anywhere; }
+  .modelo-card.ativo { border-color: var(--acento);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--acento) 35%, transparent); }
+  .mc-topo { display: flex; gap: .35rem; align-items: center; flex-wrap: wrap;
+    font-size: .8rem; }
+  .selo { font-size: .62rem; border: 1px solid var(--borda); border-radius: 99px;
+    padding: .04rem .4rem; color: var(--suave); }
+  .selo.ativo-agora { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+  .mc-toks { font-variant-numeric: tabular-nums; }
+  .mc-destaque { font-size: 1.35rem; font-weight: 700; color: var(--acento); }
+  .mc-destaque small { font-size: .6em; color: var(--suave); font-weight: 500; }
+  .mc-linha { display: flex; gap: .8rem; font-size: .72rem; color: var(--suave);
+    font-variant-numeric: tabular-nums; }
+  .tabela-dados { border-collapse: collapse; width: 100%; }
+  .tabela-dados td, .tabela-dados th { border-bottom: 1px solid color-mix(in srgb, var(--borda) 55%, transparent); }
+  .tabela-hist tr:hover td { background: color-mix(in srgb, var(--acento) 4%, transparent); }
+  .linha-hist { cursor: pointer; }
+  .num { font-variant-numeric: tabular-nums; text-align: right; }
+  .barra-dur { display: inline-block; height: .4rem; border-radius: 99px;
+    background: color-mix(in srgb, var(--acento) 45%, transparent);
+    vertical-align: middle; margin-left: .3rem; }
+  .dia-hist {
+    margin: .9rem 0 .4rem; font-size: .78rem; font-weight: 700; color: var(--suave);
+    text-transform: uppercase; letter-spacing: .04em;
+    border-bottom: 1px solid var(--borda); padding-bottom: .25rem;
+  }
+  .dia-hist:first-of-type { margin-top: .4rem; }
+  .selo.tipo-pesquisa  { color: var(--acento); border-color: color-mix(in srgb, var(--acento) 45%, transparent); }
+  .selo.tipo-ingest    { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+  .selo.tipo-preview   { color: var(--aviso); border-color: color-mix(in srgb, var(--aviso) 45%, transparent); }
+  .selo.tipo-tarefa    { color: #8b5cf6; border-color: color-mix(in srgb, #8b5cf6 45%, transparent); }
+  .selo.tipo-manutencao{ color: #0891b2; border-color: color-mix(in srgb, #0891b2 45%, transparent); }
+  .hist-filtros { display: flex; gap: .3rem; flex-wrap: wrap; margin: .5rem 0 .8rem; }
+  .hist-filtros .aba { font-size: .72rem; padding: .15rem .6rem; cursor: pointer;
+    border: 1px solid var(--borda); border-radius: 99px; background: none;
+    color: var(--suave); }
+  .hist-filtros .aba.ativa { color: var(--acento); border-color: var(--acento); }
+</style>
+</div>
+{% endblock %}

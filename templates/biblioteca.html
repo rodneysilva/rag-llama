@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+{% block titulo %}Biblioteca — RagAroy{% endblock %}
+{% block conteudo %}
+<div class="pagina-conteudo">
+
+<h1>Adicionar conhecimento</h1>
+<p class="descricao">Uma entrada; todo caminho termina na <b>revisão</b> — você vê cada documento
+(como veio × como vai entrar), duplicados, categorias e o score de aderência, e aplica só o aprovado.</p>
+
+<section class="cartao">
+  <form hx-post="/hx/aquisicao" hx-target="#executando" hx-swap="afterbegin"
+        hx-encoding="multipart/form-data">
+    <div class="linha">
+      <div>
+        <label>fonte</label>
+        <select name="fonte" id="fonte">
+          <option value="pesquisa">pesquisa na web (evidências)</option>
+          <option value="arquivos">arquivos do computador</option>
+          <option value="pasta">pasta do servidor</option>
+          <option value="hf">huggingface (cards)</option>
+        </select>
+      </div>
+      <div>
+        <label id="rotulo-entrada">assunto (qualquer idioma; a busca sai em inglês)</label>
+        <input type="text" name="entrada" id="entrada" placeholder="ex.: vatapá, kubernetes ingress…">
+      </div>
+      <div class="estreito">
+        <label>máx. fontes</label>
+        <input type="number" name="limite" value="6" min="3" max="12" style="width:6rem;">
+      </div>
+      <div class="estreito">
+        <label>coleção-alvo</label>
+        <select name="colecao" id="colecao">
+          <option value="">— automática (a LLM decide) —</option>
+          {% for c in colecoes %}<option value="{{ c.nome }}">{{ c.nome }} ({{ c.points }} pts)</option>{% endfor %}
+          <option value="__nova__">＋ criar nova coleção…</option>
+        </select>
+      </div>
+      <div class="estreito" id="zona-nova" style="display:none;">
+        <label>nome da nova</label>
+        <input type="text" id="colecao-nova" placeholder="ex.: dotnet_diagnostico" style="min-width:10rem;">
+      </div>
+    </div>
+    <div class="linha" id="zona-arquivo" style="display:none; margin-top:.5rem;">
+      <div>
+        <label>arquivos (upload)</label>
+        <input type="file" name="arquivos" multiple>
+      </div>
+    </div>
+    <div style="margin-top:.7rem;">
+      <button class="primario" type="submit">iniciar (termina na revisão)</button>
+    </div>
+  </form>
+  <script>
+    const sel = document.getElementById("fonte");
+    const zona = document.getElementById("zona-arquivo");
+    const rot = document.getElementById("rotulo-entrada");
+    const inp = document.getElementById("entrada");
+    function ajusta() {
+      zona.style.display = sel.value === "arquivos" ? "" : "none";
+      rot.textContent = { pesquisa: "assunto (qualquer idioma; a busca sai em inglês)",
+                          arquivos: "coleção para os arquivos (vazio = automático)",
+                          pasta: "caminho da pasta no servidor",
+                          hf: "buscar datasets no Hub" }[sel.value];
+      inp.required = sel.value !== "arquivos";
+    }
+    sel.addEventListener("change", ajusta); ajusta();
+      // destino: "criar nova" revela o nome; no submit o nome vira o valor real
+      const selCol = document.getElementById("colecao");
+      const zonaNova = document.getElementById("zona-nova");
+      const nova = document.getElementById("colecao-nova");
+      selCol.addEventListener("change", () => {
+        zonaNova.style.display = selCol.value === "__nova__" ? "" : "none";
+      });
+      selCol.closest("form").addEventListener("submit", () => {
+        if (selCol.value === "__nova__") selCol.value = nova.value.trim();
+      });
+  </script>
+</section>
+
+<details class="cartao" style="padding:.8rem 1rem;">
+  <summary style="cursor:pointer;color:var(--suave);font-size:.85rem;">&#128218; ensinar o assistente — registrar problema &#8594; solu&#231;&#227;o</summary>
+  <p class="mini" style="margin:.5rem 0 .2rem;">
+    Registre um problema que você <b>resolveu</b>: ele vira conhecimento pesquisável
+    (cole&#231;&#227;o <code>erros_comuns</code>) — da pr&#243;xima vez que algu&#233;m (ou voc&#234;)
+    perguntar sobre esse erro no <b>chat</b>, o assistente encontra a causa raiz e a
+    solu&#231;&#227;o na base. Pense nele como um "post-mortem" que fica na mem&#243;ria do sistema.
+  </p>
+  <form hx-post="/hx/resolucao" hx-swap="outerHTML" style="margin-top:.6rem;">
+    <div class="linha">
+      <div><label>problema — como apareceu (a mensagem/sintoma)</label><input type="text" name="problema" required placeholder="ex.: microfone n&#227;o transcreve o &#225;udio gravado"></div>
+    </div>
+    <div class="linha" style="margin-top:.4rem;">
+      <div><label>causa raiz — o que realmente estava errado</label><input type="text" name="causa" required placeholder="ex.: navegador salva webm com extens&#227;o .wav"></div>
+    </div>
+    <div class="linha" style="margin-top:.4rem;">
+      <div><label>solu&#231;&#227;o aplicada — o passo a passo que funcionou</label><input type="text" name="solucao" required placeholder="ex.: detectar EBML e converter com ffmpeg para wav 16k"></div>
+      <div class="estreito"><label>onde aconteceu (opcional)</label><input type="text" name="contexto" placeholder="chat / vps / esta&#231;&#227;o"></div>
+    </div>
+    <button class="primario" type="submit" style="margin-top:.6rem;">ensinar (indexar na base do chat)</button>
+  </form>
+</details>
+
+<details class="cartao" style="padding:.8rem 1rem;" id="mcp-cartao">
+  <summary style="cursor:pointer;color:var(--suave);font-size:.85rem;">🔌 servidores MCP — ferramentas para o chat</summary>
+  <p class="mini" style="margin:.5rem 0 .2rem;">
+    MCP = ferramentas externas que o assistente do chat pode USAR ao responder
+    (marque nos servidores no composer, junto das coleções). Instale do catálogo
+    com um clique — ou aponte uma URL/comando próprio.
+  </p>
+  <div id="mcp-lista" class="mini">carregando…</div>
+  <div class="linha" style="margin-top:.6rem; align-items:end;">
+    <div style="flex:1;"><label class="mini">instalar por entrada (URL http · comando npx/uvx · github.com/owner/repo)</label>
+      <input type="text" id="mcp-entrada" placeholder="ex.: https://mcp.exemplo.com/sse ou npx -y @modelo/context-serve" style="width:100%; padding:.3rem .5rem;"></div>
+    <button type="button" class="primario" onclick="instalarMcp(this)">instalar</button>
+  </div>
+</details>
+<script>
+  async function carregarMcpsBiblio() {
+    const zona = document.getElementById("mcp-lista");
+    if (!zona) return;
+    try {
+      const [reg, cat] = await Promise.all([
+        (await fetch("/api/mcp")).json(),
+        (await fetch("/api/mcp/conhecidos")).json(),
+      ]);
+      const instalados = new Set((Array.isArray(reg) ? reg : []).map(m => (m.nome || "").toLowerCase()));
+      const catalogo = (cat && (cat.conhecidos || cat)) || [];
+      let html = "";
+      if (instalados.size) {
+        html += "<b>registrados:</b> " + [...instalados].join(" · ") + "<br>";
+      } else {
+        html += "nenhum servidor registrado ainda<br>";
+      }
+      const itens = Array.isArray(catalogo) ? catalogo : Object.values(catalogo);
+      html += "<div class='colecoes-grid' style='margin-top:.4rem;'>";
+      for (const m of itens) {
+        const nativo = m.nativo || m.transport === "nativo";
+        const ok = instalados.has(String(m.nome || m.nome_display || "").toLowerCase());
+        html += "<label class='colecao-check' style='align-items:start;'>" +
+          "<input type='checkbox' class='mcp-inst' value='" + (m.nome || "") + "'" +
+          (nativo ? " checked disabled" : (ok ? " checked disabled" : "")) + "> " +
+          "<span><b>" + (m.nome || "?") + "</b>" +
+          (m.rotulo && m.rotulo !== m.nome ? " — <span class='mini'>" + m.rotulo + "</span>" : "") +
+          " <span class='mini'>(" + (m.transport || m.tipo || "?") + ")</span><br>" +
+          "<span class='mini'>" + (m.descricao || m.o_que_faz || "").slice(0, 130) + "</span></span></label>";
+      }
+      html += "</div>";
+      zona.innerHTML = html;
+    } catch {
+      zona.textContent = "MCP indisponível agora";
+    }
+  }
+  async function instalarMcp(btn) {
+    const entrada = document.getElementById("mcp-entrada").value.trim();
+    const marcados = [...document.querySelectorAll(".mcp-inst:checked:not(:disabled)")].map(c => c.value);
+    if (!entrada && !marcados.length) { alert("escolha do catálogo ou escreva uma entrada"); return; }
+    btn.disabled = true; btn.textContent = "instalando…";
+    try {
+      for (const nome of marcados) {
+        await fetch("/api/mcp/instalar", {method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({nome})});
+      }
+      if (entrada) {
+        const r = await fetch("/api/mcp/instalar-job", {method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({entrada})});
+        if (!r.ok) throw new Error((await r.json()).detail || r.status);
+        btn.textContent = "instalando (job)…";
+        setTimeout(carregarMcpsBiblio, 8000);
+      }
+      btn.textContent = "✓ instalado";
+      carregarMcpsBiblio();
+    } catch (e) { alert("falha: " + e.message); }
+    btn.disabled = false; setTimeout(() => (btn.textContent = "instalar"), 1500);
+  }
+  carregarMcpsBiblio();
+</script>
+
+<div id="executando">
+  {# ═══ JOBS ATIVOS: re-injetados ao voltar à página (a pesquisa não some) #}
+  {% for j in jobs_ativos %}
+  <div id="job-{{ j.job }}" class="cartao" style="padding:.8rem;"
+       hx-get="/hx/job/{{ j.kind }}/{{ j.job }}" hx-trigger="every 1500ms" hx-swap="outerHTML">
+    <div class="resumo-job"><span class="ponto" style="display:inline-block;"></span>
+      {{ j.rotulo }} — em andamento…</div>
+  </div>
+  {% endfor %}
+</div>
+
+<section class="cartao">
+  <div class="linha" style="align-items:center; margin-bottom:.6rem;">
+    <h2 style="margin:0; flex:0 0 auto;">Coleções</h2>
+    <div style="flex:1; min-width:min(100%,12rem); max-width:20rem;">
+      <input type="text" id="filtro-colecao" placeholder="🔎 filtrar por nome/categoria…" style="padding:.35rem .55rem; font-size:.85rem;">
+    </div>
+    <div class="estreito" style="flex:0 0 auto;">
+      <button hx-post="/hx/recategorizar" hx-target="#executando" hx-swap="afterbegin"
+              title="a LLM re-analisa TODA a biblioteca: área, categoria e descrição de cada coleção">
+        🧠 recategorizar com IA</button>
+    </div>
+  </div>
+  <div class="colecoes-cards">
+      {% for c in colecoes %}
+      <div class="colecao-card linha-colecao" data-busca="{{ c.nome }} {{ c.categoria or '' }} {{ c.descricao or '' }}">
+        <div class="cc-topo">
+          <b class="cc-nome">{{ c.nome }}</b>
+          <span class="cc-pts">{{ c.points }} pts</span>
+        </div>
+        <p class="cc-cat">{{ c.categoria or "—" }}</p>
+        <p class="cc-desc">{{ (c.descricao or "")[:140] }}</p>
+        <div class="cc-acoes">
+          <button onclick="alternarDocs(this, '{{ c.nome | e }}')"
+                  data-aberto="0"
+                  title="documentos da coleção (nomes, pedaços, prévia)">📄 documentos</button>
+          <button hx-post="/hx/enriquecer/{{ c.nome }}" hx-target="#executando" hx-swap="afterbegin"
+                  title="a LLM re-lê amostras e regenera área/categoria/descrição">✨ enriquecer</button>
+          <button class="perigo" hx-post="/hx/colecao/{{ c.nome }}/apagar"
+                  hx-target="#executando" hx-swap="afterbegin"
+                  hx-confirm="apagar {{ c.nome }} inteira? (sem volta)">🗑 apagar</button>
+        </div>
+        {# ACCORDION INLINE: os documentos abrem DENTRO do card (o drawer
+           fixo quebrava a tela e o fechar não funcionava) — lazy: só baixa
+           a lista no 1º clique; clicar de novo fecha. #}
+        <div class="docs-slot" id="docs-{{ c.nome }}" hidden></div>
+      </div>
+      {% else %}
+      <p class="mut">nenhuma coleção ainda.</p>
+      {% endfor %}
+    </div>
+
+  <script>
+    // ACCORDION lazy: 1º clique baixa a lista (fetch), 2º fecha. O slot
+    // vive DENTRO do card — nada de overlay cobrindo a página.
+    async function alternarDocs(btn, nome) {
+      const slot = document.getElementById("docs-" + nome);
+      if (btn.dataset.aberto === "1") {
+        slot.hidden = true; btn.dataset.aberto = "0";
+        btn.textContent = "📄 documentos";
+        return;
+      }
+      btn.dataset.aberto = "1";
+      btn.textContent = "📄 fechar documentos";
+      if (!slot.dataset.carregado) {
+        slot.innerHTML = '<p class="mini" style="padding:.3rem 0">carregando documentos…</p>';
+        try {
+          const r = await fetch("/hx/colecao/" + encodeURIComponent(nome) + "/docs");
+          slot.innerHTML = await r.text();
+          slot.dataset.carregado = "1";
+        } catch (e) {
+          slot.innerHTML = '<p class="erro-texto">falha: ' + e.message + "</p>";
+        }
+      }
+      slot.hidden = false;
+    }
+    // MODAL de detalhes (a lista corta o conteúdo em 160 chars): o modal
+    // nativo <dialog> traz o documento por inteiro + backdrop fecha.
+    async function abrirDocModal(nome, chave) {
+      const dlg = document.getElementById("doc-modal");
+      const corpo = document.getElementById("doc-modal-corpo");
+      corpo.innerHTML = '<p class="mini">carregando documento…</p>';
+      dlg.showModal();
+      try {
+        const r = await fetch("/hx/colecao/" + encodeURIComponent(nome)
+                              + "/doc?chave=" + encodeURIComponent(chave));
+        corpo.innerHTML = await r.text();
+      } catch (e) {
+        corpo.innerHTML = '<p class="erro-texto">falha: ' + e.message + "</p>";
+      }
+    }
+  </script>
+
+  {# MODAL nativo de detalhes do documento (acessível, fecha com ESC) #}
+  <dialog id="doc-modal" class="doc-modal">
+    <div class="doc-modal-cab">
+      <b>documento</b>
+      <div style="flex:1"></div>
+      <button type="button" class="acao-btn" onclick="document.getElementById('doc-modal').close()"
+              title="fechar">✕ fechar</button>
+    </div>
+    <div class="doc-modal-corpo" id="doc-modal-corpo"></div>
+  </dialog>
+  <script>
+    // filtro ao vivo: digita → esconde as linhas que não casam
+    const f = document.getElementById("filtro-colecao");
+    f.addEventListener("input", () => {
+      const q = f.value.trim().toLowerCase();
+      document.querySelectorAll(".linha-colecao").forEach(tr => {
+        tr.style.display = tr.dataset.busca.toLowerCase().includes(q) ? "" : "none";
+      });
+    });
+  </script>
+</section>
+</div>
+{% endblock %}

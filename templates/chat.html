@@ -1,0 +1,1619 @@
+﻿{% extends "base.html" %}
+{% block titulo %}Chat — RagAroy{% endblock %}
+{% block classe %}pagina-chat{% endblock %}
+{% block conteudo %}
+{% from "_icones.html" import icone %}
+
+<div class="chat-shell">
+
+  {# ═══ SIDEBAR de conversas (estilo Open WebUI: sempre visível em desktop,
+       drawer overlay no celular) — nova conversa no TOPO; a borda DIREITA
+       arrasta para redimensionar (alça) #}
+  <aside class="drawer-conversas" id="drawer-conversas">
+    <button class="conv-nova" hx-post="/hx/conversa/nova" hx-target="#palco" hx-swap="innerHTML">
+      ＋ Nova conversa
+    </button>
+    <div class="drawer-corpo" id="lista-conversas-slot" hx-get="/hx/conversas" hx-trigger="load" hx-swap="innerHTML"></div>
+    <div class="split-alca conv-alca" id="conv-alca" title="arraste para redimensionar"></div>
+  </aside>
+
+  {# ═══ COLUNA CENTRAL: palco rolável + composer ═══ #}
+  <div class="chat-col">
+    <div class="chat-sub">
+      <button class="mini-btn so-mobile" onclick="abrirDrawer()" title="conversas">💬</button>
+      {# ⚡ CACHE CARREGADO (pedido do dono): o badge abre um popover com AS
+         ENTRADAS do Redis — pergunta, quando, escopo e a resposta pronta;
+         recarrega a cada abertura (e a cada 30 s enquanto aberto) #}
+      <details class="cache-popover">
+        <summary class="badge-cache" title="cache semântico — clique para ver o que está carregado">
+          {% if cache.online %}⚡ {{ cache.entradas }} em cache{% else %}⚡ cache off{% endif %}
+        </summary>
+        <div class="cache-popover-corpo" hx-get="/hx/cachepanel"
+             hx-trigger="load, every 30s whileVisible"
+             hx-swap="innerHTML"><span class="mini">carregando…</span></div>
+      </details>
+      <button type="button" class="badge-cache" id="badge-modelo"
+              title="modelo de conversa NO AR AGORA — lido do servidor (/api/modelo/ativo)">🧠 …</button>
+      <button type="button" class="btn-fontes" onclick="copiarConversa(this)"
+              title="copia a conversa inteira (perguntas, respostas, tokens e raciocinio) em markdown">
+        &#128203; copiar conversa</button>
+      <label class="toggle-voz" title="modo voz">
+        <input type="checkbox" id="modo-voz" onchange="marcaModoVoz()">
+        <span>🎙 ouvir respostas</span>
+      </label>
+      <div style="flex:1"></div>
+    </div>
+
+    <div id="palco">
+      {# partial AUTOCONTIDO: section#conversa + #pensando (o alvo do form
+         PRECISA existir após qualquer swap de conversa — era a causa do
+         htmx:targetError) #}
+      {% include "_palco.html" %}
+    </div>
+
+    <section class="cartao" id="composer">
+      <form id="form-chat" hx-post="/hx/chat" hx-target="#pensando" hx-swap="beforeend"
+             hx-headers='{"X-Otimista": "1"}'
+            {# ANTES era innerHTML: cada envio APAGAVA a troca anterior que
+               vivia em #pensando — o histórico sumia do chat #} hx-encoding="multipart/form-data">
+        {# ══ LINHA DE ENTRADA: [mic] [textarea flex] [enviar] — flexbox, alinhados ══ #}
+        <div class="entrada-linha">
+          <button type="button" class="mic-btn" id="btn-mic" onclick="alternarMic()" title="ditar — para sozinho ao detectar silêncio (VAD) e envia">&#127908;</button>
+          <textarea id="pergunta" name="question" rows="1" placeholder="pergunte… (⏎ envia · ⇧⏎ linha · ↑ última)" required></textarea>
+          <button class="primario enviar-btn" type="submit" title="enviar">&#10148;</button>
+        </div>
+        {# mídia anexada ao contexto (📎 no painel) — IMPLÍCITO: tudo que
+           está na conversa é contexto; só o hidden field existe #}
+        <input type="hidden" name="referencia" id="referencia" value="">
+        {# ══ CONTROLES — ORDEM DO FLUXO (pedido do dono): 1º o TIPO de
+           resposta → o MODELO filtra pelo tipo → por último o MODO (só
+           vale para texto; geração de mídia ignora) ══ #}
+        <div class="controles-linha">
+          {# 1º: TIPO DE RESPOSTA — texto ou geração de mídia #}
+          <select name="midia" id="sel-midia" title="tipo de resposta" onchange="midiaMudou()">
+            <option value="">📝 texto</option>
+            <option value="imagem">🖼 imagem</option>
+            <option value="video">🎬 vídeo</option>
+            <option value="gif">🎞 gif</option>
+            <option value="i2t">imagem → texto</option>
+            <option value="i2v">imagem → vídeo</option>
+            <option value="i2g">imagem → gif</option>
+          </select>
+          {# ⏱️ DURAÇÃO do vídeo (pedido do dono — "sempre gera apenas 2s"):
+             frames = s×16+1 (spec core/specs/midia_duracao.md); visível só
+             em vídeo/i2v — gif segue loop fixo de ~1,5 s #}
+          <select name="duracao" id="sel-duracao" title="duração do vídeo" hidden>
+            <option value="2">⏱ 2s</option>
+            <option value="3">⏱ 3s</option>
+            <option value="5" selected>⏱ 5s</option>
+            <option value="8">⏱ 8s</option>
+          </select>
+          {# 📎 SUBIR IMAGEM (pedido do dono): visível SÓ nos tipos que
+             PRECISAM de uma imagem de entrada (i2* — análise ou 1º quadro);
+             sobe em /api/upload e vira a `referencia` do envio #}
+          <input type="file" id="anexo-arquivo" accept="image/*" hidden onchange="anexoSubido(this)">
+          <button type="button" id="btn-anexo" class="acao-btn" hidden
+                  onclick="document.getElementById('anexo-arquivo').click()"
+                  title="subir uma imagem do seu computador para usar nesta saída (análise/primeiro quadro)">📎 subir imagem</button>
+          <span class="chip-ref" id="chip-ref" hidden title="clique para remover a imagem anexada"></span>
+          {# 2º: MODELO — categorias de conversa em optgroups; ao escolher
+             o tipo acima, SÓ os modelos daquele tipo ficam habilitados
+             (imagem → Flux; vídeo/gif → Wan2.2). Volta ao chat em texto. #}
+          <select name="model" id="sel-modelo" title="modelo (filtra pelo tipo de resposta)" onchange="modeloMudou(this)">
+            {% for g in modelos_chat_grupos %}
+            {% if g.modelos %}
+            <optgroup label="{{ g.rotulo }}" class="grp-chat" {% if g.externo %}data-prov="{{ g.externo }}"{% endif %}>
+              {% for m in g.modelos %}
+              <option value="{{ m.nome }}" {{ 'selected' if m.ativo }}{% if m.visao %} data-tipo="multimodal"{% endif %}>{{ '👁 ' if m.visao else '' }}{{ m.rotulo or m.nome }}{% if m.gb %} · {{ m.gb }}GB{% endif %}</option>
+              {% endfor %}
+            </optgroup>
+            {% endif %}
+            {% endfor %}
+            <optgroup label="🎨 geração" id="grp-geracao" hidden>
+              {% for m in modelos_geracao.get('imagem', []) %}
+              <option value="{{ m.nome }}" data-tipo="imagem">🖼 {{ m.nome }}{% if m.gb %} · {{ m.gb }}GB{% endif %}</option>
+              {% endfor %}
+              {% for m in modelos_geracao.get('video', []) %}
+              <option value="{{ m.nome }}" data-tipo="video">🎬 {{ m.nome }}</option>
+              {% endfor %}
+              <option value="qwen2.5-vl-7b" data-tipo="multimodal">🖼️ qwen2.5-vl (multimodal)</option>
+            </optgroup>
+          </select>
+          {# 3º: MODO — como usar a base (ignorado na geração de mídia) #}
+          <select name="mode" id="sel-modo" title="modo de resposta (como a base entra)">
+            <option value="hibrido">híbrido</option>
+            <option value="rag">rag (só a base)</option>
+            <option value="livre">livre</option>
+            <option value="auto">auto</option>
+          </select>
+          <button type="button" onclick="melhorarPrompt(this)" id="btn-prompt"
+                  title="a ✨ reescreve o que você digitou na melhor forma — pergunta, pedido de código, instrução ou mídia (se o seletor estiver ativo)">✨ prompt</button>
+          <button type="button" onclick="alternarPainel()" id="btn-painel"
+                  title="mostrar/ocultar o painel da conversa (arquivos · mídia · fontes)">{{ icone("painel") }} painel</button>
+          <button type="button" hx-post="/hx/conversa/nova" hx-target="#palco" hx-swap="innerHTML" title="nova conversa">&#10133; nova</button>
+        </div>
+        {# 🎯 GUIA do tipo escolhido (pedido: "prover bastante informação para a
+           criação, de cada modelo e tipo"): conhecimento de bastidor ANTES de
+           gerar — só aparece quando um tipo de mídia está selecionado #}
+        <details class="colecoes-box guia-midia" id="guia-midia" hidden>
+          <summary id="guia-midia-titulo">🎯 guia</summary>
+          <div id="guia-midia-corpo" class="mini" style="line-height:1.55;"></div>
+        </details>
+        {# ══ COLEÇÕES: grid de checkboxes (rola dentro) — marcar alguma no
+           modo LIVRE troca para HÍBRIDO automaticamente: coleção marcada
+           É contexto RAG (o servidor também promove; o select reflete);
+           OCULTAS na geração de mídia (ambiente limpo — não se aplicam) ══ #}
+        <details class="colecoes-box" id="colecoes-box" open>
+          <summary>coleções do contexto ({{ colecoes | length }})</summary>
+          <input type="search" id="colecao-busca" placeholder="pesquisar coleção…" autocomplete="off"
+                 oninput="filtrarColecoes(this.value)">
+          <div class="colecoes-grid" id="colecoes-grid">
+            {% for c in colecoes %}
+            <label class="colecao-check"><input type="checkbox" name="colecoes" value="{{ c.nome }}"> {{ c.nome }} <span class="mini">({{ c.points }})</span></label>
+            {% endfor %}
+          </div>
+        </details>
+        {# 🔌 FERRAMENTAS MCP (pedido: selecionar como as coleções, sem
+           muita informação de cara): recolhido por padrão, pesquisa filtra
+           e as caixas marcadas viajam no form (name=mcps — o agente usa as
+           ferramentas dos servidores marcados ao responder) #}
+        <details class="colecoes-box" id="mcp-box">
+          <summary>🔌 ferramentas MCP <span class="mini" id="mcp-contagem"></span></summary>
+          <input type="search" id="mcp-busca" placeholder="pesquisar MCP…" autocomplete="off"
+                 oninput="filtrarMcps(this.value)">
+          <div class="colecoes-grid" id="mcp-grid">
+            <p class="mini" id="mcp-vazio">carregando servidores…</p>
+          </div>
+          <p class="mini" style="margin:.3rem 0 0;">marcadas = o assistente usa ao responder
+            (🌐 pesquisa-web baixa páginas completas para contextualizar com informação atual).
+            Instale mais na Biblioteca 🔌.</p>
+        </details>
+      </form>
+      <p class="mini" style="margin:.4rem 0 0;">
+        mídia gera na GPU local (2–15 min). ⏎ envia · ⇧⏎ nova linha · ↑ recupera a última pergunta.
+      </p>
+    </section>
+  </div>
+
+  {# MODAL de teste na sandbox — FORA do <form> (dentro dele o botão fechar
+     SUBMETIA o formulário: fechava e enviava mensagem vazia — era o
+     "botão quebrado"). Padrão modal nativo: dialog + backdrop + cabeçalho
+     com título à esquerda e ação à direita, botão SEMPRE type="button". #}
+  <dialog id="testar-modal" class="doc-modal">
+    <div class="doc-modal-cab">
+      <b>⚙️ sandbox — teste de código</b>
+      <div style="flex:1"></div>
+      <button type="button" class="acao-btn" onclick="document.getElementById('testar-modal').close()">✕ fechar</button>
+    </div>
+    <div class="doc-modal-corpo" id="testar-modal-corpo"></div>
+  </dialog>
+
+  {# 📖 LEITURA DA RESPOSTA em tela ampla — o botão "▪ resposta" do fim da
+     mensagem abre AQUI (o painel 📚 fica só com as fontes; antes a resposta
+     era jogada NA ABA de fontes e tudo parecia a mesma coisa) #}
+  <dialog id="resposta-modal" class="doc-modal">
+    <div class="doc-modal-cab">
+      <b>📖 resposta</b>
+      <div style="flex:1"></div>
+      <button type="button" class="acao-btn" onclick="document.getElementById('resposta-modal').close()">✕ fechar</button>
+    </div>
+    <div class="doc-modal-corpo resposta md" id="resposta-modal-corpo"></div>
+  </dialog>
+
+  {# ═══ SPLIT DIREITO: painel da conversa — cabeçalho UMA LINHA (abas
+       rolam na horizontal; ação fixa à direita), alça de redimensionar,
+       orelha lateral quando retraído. Botões rotulados = .acao-btn
+       (.mini-btn é quadrado de ÍCONE — ícone+texto espremem). #}
+  <aside class="split-docs" id="split-docs" hidden>
+    <div class="split-alca" id="split-alca" title="arraste para redimensionar"></div>
+    <div class="painel-cab">
+      <div class="painel-abas" id="painel-abas">
+        <button type="button" class="aba ativa" data-aba="arquivos" title="arquivos de código da conversa">
+          {{ icone("arquivo") }} arquivos <span class="n"></span></button>
+        <button type="button" class="aba" data-aba="midia" title="mídia gerada na conversa">
+          {{ icone("filme") }} mídia <span class="n"></span></button>
+        <button type="button" class="aba" data-aba="fontes" title="documentos que basearam as respostas">
+          {{ icone("livro") }} fontes <span class="n"></span></button>
+      </div>
+      {# ÚNICA ação do cabeçalho: RETRAIR (a orelha lateral reabre) #}
+      <div class="painel-acoes">
+        <button type="button" class="acao-btn" onclick="retrairPainel()"
+                title="retrair o painel para a lateral (clique na orelha para voltar)">
+          {{ icone("recolher", 12) }} retrair</button>
+      </div>
+    </div>
+    <div class="split-corpo" id="split-corpo">
+      <p class="mut" id="painel-vazio" hidden style="padding:.8rem; font-size:.78rem;"></p>
+    </div>
+    {# RODAPÉ do painel: zip da aba atual — lugar fixo, sem disputar espaço
+       com as abas no cabeçalho #}
+    <div class="painel-rodape">
+      <button type="button" class="acao-btn largo" id="painel-zip" onclick="baixarAbaZip(this)" hidden
+              title="baixar os itens da aba atual em .zip">{{ icone("download", 12) }} baixar esta aba (.zip)</button>
+    </div>
+  </aside>
+
+  {# ORELHA LATERAL: visível SÓ quando o painel está retraído — reabre com
+     1 clique (o painel nunca fica inacessível de novo) #}
+  <button type="button" class="painel-orelha" id="painel-orelha" hidden
+          onclick="abrirPainelDaOrelha()" title="reabrir o painel da conversa">
+    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+    <span>painel <b id="orelha-n"></b></span>
+  </button>
+
+</div>
+
+<script>
+/* ═══════════ 1. ENTER envia · SHIFT+ENTER linha · ↑ histórico ═══════════ */
+const TA = document.getElementById("pergunta");
+const FORM = document.getElementById("form-chat");
+const historico = [];
+let hIdx = -1;
+
+TA.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    const v = TA.value.trim();
+    if (!v) return;
+    historico.push(v); hIdx = historico.length;   // ↑ volta do último
+    FORM.requestSubmit();   // submit NATIVO: o htmx intercepta de verdade
+    // (o clear agora acontece no afterRequest)
+    return;
+  }
+  if (e.key === "ArrowUp" && !TA.value) {            // caixa vazia: recupera
+    e.preventDefault();
+    if (historico.length) { hIdx = Math.max(0, hIdx - 1); TA.value = historico[hIdx]; }
+  }
+  if (e.key === "ArrowDown" && !TA.value) {
+    e.preventDefault();
+    hIdx = Math.min(historico.length, hIdx + 1);
+    TA.value = historico[hIdx] || "";
+  }
+});
+// textarea acompanha as LINHAS do texto (pedido do dono): nasce em 1
+// linha e cresce até o máximo do CSS (12rem) — o cálculo é em PX porque
+// scrollHeight é px (o antigo min(scrollHeight, 12)+"rem" travava em 12rem)
+function ajustarAlturaTA() {
+  TA.style.height = "auto";
+  const maxPx = parseFloat(getComputedStyle(TA).maxHeight) || 192;
+  TA.style.height = Math.min(TA.scrollHeight, maxPx) + "px";
+}
+TA.addEventListener("input", ajustarAlturaTA);
+/* PRIMEIRA conversa ou não: o campo SEMPRE começa em 1 linha e expande
+   conforme o texto (a ".alta" de fábrica saiu — pedido do dono). */
+document.body.addEventListener("htmx:afterSwap", (e) => {
+  const alvo = e.detail.target;
+  const dentro = alvo && alvo.closest && alvo.closest("#pensando");
+  if (alvo?.id === "palco" || alvo?.id === "pensando" || dentro) {
+    // 🫧 o card real chegou: o placeholder "enviando…" sai
+    document.querySelectorAll("#pensando .otimismo").forEach(n => n.remove());
+    // resposta concluída → o modelo pode ter trocado no caminho: refresh
+    if (document.querySelector("#pensando .msg.assistente:not(.stream-ao-vivo)"))
+      agendarModeloAtivo();
+  }
+});
+ajustarAlturaTA();
+// limpa a caixa SOMENTE depois que o htmx enviou de verdade
+FORM.addEventListener("htmx:afterRequest", (e) => {
+  if (e.target === FORM && e.detail.successful) {
+    TA.value = "";
+    ajustarAlturaTA();
+    tirarDoContexto();   // a referência foi consumida pelo envio
+  }
+  if (e.target === FORM && !e.detail.successful) {
+    // 🫧 envio FALHOU (rede): a bolha otimista sai para o usuário tentar
+    // de novo sem fantasma na conversa
+    document.querySelectorAll("#pensando .otimista, #pensando .otimismo")
+      .forEach(n => n.remove());
+  }
+});
+
+/* ═══════════ 1b. BOLHA OTIMISTA — mensagem instantânea ═══════════
+   A bolha do usuário entra na tela NO ATO do submit (antes do POST
+   voltar — pedido do dono: "deve ser instantâneo, mesmo que precise
+   pensar depois"). O servidor devolve SÓ o card do job (header
+   X-Otimista) e o placeholder "enviando…" sai quando ele chega. */
+FORM.addEventListener("submit", () => {
+  const v = TA.value.trim();
+  if (!v) return;   // required cuida, mas garantimos
+  const bolha = document.createElement("div");
+  bolha.className = "msg usuario otimista";
+  bolha.innerHTML = '<div class="cab-msg"><span class="av-msg">&#128100;</span>' +
+                    '<span class="quem">você</span></div><div class="resposta"></div>';
+  bolha.querySelector(".resposta").textContent = v;
+  const pensando = document.getElementById("pensando");
+  pensando.appendChild(bolha);
+  const ph = document.createElement("div");
+  ph.className = "pensando-cab otimismo";
+  ph.innerHTML = '<span class="ponto"></span> enviando…';
+  pensando.appendChild(ph);
+});
+
+/* ═══════════ 1e. PESQUISA de coleções e MCPs no chat ═══════════ */
+function filtrarColecoes(termo) {
+  const t = (termo || "").toLowerCase();
+  document.querySelectorAll("#colecoes-grid .colecao-check").forEach(el =>
+    (el.hidden = t ? !el.textContent.toLowerCase().includes(t) : false));
+}
+let _mcpsMarcados = new Set(
+  JSON.parse(localStorage.getItem("ragaroy.mcps") || "[]"));
+function _salvarMcps() {   // a seleção ACOMPANHA o usuário (próximas visitas)
+  localStorage.setItem("ragaroy.mcps", JSON.stringify([..._mcpsMarcados]));
+}
+function filtrarMcps(termo) {
+  const t = (termo || "").toLowerCase();
+  document.querySelectorAll("#mcp-grid .colecao-check").forEach(el =>
+    (el.hidden = t ? !el.textContent.toLowerCase().includes(t) : false));
+}
+/* 🔎 PESQUISA-WEB (NATIVA): entra na lista ANTES dos servidores — é o
+   motor de busca do RagAroy (páginas inteiras, não snippets), marcável
+   como qualquer MCP para contextualizar a sessão com informação atual. */
+const MCP_NATIVO = {
+  nome: "pesquisa-web",
+  rotulo: 'pesquisa-web <span class="mini">🌐 nativa — páginas completas, informação atual</span>',
+};
+async function carregarMcps() {
+  const grid = document.getElementById("mcp-grid");
+  const cont = document.getElementById("mcp-contagem");
+  try {
+    const r = await fetch("/api/mcp");
+    const lista = await r.json();
+    let html = "";
+    const item = (nome, rotulo) =>
+      '<label class="colecao-check' + (_mcpsMarcados.has(nome) ? " marcado" : "") + '">' +
+      '<input type="checkbox" name="mcps" value="' + nome + '"' +
+      (_mcpsMarcados.has(nome) ? " checked" : "") + '> ' + rotulo + '</label>';
+    html += item(MCP_NATIVO.nome, MCP_NATIVO.rotulo);
+    if (Array.isArray(lista)) {
+      html += lista.map(m => item(m.nome, m.nome +
+        ' <span class="mini">(' + (m.transport || "?") + ')</span>')).join("");
+    }
+    grid.innerHTML = html || '<p class="mini">nenhum servidor MCP registrado</p>';
+    grid.querySelectorAll("input[name=mcps]").forEach(cb =>
+      cb.addEventListener("change", () => {
+        cb.checked ? _mcpsMarcados.add(cb.value) : _mcpsMarcados.delete(cb.value);
+        _salvarMcps();
+        atualizarContagemMcp();
+      }));
+    atualizarContagemMcp();
+  } catch {
+    grid.innerHTML = '<p class="mini">MCP indisponível agora — abra de novo</p>';
+  }
+}
+function atualizarContagemMcp() {
+  const cont = document.getElementById("mcp-contagem");
+  if (cont) cont.textContent = _mcpsMarcados.size
+    ? "· " + _mcpsMarcados.size + " marcada(s)" : "";
+}
+carregarMcps();
+// REFRESH ao ABRIR o box (pedido: "selecionei um MCP conhecido e ele não
+// apareceu no chat") — instalar na Biblioteca e voltar atualiza sem F5
+document.getElementById("mcp-box")?.addEventListener("toggle", (e) => {
+  if (e.target.open) carregarMcps();
+});
+
+/* ═══════════ 1f. MODELO ATIVO — badge lido do SERVIDOR ═══════════
+   /api/modelo/ativo consulta o /v1/models (OpenAI) do llama-server: o
+   badge mostra o que está NO AR agora; trocar modelo = clicar no select
+   (a troca dispara na hora e o badge acompanha até subir — natural). */
+let MODELO_ATIVO = "";
+let VISAO_ATIVA = "";
+async function atualizarModeloAtivo() {
+  const b = document.getElementById("badge-modelo");
+  if (!b) return;
+  try {
+    const d = await (await fetch("/api/modelo/ativo")).json();
+    MODELO_ATIVO = d.modelo || "";
+    VISAO_ATIVA = d.visao || "";
+    // 🧠 badge = o modelo que VAI RESPONDER este envio: multimodal (👁)
+    // quando o tipo é imagem→texto — mesma fonte única do Sistema/dashboard
+    const usaVisao = document.getElementById("sel-midia")?.value === "i2t";
+    const quem = usaVisao
+      ? (VISAO_ATIVA || "multimodal sobe na 1ª análise")
+      : MODELO_ATIVO;
+    b.textContent = (usaVisao ? "👁 " : "🧠 ") + (quem || "offline");
+    b.title = usaVisao
+      ? "análise multimodal no ar agora (lido do servidor)"
+      : (MODELO_ATIVO
+        ? "modelo de conversa no ar agora (lido do servidor)"
+        : "nenhum modelo de conversa no ar");
+  } catch {
+    b.textContent = "🧠 …";
+  }
+}
+let _modeloDeb = null;
+function agendarModeloAtivo() {
+  clearTimeout(_modeloDeb);
+  _modeloDeb = setTimeout(atualizarModeloAtivo, 400);
+}
+async function modeloMudou(sel) {
+  const opt = sel.selectedOptions[0];
+  if (!opt || !opt.closest("optgroup.grp-chat")) return;  // geração: não troca
+  const alias = sel.value;
+  if (!alias || alias === MODELO_ATIVO) return;
+  const b = document.getElementById("badge-modelo");
+  b.textContent = "🔁 " + alias + " carregando…";
+  b.title = "trocando o modelo no servidor (GPU) — o próximo aviso é quando estiver no ar";
+  try {
+    const r = await fetch("/api/modelo/ativo", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({modelo: alias})});
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      b.textContent = "⚠️ " + (err.detail || "troca falhou");
+      setTimeout(atualizarModeloAtivo, 2500);
+      return;
+    }
+  } catch { atualizarModeloAtivo(); return; }
+  for (let i = 0; i < 120; i++) {          // acompanha até subir (máx 6 min)
+    await new Promise(ok => setTimeout(ok, 3000));
+    try {
+      const d = await (await fetch("/api/modelo/ativo")).json();
+      if ((d.modelo || "").toLowerCase() === alias.toLowerCase()) break;
+      b.textContent = "🔁 " + alias + " (" + ((i + 1) * 3) + "s)…";
+    } catch {}
+  }
+  atualizarModeloAtivo();
+}
+atualizarModeloAtivo();
+
+/* ═══════════ 1d. RACIOCÍNIO: o estado abrir/recolher vive no base.html
+   (mecanismo único por CHAVE estável — id do card + summary) — abrir
+   durante a geração de logs PERMANECE aberto em qualquer re-render do
+   polling; o servidor decide apenas o estado INICIAL (ao vivo aberto,
+   histórico recolhido) e a escolha do usuário SEMPRE vence. ═══════════ */
+
+/* ═══════════ 2. MICROFONE com VAD (detecção de silêncio) ═══════════
+   TÉCNICA: VAD por ENERGIA (RMS). Um AnalyserNode lê o volume do micro
+   em tempo real; enquanto você fala a energia fica alta. Quando cai
+   abaixo do limiar por ~1.4 s SEGUIDOS (e já houve fala), a gravação
+   para sozinha → transcreve (whisper) → ENVIA na hora. É o mesmo
+   "auto-stop" de assistentes de voz; alternativa é WebRTC VAD nativo. */
+let gravando = false, mediaRec = null, chunks = [], streamMic = null,
+    vadTimer = null, analyser = null, audioCtx = null;
+
+function _vadEstado(txt, cor) {
+  const b = document.getElementById("btn-mic");
+  b.title = txt;
+  b.style.borderColor = cor;
+}
+
+async function alternarMic() {
+  if (gravando) { _pararGravacao(); return; }
+  try {
+    streamMic = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    audioCtx.createMediaStreamSource(streamMic).connect(analyser);
+
+    mediaRec = new MediaRecorder(streamMic);
+    chunks = [];
+    mediaRec.ondataavailable = (e) => chunks.push(e.data);
+    mediaRec.onstop = async () => {
+      streamMic.getTracks().forEach(t => t.stop());
+      audioCtx?.close();
+      clearInterval(vadTimer);
+      const btn = document.getElementById("btn-mic");
+      btn.textContent = "⏳"; btn.classList.add("gravando");
+      const fd = new FormData();
+      fd.append("audio", new Blob(chunks, {type: "audio/webm"}), "ditado.webm");
+      try {
+        const r = await fetch("/hx/voz", {method: "POST", body: fd});
+        const html = await r.text();
+        const tmp = document.createElement("div"); tmp.innerHTML = html;
+        const novo_ = tmp.querySelector("textarea")?.value || "";
+        if (novo_.trim()) {
+          TA.value = novo_;                        // transcreveu
+          TA.focus();
+          FORM.requestSubmit();   // enviou: transcreveu -> manda
+        }
+      } catch (e) { alert("transcrição falhou: " + e); }
+      btn.textContent = "🎤"; btn.classList.remove("gravando");
+      _vadEstado("ditar — para sozinho no silêncio", "");
+    };
+    mediaRec.start();
+    gravando = true;
+    document.getElementById("btn-mic").textContent = "⏺";
+
+    // VAD: RMS a cada 150ms. Silêncio PROLONGADO (2.5s) após fala =
+    // terminou mesmo — pausas curtas de quem pensa NÃO interrompem.
+    // Limiar ADAPTATIVO: o ruído de fundo é medido nos 1.5s iniciais e o
+    // gatilho fica ACIMA dele (microfone ruidoso não engole a fala).
+    let silencioMs = 0, houveFala = false, pisoRuido = 0.012;
+    let amostrasRuido = [];
+    const buf = new Uint8Array(analyser.frequencyBinCount);
+    const t0Vad = Date.now();
+    vadTimer = setInterval(() => {
+      analyser.getByteTimeDomainData(buf);
+      let soma = 0;
+      for (const v of buf) { const d = (v - 128) / 128; soma += d * d; }
+      const rms = Math.sqrt(soma / buf.length);
+      if (!houveFala && Date.now() - t0Vad < 1500) {
+        amostrasRuido.push(rms);
+        _vadEstado("calibrando ambiente…", "var(--suave)");
+        return;
+      }
+      if (amostrasRuido.length) {
+        pisoRuido = Math.max(0.012,
+          (amostrasRuido.reduce((a, b) => a + b, 0) /
+           amostrasRuido.length) * 2.5);
+        amostrasRuido = [];
+      }
+      if (rms > pisoRuido) {
+        houveFala = true; silencioMs = 0;
+        _vadEstado("ouvindo… (fale à vontade)", "var(--ok)");
+      } else if (houveFala) {
+        silencioMs += 150;
+        _vadEstado("pausa " + (silencioMs / 1000).toFixed(1) +
+                   "s / 2.5s…", "var(--aviso)");
+        if (silencioMs >= 2500) _pararGravacao();
+      }
+    }, 150);
+  } catch (e) { alert("microfone indisponível: " + e.message); }
+}
+function _pararGravacao() {
+  clearInterval(vadTimer);
+  if (mediaRec && mediaRec.state !== "inactive") mediaRec.stop();
+  gravando = false;
+}
+
+function _copiar(btn, texto) {
+  navigator.clipboard.writeText(texto).then(() => {
+    const antigo = btn.textContent;
+    btn.textContent = "✓ copiado";
+    setTimeout(() => btn.textContent = antigo, 1400);
+  });
+}
+
+/* ═══════════ 3. COMBOBOX INTELIGENTE (tipo ↔ modelos) ═══════════
+   O select é RECONSTRUÍDO por tipo (pedido do dono: "deve saber para
+   que serve cada modelo"): texto → SÓ modelos de conversa (wan/flux/
+   multimodal NEM aparecem na lista); imagem → só Flux; vídeo/gif/i2v/
+   i2g → só Wan2.2; i2t → só o multimodal. A escolha de conversa volta
+   sozinha quando o tipo retorna a texto. */
+const SEL_MODEL = document.getElementById("sel-modelo");
+const SEL_MIDIA = document.getElementById("sel-midia");
+// catálogo ÚNICO lido UMA vez do render do servidor
+const _MODELOS_TODOS = [...SEL_MODEL.querySelectorAll("option")].map(o => ({
+  valor: o.value, texto: o.textContent.trim(),
+  grupo: o.closest("optgroup")?.label || "modelos",
+  chat: !!o.closest("optgroup.grp-chat"),
+  tipo: o.dataset.tipo || "",
+}));
+let _modeloChat = [..._MODELOS_TODOS].find(o => o.valor === SEL_MODEL.value)?.valor
+                  || _MODELOS_TODOS.find(o => o.chat)?.valor || "";
+
+function _popularModelos(opts, titulo) {
+  SEL_MODEL.innerHTML = "";
+  const grupos = new Map();   // preserva a ordem de entrada
+  opts.forEach(o => {
+    if (!grupos.has(o.grupo)) grupos.set(o.grupo, []);
+    grupos.get(o.grupo).push(o);
+  });
+  for (const [rotulo, itens] of grupos) {
+    const g = document.createElement("optgroup");
+    g.label = rotulo;
+    if (itens[0].chat) g.className = "grp-chat";
+    for (const it of itens) {
+      const op = document.createElement("option");
+      op.value = it.valor;
+      op.textContent = it.texto;
+      g.appendChild(op);
+    }
+    SEL_MODEL.appendChild(g);
+  }
+  SEL_MODEL.title = titulo;
+}
+
+/* 🎯 GUIA por tipo+modelo com CHIPS DE PROMPT (pedido do dono: "dar dicas de
+   ambientes e prompts, estilo — realismo, desenho, quadrinhos… ajudar no
+   prompt"): o clique INSERE a dica no campo de pergunta — o ✨ depois vira
+   storytelling denso. Cada tipo mostra o que importa pra ele. */
+const CHIPS_MIDIA = {
+  estilo: { rotulo: "🎨 estilo", itens: [
+    "realismo fotográfico", "cinematográfico", "anime", "desenho animado",
+    "quadrinhos / HQ", "3D render", "aquarela", "pixel art",
+    "neon cyberpunk", "minimalista"] },
+  ambiente: { rotulo: "🌍 ambiente", itens: [
+    "cidade à noite com chuva e neon", "floresta ao amanhecer com névoa",
+    "praia ao pôr do sol", "interior aconchegante com lareira",
+    "espaço sideral com nebulosa", "deserto ao meio-dia",
+    "estúdio com fundo limpo"] },
+  luz: { rotulo: "💡 luz · câmera", itens: [
+    "golden hour", "luz suave difusa", "iluminação dramática", "contraluz",
+    "close-up", "plano aberto", "vista de drone", "câmera lenta"] },
+  movimento: { rotulo: "🎥 movimento", itens: [
+    "câmera dolly lento", "pan suave da esquerda pra direita", "câmera fixa",
+    "movimento cíclico suave"] },
+};
+function _chipsHTML(categorias) {
+  let html = "";
+  for (const c of categorias) {
+    const g = CHIPS_MIDIA[c];
+    if (!g) continue;
+    html += `<div style="margin:.3rem 0;"><span class="mini" style="opacity:.8;">${g.rotulo}:</span> `;
+    for (const it of g.itens) {
+      const t = it.replace(/'/g, "\\'");
+      html += `<button type="button" class="chip-prompt" data-txt="${t}" onclick="chipPrompt(this.dataset.txt)">${it}</button>`;
+    }
+    html += "</div>";
+  }
+  return html;
+}
+const GUIA_MIDIA = {
+  imagem: { titulo: "🎯 guia · imagem (Flux)",
+    corpo: () => `<b>Uma cena que conta história</b>: sujeito com expressão, ação em
+      andamento, luz com direção, estilo e enquadramento. ⚠️ sem texto/letras na
+      imagem. Clique nas dicas — elas entram no seu prompt (o ✨ transforma em
+      cena densa):` + _chipsHTML(["estilo", "ambiente", "luz"]) },
+  video: { titulo: "🎯 guia · vídeo (Wan — você escolhe a duração)",
+    corpo: () => `<b>Cena única que se desenvolve</b>: sujeito GRANDE no quadro, uma
+      ação contínua, câmera declarada. Wan2.1 é leve e estável; Wan2.2 tem mais
+      detalhe (movimentos amplos degradam). Sem cortes, sem texto na tela.<br>
+      ⏱️ <b>escolha a duração ao lado</b> e o prompt acompanha (spec
+      midia_duracao): <b>2s</b>=um gesto legível · <b>3s</b>=arco mínimo
+      (preparo→ação→reação) · <b>5s</b>=ação + desenvolvimento · <b>8s</b>=2–3
+      beats encadeados na mesma cena (gera ~4× mais devagar que 2s):` +
+      _chipsHTML(["estilo", "ambiente", "luz", "movimento"]) },
+  gif: { titulo: "🎯 guia · gif (17 frames · loop)",
+    corpo: () => `<b>GIF bom = loop perfeito</b>: UMA ação curta e cíclica (respirar,
+      girar, ondular) que volta ao início sem emenda. Movimento no CENTRO, sem
+      cortes, sem texto. Ida e volta = loop natural:` +
+      _chipsHTML(["estilo", "ambiente", "movimento"]) },
+  i2t: { titulo: "🎯 guia · imagem → texto (Qwen2.5-VL)",
+    corpo: () => `Suba a imagem (📎) e pergunte <b>o que extrair dela</b>: descrição,
+      texto contido (placas/código/documento), objetos e contagens, cores,
+      contexto. Perguntas específicas dão respostas melhores que "descreva".` },
+  i2v: { titulo: "🎯 guia · imagem → vídeo (Wan)",
+    corpo: () => `A imagem anexa (📎) vira o <b>primeiro quadro</b>: descreva o
+      MOVIMENTO que parte dela (não uma cena nova). Movimento suave e contínuo
+      funciona melhor. ⏱️ a duração ao lado escala a ação
+      (2s=um gesto · 5s=desenvolvimento · 8s=2–3 beats):` + _chipsHTML(["movimento", "luz"]) },
+  i2g: { titulo: "🎯 guia · imagem → gif (loop)",
+    corpo: () => `A imagem anexa (📎) é o primeiro frame: o movimento parte dela e
+      VOLTA a ela (ida e volta = loop perfeito). UMA ação cíclica, curta,
+      centrada:` + _chipsHTML(["movimento"]) },
+};
+function _atualizarGuia(tipo) {
+  const box = document.getElementById("guia-midia");
+  const g = GUIA_MIDIA[tipo];
+  if (!g) { box.hidden = true; return; }
+  document.getElementById("guia-midia-titulo").textContent = g.titulo;
+  document.getElementById("guia-midia-corpo").innerHTML =
+    (typeof g.corpo === "function" ? g.corpo() : g.corpo);
+  box.hidden = false;
+  box.open = true;   // dicas À VISTA ao escolher o tipo (chips clicáveis)
+}
+/* clique na dica → ENTRA no prompt (com vírgula quando já há texto) */
+function chipPrompt(txt) {
+  const ta = document.getElementById("pergunta");
+  const atual = ta.value.trim();
+  ta.value = atual ? atual.replace(/[.,;\s]+$/, "") + ", " + txt : txt;
+  ta.focus();
+  ta.dispatchEvent(new Event("input", {bubbles: true}));
+}
+
+function midiaMudou() {
+  const tipo = SEL_MIDIA.value;
+  const modo = document.getElementById("sel-modo");
+  const btnAnexo = document.getElementById("btn-anexo");
+  // MODO só vale para TEXTO (geração de mídia ignora a base) — o 3º
+  // combobox desabilita visualmente quando o tipo pede mídia
+  if (modo) {
+    modo.disabled = !!tipo;
+    modo.title = tipo
+      ? "o modo não se aplica à geração de mídia"
+      : "modo de resposta (como a base entra)";
+  }
+  // 📎 botão de subir imagem: SÓ nos tipos com imagem de ENTRADA (i2*)
+  if (btnAnexo) {
+    btnAnexo.hidden = !tipo.startsWith("i2");
+    btnAnexo.title = tipo === "i2t"
+      ? "subir a imagem para o multimodal analisar"
+      : "subir a imagem que vira o primeiro quadro do vídeo/gif";
+  }
+  // ⏱️ seletor de DURAÇÃO: vídeo/i2v em SEGUNDOS (16 fps); gif/i2g em
+  // FRAMES (loop a 12 fps — spec midia_duracao). Repovoado por tipo.
+  const selDur = document.getElementById("sel-duracao");
+  if (selDur) {
+    if (tipo === "video" || tipo === "i2v") {
+      selDur.innerHTML = '<option value="2">⏱ 2s</option><option value="3">⏱ 3s</option>'
+        + '<option value="5" selected>⏱ 5s</option><option value="8">⏱ 8s</option>';
+      selDur.title = "duração → frames (16 fps): 2s=33 · 3s=49 · 5s=81 · 8s=129 — tempo de geração cresce ~linear";
+    } else if (tipo === "gif" || tipo === "i2g") {
+      selDur.innerHTML = '<option value="17" selected>⏱ ~1,5s (17f)</option>'
+        + '<option value="33">⏱ ~3s (33f)</option><option value="49">⏱ ~4s (49f)</option>';
+      selDur.title = "duração do loop em FRAMES (12 fps): mais frames = ação mais longa, loop perfeito continua valendo";
+    }
+    selDur.hidden = !(tipo === "video" || tipo === "i2v" || tipo === "gif" || tipo === "i2g");
+  }
+  agendarModeloAtivo();   // i2t ↔ texto troca o modelo exibido no badge
+  // 🕵️ AMBIENTE LIMPO na geração de mídia (pedido do dono): coleções/MCP
+  // não se aplicam — saem da vista; o GUIA do tipo entra no lugar deles
+  const boxColecoes = document.getElementById("colecoes-box");
+  const boxMcp = document.getElementById("mcp-box");
+  if (boxColecoes) boxColecoes.hidden = !!tipo;
+  if (boxMcp) boxMcp.hidden = !!tipo;
+  _atualizarGuia(tipo.startsWith("i2") ? tipo : (tipo || ""));
+  if (!tipo) {                                   // texto: SÓ conversa
+    _popularModelos(_MODELOS_TODOS.filter(o => o.chat),
+                    "modelo de conversa (lido do servidor no badge 🧠)");
+    if (_MODELOS_TODOS.some(o => o.chat && o.valor === _modeloChat))
+      SEL_MODEL.value = _modeloChat;
+    return;
+  }
+  const atual = _MODELOS_TODOS.find(o => o.valor === SEL_MODEL.value);
+  if (atual?.chat) _modeloChat = atual.valor;    // guarda a escolha de conversa
+  const quer = {imagem: "imagem", video: "video", gif: "video",
+                i2v: "video", i2g: "video", i2t: "multimodal"}[tipo] || "imagem";
+  const opcoes = _MODELOS_TODOS.filter(o => o.tipo === quer);
+  _popularModelos(opcoes,
+                  "modelo para " + (tipo === "i2t" ? "analisar a imagem" : "gerar " + tipo));
+}
+
+/* 📎 SUBIR IMAGEM: /api/upload salva em saidas/entrada e devolve o
+   caminho — vira a `referencia` do envio (o mesmo campo do "incluir no
+   contexto" do painel: i2* usa como entrada, texto comum usa a visão
+   para descrever). O chip mostra o nome; clique remove. */
+async function anexoSubido(input) {
+  const arq = input.files?.[0];
+  input.value = "";   // permite subir o MESMO arquivo de novo depois
+  if (!arq) return;
+  const chip = document.getElementById("chip-ref");
+  chip.hidden = false;
+  chip.textContent = "📎 subindo " + arq.name + "…";
+  try {
+    const fd = new FormData();
+    fd.append("file", arq);
+    const r = await fetch("/api/upload", {method: "POST", body: fd});
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || ("HTTP " + r.status));
+    document.getElementById("referencia").value = d.arquivo;
+    chip.textContent = "📎 " + d.nome + " ✓";
+    chip.title = "imagem anexada — clique para remover";
+  } catch (e) {
+    chip.textContent = "⚠️ " + e.message;
+    document.getElementById("referencia").value = "";
+    setTimeout(() => (chip.hidden = true), 2600);
+  }
+}
+document.getElementById("chip-ref")?.addEventListener("click", () => {
+  document.getElementById("referencia").value = "";
+  const chip = document.getElementById("chip-ref");
+  chip.hidden = true;
+  chip.textContent = "";
+});
+midiaMudou();   // normaliza o select no load (texto = só conversa)
+
+// COLEÇÃO MARCADA = contexto RAG: no modo livre ela seria ignorada —
+// marcar a 1ª coleção troca o select para híbrido (o servidor também
+// promove; aqui o select apenas REFLETE a realidade para o usuário).
+(function () {
+  const grid = document.getElementById("colecoes-grid");
+  const selMode = document.querySelector('select[name="mode"]');
+  if (!grid || !selMode) return;
+  grid.addEventListener("change", () => {
+    const marcadas = grid.querySelectorAll("input:checked").length;
+    if (marcadas > 0 && selMode.value === "livre") {
+      selMode.value = "hibrido";
+      selMode.title = "coleção marcada entra no contexto (modo híbrido)";
+    }
+  });
+})();
+
+/* ✨ PROMPT universal: a LLM reescreve o RASCUNHO na melhor forma — entende
+   só o que está digitado (pergunta, código, instrução); o tipo de mídia,
+   quando SELECIONADO, vai apenas como DICA. Substitui o texto da caixa. */
+async function melhorarPrompt(btn) {
+  const ta = document.getElementById("pergunta");
+  const ideia = ta.value.trim();
+  if (!ideia) { alert("escreva algo primeiro — a ✨ propõe a melhor forma de pedir"); return; }
+  let dicaTipo = SEL_MIDIA.value || "";   // vazio: melhoria GENÉRICA
+  // ⏱️ a dica carrega a DURAÇÃO (vídeo: segundos; gif: "17f") para a spec
+  // escalar a ação do prompt (2s=1 beat … 8s=2–3 beats; gif por frames)
+  const selDur = document.getElementById("sel-duracao");
+  if (dicaTipo && selDur && !selDur.hidden) {
+    const v = selDur.value;
+    dicaTipo += (dicaTipo === "gif" || dicaTipo === "i2g")
+      ? " " + v + " frames" : " " + v + "s";
+  }
+  const o = btn.textContent; btn.textContent = "…"; btn.disabled = true;
+  try {
+    const r = await fetch("/hx/prompt-melhorar", {
+      method: "POST",
+      headers: {"Content-Type": "application/x-www-form-urlencoded"},
+      body: "ideia=" + encodeURIComponent(ideia)
+          + "&tipo=" + encodeURIComponent(dicaTipo)
+          + "&referencia=" + encodeURIComponent(
+              document.getElementById("referencia").value || ""),
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const txt = (await r.text()).trim();
+    if (txt) { ta.value = txt; ajustarAlturaTA(); }
+    btn.textContent = "✓";
+  } catch (e) {
+    alert("não consegui melhorar o prompt: " + e.message);
+    btn.textContent = o; btn.disabled = false; return;
+  }
+  btn.disabled = false;
+  setTimeout(() => (btn.textContent = o), 1400);
+}
+
+/* ═══════════ 5. CONVERSAS: alça redimensiona a coluna; clique atualiza
+   o DESTAQUE (antes: clicar na conversa JÁ ATUAL não movia o highlight —
+   parecia que o botão "não funcionava") ═══════════ */
+(function () {
+  const alca = document.getElementById("conv-alca");
+  const col = document.getElementById("drawer-conversas");
+  let arrastando = false;
+  if (alca) {
+    alca.addEventListener("pointerdown", (e) => {
+      arrastando = true; alca.setPointerCapture(e.pointerId);
+      document.body.style.cursor = "col-resize";
+    });
+    alca.addEventListener("pointermove", (e) => {
+      if (!arrastando) return;
+      col.style.width = Math.max(180, Math.min(e.clientX, window.innerWidth * 0.4)) + "px";
+    });
+    const fim = () => { arrastando = false; document.body.style.cursor = ""; };
+    alca.addEventListener("pointerup", fim);
+    alca.addEventListener("pointercancel", fim);
+  }
+  // abrir conversa → lista re-carrega com o DESTAQUE certo (cookie mudou)
+  document.addEventListener("htmx:afterRequest", (e) => {
+    const b = e.target.closest?.(".conv-abrir, .conv-nova");
+    if (b && e.detail.successful) {
+      setTimeout(() => htmx.ajax("GET", "/hx/conversas",
+                                 "#lista-conversas-slot"), 60);
+    }
+  });
+  // ✕ com a conexão engasgada (502 do proxy): o item NÃO some — avisa e o
+  // clique pode ser repetido (a exclusão em si é job na fila e não perde)
+  document.addEventListener("htmx:responseError", (e) => {
+    const x = e.target.closest?.(".conv-x");
+    if (!x) return;
+    x.title = "a conexão falhou (" + (e.detail.xhr?.status || "erro") +
+              ") — clique de novo quando a conexão voltar";
+    x.textContent = "⚠️";
+    setTimeout(() => (x.textContent = "✕"), 4000);
+  });
+})();
+
+/* ═══════════ 4. PAINEL DA CONVERSA (direita) — AUTO-ALIMENTADO ═══════════
+   TUDO que a conversa produz entra aqui SOZINHO (pedido do dono), em ABAS:
+   📄 arquivos (blocos de código/comando) · 🎬 mídia (imagem/vídeo/gif) ·
+   📚 fontes (docs citados + resposta completa).
+   - mídia tem PLAY (vídeo/gif nativos) e LIGHTBOX (clique amplia)
+   - mídia tem "📎 incluir no contexto" (vira referência da próxima
+     mensagem: vídeo/gif → i2v a partir dela; texto → visão descreve)
+   - painel EXPANSÍVEL: botão ⤢ ou arrastar a borda esquerda
+   - ⬇ baixa a ABA ATUAL em .zip (código → /api/zip; mídia → /api/midia/zip)
+   - trocar de conversa RECONSTRÓI as abas a partir das mensagens */
+
+/* ESTADOS do painel: ABERTO | RETRAÍDO (orelha lateral). Nunca "some":
+   retrair troca o aside pela ORELHA fixa; 1 clique volta. O botão "painel"
+   do composer SÓ fica ativo com conteúdo (regra do dono). */
+function painelAbrir() {
+  document.getElementById("split-docs").hidden = false;
+  document.getElementById("painel-orelha").hidden = true;
+}
+function retrairPainel() {
+  document.getElementById("split-docs").hidden = true;
+  document.getElementById("painel-orelha").hidden = false;
+}
+function abrirPainelDaOrelha() { painelAbrir(); _contaAbas(); }
+function fecharSplit() { retrairPainel(); }   // compat: quem chamava fecha, agora RETRAI
+function alternarPainel() {
+  const p = document.getElementById("split-docs");
+  if (p.hidden) { abrirPainelDaOrelha(); return; }
+  retrairPainel();
+}
+function _painelTemConteudo() {
+  return document.querySelectorAll("#split-corpo .painel-item").length > 0;
+}
+
+/* ---------- abas: ÚNICA porta de filtragem ----------
+   _irParaAba troca a aba VISÍVEL: marca o botão, esconde os itens das
+   outras e mostra o estado vazio quando NÃO HÁ itens na aba (regra do
+   dono: aba sem conteúdo não mostra NADA de outras abas). A filtragem
+   depende do CSS global [hidden]{display:none!important} — display:flex
+   da classe .painel-item vencia o atributo hidden (bug raiz). */
+let abaAtual = "arquivos";
+function _irParaAba(aba) {
+  abaAtual = aba;
+  document.querySelectorAll("#painel-abas .aba").forEach(x =>
+    x.classList.toggle("ativa", x.dataset.aba === aba));
+  let visiveis = 0;
+  // [data-aba] (não só .painel-item): grupos de resposta e registros de
+  // execução também pertencem a uma aba e precisam aparecer/sumir com ela
+  document.querySelectorAll("#split-corpo [data-aba]").forEach(it => {
+    const mostrar = it.dataset.aba === aba;
+    it.hidden = !mostrar;
+    if (mostrar) visiveis++;
+  });
+  const vazio = document.getElementById("painel-vazio");
+  if (vazio) {
+    vazio.hidden = visiveis > 0;
+    vazio.textContent = {
+      arquivos: "nenhum arquivo de código ainda — peça código ao assistente.",
+      midia: "nenhuma mídia ainda — gere imagem/vídeo/gif na conversa.",
+      fontes: "nenhuma fonte ainda — respostas com 📚 trazem as fontes.",
+    }[aba] || "nada aqui ainda.";
+  }
+}
+document.getElementById("painel-abas").addEventListener("click", (e) => {
+  const b = e.target.closest(".aba");
+  if (b) _irParaAba(b.dataset.aba);
+});
+function _contaAbas() {
+  const n = {arquivos: 0, midia: 0, fontes: 0};
+  document.querySelectorAll("#split-corpo .painel-item")
+    .forEach(it => { n[it.dataset.aba] = (n[it.dataset.aba] || 0) + 1; });
+  document.querySelectorAll("#painel-abas .aba").forEach(b => {
+    const el = b.querySelector(".n");
+    const v = n[b.dataset.aba] || 0;
+    el.textContent = v ? "(" + v + ")" : "";
+  });
+  const total = n.arquivos + n.midia + n.fontes;
+  const dl = document.getElementById("painel-zip");
+  dl.hidden = !(n[abaAtual] > 0);
+  dl.title = "baixar os itens da aba " + abaAtual + " em .zip";
+  const vazio = document.getElementById("painel-vazio");
+  if (vazio && n[abaAtual] > 0) vazio.hidden = true;
+  // BOTÃO painel (composer) SEMPRE clicável (pedido do dono: clicar tem
+  // que ABRIR, mesmo vazio — as abas mostram o estado explicativo); a
+  // ORELHA mostra o total quando retraído
+  const btn = document.getElementById("btn-painel");
+  if (btn) {
+    btn.disabled = false;
+    btn.title = total === 0
+      ? "painel da conversa (vazio — arquivos, mídia e fontes entram sozinhos conforme você conversa)"
+      : "mostrar/ocultar o painel da conversa (" + total + " item(ns))";
+  }
+  const orelhaN = document.getElementById("orelha-n");
+  if (orelhaN) orelhaN.textContent = total ? "(" + total + ")" : "";
+}
+
+function _painelItemNovo(rotulo, aba, ancora) {
+  const corpo = document.getElementById("split-corpo");
+  const item = document.createElement("div");
+  item.className = "doc-chunk painel-item";
+  item.dataset.aba = aba;
+  item.hidden = aba !== abaAtual;
+  const cab = document.createElement("div");
+  cab.className = "doc-hd";
+  const b = document.createElement("b");
+  b.textContent = rotulo;
+  cab.appendChild(b);
+  item.appendChild(cab);
+  if (ancora) ancora.after(item);   // dentro do GRUPO da resposta
+  else corpo.appendChild(item);
+  _contaAbas();
+  painelAbrir();
+  return item;
+}
+
+/* ═══ GRUPOS POR RESPOSTA (pedido: "conjunto centralizado por resposta")
+   cada resposta com código ganha um CABEÇALHO no painel; os arquivos DELA
+   ficam juntos embaixo dele — e as EXECUÇÕES (▶ testar) também são
+   registradas no grupo da resposta que as originou. */
+function _inserirNoGrupo(g, el) {
+  (g._fim || g).after(el);
+  g._fim = el;
+  _contaAbas();
+}
+let _grupoSeq = 0;
+function _painelGrupoNovo(quantidade = 0) {
+  _grupoSeq++;
+  const g = document.createElement("div");
+  g.className = "painel-grupo";
+  g.dataset.g = _grupoSeq;
+  g.dataset.aba = "arquivos";
+  // ▶ TESTA A RESPOSTA COMPLETA (pedido do dono: "pode ser para a
+  // resposta") — o servidor escolhe o entry point (Program.cs > Main >
+  // top-level > site > convencional). Sem ▶ por arquivo: o teste é do
+  // PROJETO, não de um arquivo isolado.
+  // ⚠️ o rótulo vive no <span>: NUNCA faça grupo.textContent = … (apaga
+  // o botão filho — já apagou em produção)
+  const rot = document.createElement("span");
+  rot.textContent = "📦 resposta " + _grupoSeq
+                  + (quantidade ? " · " + quantidade + " arquivo(s)" : "");
+  const tst = document.createElement("button");
+  tst.className = "copiar-btn grp-testar";
+  tst.innerHTML = "▶ testar resposta";
+  tst.title = "roda o PROJETO desta resposta na sandbox — o entry point é escolhido automaticamente";
+  tst.onclick = () => testarCodigo("", tst, _arquivosDoGrupo(g));
+  g.append(rot, tst);
+  document.getElementById("split-corpo").appendChild(g);
+  return g;
+}
+/* arquivos de UM grupo (a resposta daquele card): nome do dataset +
+   conteúdo do pre clonado — é isto que vai para a sandbox, não a
+   conversa inteira */
+function _arquivosDoGrupo(g) {
+  const itens = [];
+  let n = g.nextElementSibling;
+  while (n && !n.classList?.contains("painel-grupo")) {
+    if (n.classList?.contains("painel-item") && n.dataset.nome)
+      itens.push({nome: n.dataset.nome,
+                  conteudo: n.querySelector("pre")?.innerText || ""});
+    n = n.nextElementSibling;
+  }
+  return itens;
+}
+function _grupoDaMsg(msg) {
+  const n = msg?.dataset?.grupoPainel;
+  if (n) return document.querySelector(`#split-corpo .painel-grupo[data-g="${n}"]`);
+  // sem mensagem (▶ do painel): o ÚLTIMO grupo — :last-of-type não serve
+  // (itens são divs DEPOIS do grupo; o grupo nunca é o último div)
+  const todos = document.querySelectorAll("#split-corpo .painel-grupo");
+  return todos[todos.length - 1] || null;
+}
+/* ▶ registro de EXECUÇÃO no grupo da resposta: o que rodou, resultado e
+   tempo — o histórico de testes fica centralizado junto dos arquivos */
+function _regExec(nome, ok, segs, resumo, msg) {
+  const g = _grupoDaMsg(msg);
+  if (!g) return;
+  const el = document.createElement("div");
+  el.className = "doc-chunk painel-exec";
+  el.dataset.aba = "arquivos";
+  el.hidden = abaAtual !== "arquivos";
+  const cab = document.createElement("div");
+  cab.className = "doc-hd";
+  const b = document.createElement("b");
+  b.textContent = "▶ " + nome;
+  const st = document.createElement("span");
+  st.className = ok ? "ok" : "erro";
+  st.textContent = (ok ? "✓ ok" : "✕ falhou") + " · " + segs + "s";
+  cab.append(b, st);
+  const tx = document.createElement("div");
+  tx.className = "doc-tx";
+  tx.textContent = (resumo || "").slice(0, 240);
+  el.append(cab, tx);
+  _inserirNoGrupo(g, el);
+}
+
+/* ---------- itens ---------- */
+/* NOME REAL do arquivo: o modelo quase sempre deixa pistas no próprio
+   bloco — comentário com caminho ("# src/app.py", "// Program.cs"),
+   "arquivo: x", "salve como x" ou um token com / e extensão. Sem pistas,
+   usa a 1ª declaração (class/def/function/func) + extensão da linguagem;
+   só então cai em bloco.N.ext (nunca mais "arquivo123" genérico). */
+function _nomeArquivo(pre, ling, n, dica) {
+  const tx = pre.querySelector("code")?.innerText || pre.innerText || "";
+  // 6 primeiras linhas ÚTEIS (shebang `#!` não é comentário de nome — sem
+  // pular, blocos bash com `#!/bin/bash` na 1ª linha perdiam o scan)
+  const linhas = tx.split("\n").filter(l => !l.trim().startsWith("#!")).slice(0, 6);
+  const ext = {python: "py", javascript: "js", typescript: "ts", java: "java",
+    csharp: "cs", cpp: "cpp", c: "c", go: "go", rust: "rs", ruby: "rb",
+    php: "php", html: "html", css: "css", json: "json", yaml: "yml",
+    sql: "sql", bash: "sh", shell: "sh", powershell: "ps1", markdown: "md",
+    dockerfile: "Dockerfile", text: "txt", txt: "txt"}[ling] || ling || "txt";
+  for (const ln of linhas) {
+    // "arquivo: caminho", "# caminho/com/ext.py", "// src/app.ts", "<!-- x -->"
+    // ⚠️ sufixo OPCIONAL: `(?:\s*-{2,}>?)?` — obrigatório como estava,
+    // só casava comentários terminados em --/--> (HTML); "// Program.cs"
+    // e "# instalar.sh" NUNCA casaram (bug desde a criação; escondido
+    // pela dica citada, que trocava conteúdos entre arquivos)
+    const m = ln.match(/(?:arquivo|file|salve (?:como|em)|save as)\s*[:=]?\s*([\w./\\-]+\.[A-Za-z0-9]{1,8})/i)
+      || ln.match(/^[\s#/*<!-]*(?:-{2,}\s*)?([\w](?:[\w./\\-]*[\w])?\.[A-Za-z0-9]{1,8})(?:\s*-{2,}>?)?\s*$/);
+    if (m) {
+      const nome = m[1].replace(/\\/g, "/").split("/").filter(Boolean).pop();
+      if (nome && nome.includes(".")) return nome;
+    }
+  }
+  // DICA do texto da mensagem: o assistente COSTUMA dizer "salve como
+  // X.py" — mas só quando a EXTENSÃO da dica bate com a linguagem DO
+  // BLOCO (bug real: bloco de TERMINAL `dotnet new …` ganhava o nome
+  // "Program.cs" citado na prosa e o Program.cs de verdade virava
+  // bloco4.cs — o teste executava o comando como se fosse C#)
+  if (dica && dica.includes(".")) {
+    const extDica = dica.split(".").pop().toLowerCase();
+    if (extDica === ext.toLowerCase() || (ext === "cs" && extDica === "cs"))
+      return dica;
+  }
+  // declaração principal: class Foo / def foo / function foo / func Foo
+  const d = tx.match(/\b(?:class|def|function|func|interface|struct|enum|type)\s+([A-Za-z_][\w]*)/);
+  if (d) return d[1] + (ext === "Dockerfile" ? "" : "." + ext);
+  if (/FROM\s+\w/.test(tx)) return "Dockerfile";
+  return "bloco" + n + "." + ext;
+}
+
+// bloco de código da resposta -> arquivo na aba 📄 (com copiar + renomear
+// + testar). `grupo` = cabeçalho da resposta: o arquivo entra AGRUPADO
+// com os demais da MESMA resposta (pedido do dono).
+function painelArquivo(pre, rotuloOuLing, n, dica, grupo) {
+  const ling = rotuloOuLing || "txt";
+  const nome = _nomeArquivo(pre, ling, n || 1, dica);
+  const item = _painelItemNovo(nome, "arquivos",
+                               grupo ? (grupo._fim || grupo) : null);
+  if (grupo) grupo._fim = item;
+  item.dataset.nome = nome;
+  const btn = document.createElement("button");
+  btn.className = "copiar-btn"; btn.textContent = "📋 copiar";
+  btn.onclick = () => _copiar(btn, pre.querySelector("code")?.innerText ?? pre.innerText);
+  item.querySelector(".doc-hd").appendChild(btn);
+  // ✎ RENOMEAR: a extração automática pode errar (bloco sem comentário de
+  // caminho) — o dono corrige NA HORA e vale para o ▶ testar e o .zip
+  const ren = document.createElement("button");
+  ren.className = "copiar-btn"; ren.textContent = "✎ renomear";
+  ren.title = "corrigir o nome deste arquivo (vale para o teste e para o .zip)";
+  ren.onclick = () => {
+    const bruto = prompt("nome do arquivo (com extensão):", item.dataset.nome || nome);
+    if (!bruto) return;
+    const limpo = bruto.trim().replace(/[\\/:*?"<>|]/g, "").split(/[\\/]/).pop();
+    if (!limpo.includes(".")) {
+      alert("nome inválido — inclua a extensão (ex.: instalar.sh)"); return;
+    }
+    item.dataset.nome = limpo;
+    item.querySelector(".doc-hd b").textContent = limpo;
+  };
+  item.querySelector(".doc-hd").appendChild(ren);
+  // (▶ testar vive no GRUPO da resposta — teste do PROJETO completo, não
+  //  por arquivo; o ✎ renomear continua valendo: _arquivosDoGrupo lê o
+  //  dataset.nome do item na hora do clique)
+  const cl = pre.cloneNode(true);
+  cl.classList.add("painel-pre");
+  item.appendChild(cl);
+}
+
+/* DICA de nomes CITADOS na prosa de uma mensagem ("salve como X.py") —
+   usada pelo painel E pelo ▶ testar do card (mesma regra: o nome do
+   arquivo bate com o que o chat sugeriu, pedido do dono). */
+function _nomesCitados(msg) {
+  const prosa = msg?.querySelector?.(".resposta")?.innerText || "";
+  return [...prosa.matchAll(/([\w.-]+\.(?:py|js|ts|sh|rb|php|java|rs|go|dart|cs|html|css|json|md|sql))\b/gi)]
+    .map(m => m[1]).filter((v, i, a) => a.indexOf(v) === i);
+}
+
+/* FONTE ÚNICA de contexto p/ a sandbox (SOLID): TODOS os códigos da
+   conversa — painel (nomes reais já extraídos) + cards das mensagens que
+   ainda não caíram no painel (streaming ao vivo), dedup por nome+conteúdo.
+   Usada pelo ▶ testar do PAINEL e pelo ▶ testar do CARD da mensagem. */
+function _arquivosDaConversa() {
+  const vistos = new Set();
+  const arqs = [];
+  const add = (nome, conteudo) => {
+    if (!conteudo || !nome) return;
+    const chave = nome + "\u0000" + conteudo;
+    if (vistos.has(chave)) return;
+    vistos.add(chave);
+    arqs.push({nome, conteudo});
+  };
+  document.querySelectorAll("#split-corpo .painel-item[data-aba='arquivos']")
+    .forEach(it => add(it.dataset.nome, it.querySelector("pre")?.innerText || ""));
+  document.querySelectorAll("#palco figure.cod pre, #pensando figure.cod pre")
+    .forEach((pre, i) => {
+      const code = pre.querySelector("code");
+      const ling = (code?.className.match(/language-([\w+#.-]+)/)?.[1]) || "txt";
+      const citados = _nomesCitados(pre.closest(".msg"));
+      add(_nomeArquivo(pre, ling, i + 1, citados[i]), code?.innerText ?? pre.innerText);
+    });
+  return arqs;
+}
+
+/* ▶ TESTAR (card da MENSAGEM): clique delegado — ESCOPO = SÓ os arquivos
+   DESTA resposta (pedido do dono: "pelo retorno da resposta apenas, não
+   tudo"; cross-file continua valendo DENTRO dela). O botão do PAINEL é
+   quem leva a conversa inteira. */
+document.body.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-testar]");
+  if (!b) return;
+  const msg = b.closest(".msg");
+  const fig = b.closest("figure.cod");
+  if (!fig || !msg) return;
+  const pre = fig.querySelector("pre");
+  const code = fig.querySelector("code");
+  const ling = (code?.className.match(/language-([\w+#.-]+)/)?.[1]) || "txt";
+  // arquivos DESTA resposta (dedup por nome)
+  const citados = _nomesCitados(msg);
+  const figs = [...msg.querySelectorAll("figure.cod pre")];
+  const vistos = new Set();
+  const arqs = [];
+  figs.forEach((p, i) => {
+    const c2 = p.querySelector("code");
+    const nome = _nomeArquivo(p, (c2?.className.match(/language-([\w+#.-]+)/)?.[1]) || "txt",
+                              i + 1, citados[i]);
+    if (vistos.has(nome)) return;
+    vistos.add(nome);
+    arqs.push({nome, conteudo: c2?.innerText ?? p.innerText});
+  });
+  const idx = Math.max(0, figs.indexOf(pre));
+  const nome = _nomeArquivo(pre, ling, arqs.length + 1, citados[idx]);
+  testarCodigo(nome, b, arqs);
+});
+
+/* ▶ TESTAR na sandbox: JOB com raciocínio ao vivo (o pip install passa dos
+   100 s da borda — o fetch síncrono morria em "Unexpected token '<'");
+   ao concluir: saída/preview + OS ARQUIVOS EM CONJUNTO (o principal
+   destacado, cada um expansível — pedido do dono). FECHAR limpa a sandbox. */
+async function testarCodigo(nome, btn, arqsExternos) {
+  const dlg = document.getElementById("testar-modal");
+  const corpo = document.getElementById("testar-modal-corpo");
+  const arqs = arqsExternos || _arquivosDaConversa();
+  if (!arqs.length) { alert("não há código na conversa para testar"); return; }
+  const msgDoBtn = btn?.closest?.(".msg") || null;   // grupo p/ o registro
+  const o = btn ? btn.innerHTML : "";
+  if (btn) btn.innerHTML = "…";
+  dlg.showModal();
+  const lista = arqs.map(a => a.nome).join(" · ");
+  const titulo = nome ? "<b>" + nome + "</b>" : "<b>resposta completa</b> (entry automático)";
+  corpo.innerHTML = "<p class='mini'>⚙️ testando " + titulo + " — arquivos em conjunto: "
+    + lista + "</p><div class='log' id='sbx-log'><div>iniciando…</div></div>";
+  let job = null;
+  try {
+    const r = await fetch("/api/sandbox/testar", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({principal: nome, arquivos: arqs}),
+    });
+    const txt = await r.text();
+    let d;
+    try { d = JSON.parse(txt); } catch { throw new Error("resposta não-JSON (HTTP " + r.status + "): " + txt.slice(0, 120)); }
+    if (!r.ok) throw new Error(d.detail || ("HTTP " + r.status));
+    job = d.job;
+  } catch (e) {
+    corpo.innerHTML = "<p class='erro-texto'>falha: " + e.message + "</p>";
+    if (btn) btn.innerHTML = o;
+    return;
+  }
+  // polling do job com as linhas ao vivo
+  let fim = null;
+  for (let i = 0; i < 400; i++) {
+    await new Promise(ok => setTimeout(ok, 1500));
+    try {
+      const s = await (await fetch("/api/sandbox/status/" + job)).json();
+      const lg = document.getElementById("sbx-log");
+      if (lg && s.lines) lg.innerHTML = s.lines.map(l =>
+        "<div>" + (l.ts ? '<span class="hora">' + l.ts + "</span>" : "") + l.msg + "</div>").join("");
+      if (s.result || s.error || s.erro) { fim = s; break; }
+    } catch (_) { /* instante de gateway: segue polando */ }
+  }
+  if (!fim) { corpo.innerHTML += "<p class='erro-texto'>o teste não voltou (job " + job + ") — feche e tente de novo</p>"; if (btn) btn.innerHTML = o; return; }
+  const d = fim.result || {};
+  const erro = fim.error || fim.erro;
+  const blocoArqs = "<details style='margin-top:.5rem;'><summary class='mini'>📄 arquivos deste teste (" + arqs.length + ")</summary><div class='log'>"
+    + arqs.map(a => "<details style='margin:.2rem 0;'><summary class='mini'>"
+      + (a.nome === nome ? "▶ " : "") + a.nome + "</summary><pre class='painel-pre'>"
+      + (a.conteudo || "").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])) + "</pre></details>").join("")
+    + "</div></details>";
+  if (erro) {
+    corpo.innerHTML = "<p class='erro-texto'>✕ " + erro + "</p>" + blocoArqs;
+  } else if (d.preview) {
+    // IFRAME pela rota SAME-ORIGIN (d.url) — o modal não pode depender do
+    // subdomínio público (bug real: "conexão com sandbox.disroy.org
+    // recusada" no modal enquanto o MESMO app abria em outra aba; o
+    // compartilhamento externo segue pelo link ↗)
+    const iframeUrl = d.url || d.url_publica;
+    corpo.innerHTML =
+      "<div class='mini' style='margin-bottom:.4rem;'>🖼 preview de <b>" + d.preview +
+      "</b> — <a href='" + d.url_publica + "' target='_blank' rel='noopener'>abrir em outra aba ↗</a></div>" +
+      "<iframe src='" + iframeUrl + "' style='width:100%; height:52vh; border:1px solid var(--borda); border-radius:8px; background:#fff;'></iframe>" + blocoArqs;
+  } else {
+    const cor = d.ok ? "var(--ok)" : "var(--erro)";
+    corpo.innerHTML =
+      "<div class='mini' style='margin-bottom:.4rem;'>$ " + (d.comando || "") +
+      " · <span style='color:" + cor + "'>" + (d.ok ? "✓ saída 0" : "✕ erro") +
+      "</span> · " + (d.segundos ?? "?") + "s</div>" +
+      "<pre class='painel-pre' style='max-height:44vh; overflow:auto;'>" +
+      (d.saida || "(sem saída)").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])) + "</pre>" + blocoArqs;
+  }
+  // ▶ REGISTRO da execução no grupo da resposta (pedido: conjunto de
+  // execuções centralizado por resposta no painel)
+  try {
+    const okExec = !erro && d.ok !== false;
+    _regExec(nome, okExec, d.segundos ?? "?",
+             erro ? String(erro)
+                  : (d.preview ? "preview servido: " + d.preview
+                               : (d.saida || "(sem saída)")),
+             msgDoBtn);
+  } catch (_) { /* registro é acessório: nunca trava o modal */ }
+  if (btn) btn.innerHTML = o;
+}
+// FECHAR o modal = LIMPAR os arquivos do teste (o container fica pronto
+// para o próximo — pedido do dono: rápido, sem recriar nada)
+document.getElementById("testar-modal").addEventListener("close", () => {
+  fetch("/api/sandbox/limpar", {method: "POST"}).catch(() => {});
+});
+
+// mídia na aba 🎬 — play nativo + lightbox + incluir no contexto (sem duplicar)
+function mostrarMidiaNoPainel(tipo, arquivo, rotulo) {
+  const nome = (arquivo || "").split(/[\\/]/).pop();
+  const url = "/api/midia/" + tipo + "/" + encodeURIComponent(nome);
+  if (document.querySelector('#split-corpo .painel-item[data-url="' + url + '"]')) {
+    _irParaAba("midia"); return;
+  }
+  const item = _painelItemNovo(rotulo || nome, "midia");
+  item.dataset.url = url;
+  const acoes = document.createElement("div");
+  acoes.className = "midia-acoes";
+  const inc = document.createElement("button");
+  inc.className = "mini-btn incluir-ctx"; inc.textContent = "📎 incluir no contexto";
+  inc.title = "a mídia vira referência da próxima mensagem (vídeo/gif: gera a partir dela; texto: a visão descreve)";
+  inc.onclick = () => incluirNoContexto(nome, inc);
+  acoes.appendChild(inc);
+  item.querySelector(".doc-hd").appendChild(acoes);
+  const el = document.createElement(tipo === "video" ? "video" : "img");
+  el.className = "midia clicavel";
+  if (tipo === "video") el.controls = true; else el.alt = rotulo || "mídia";
+  el.src = url;
+  el.loading = "lazy";
+  el.title = "clique para ampliar";
+  if (tipo !== "video") el.onclick = () => abrirLightbox(url, rotulo);
+  item.appendChild(el);
+  _irParaAba("midia");          // chegou agora: mídia fica VISÍVEL
+  // SEM auto-scroll (pedido do dono): nada rola sozinho, em lugar nenhum
+}
+
+// resposta em TELA AMPLA (modal de leitura): o botão "▪ resposta" abre a
+// resposta renderizada num dialog — o painel 📚 fica SÓ com as fontes
+// (antes a resposta era injetada NA ABA DE FONTES e "misturava tudo").
+function verResposta(btn) {
+  const dlg = document.getElementById("resposta-modal");
+  const corpo = document.getElementById("resposta-modal-corpo");
+  const fonte = btn.closest(".msg")?.querySelector(".resposta");
+  if (!fonte) return;
+  corpo.innerHTML = "";
+  const clone = fonte.cloneNode(true);
+  clone.classList.remove("stream-ao-vivo");
+  corpo.appendChild(clone);
+  const barra = document.createElement("div");
+  barra.className = "mini";
+  barra.style.cssText = "margin-top:.6rem; display:flex; gap:.5rem;";
+  const copiar = document.createElement("button");
+  copiar.className = "cod-btn"; copiar.textContent = "📋 copiar resposta";
+  copiar.onclick = () => _copiar(copiar, fonte.innerText);
+  barra.appendChild(copiar);
+  corpo.appendChild(barra);
+  dlg.showModal();
+}
+
+// resposta completa renderizada na aba 📚 — LEGADO: substituída pelo modal
+// verResposta (resposta NÃO é fonte; a aba ficou misturada por isto).
+function respostaNoSplit() { verResposta({closest: () => null}); }
+
+// fontes citadas (rodapé da mensagem) na aba 📚 — UMA entrada POR FONTE
+// (o contador da aba conta documentos, igual ao "N fonte(s)" da mensagem).
+// Reuso: o COLETOR chama a mesma função quando a resposta conclui — as
+// fontes entram no painel SOZINHAS (pedido do dono), não só no clique.
+function _fontesParaPainel(dados) {
+  _irParaAba("fontes");
+  dados.forEach((d, i) => {
+    const arq = (d.source || d.arquivo || "?").replace(/\\/g, "/").split("/").pop();
+    const score = typeof d.score === "number"
+      ? '<span class="doc-col" title="similaridade do embedding (bge-m3)">⚡ '
+        + d.score.toFixed(3) + "</span>" : "";
+    const col = d.colecao ? '<span class="doc-col">' + d.colecao + "</span>" : "";
+    const cat = d.categoria ? '<span class="doc-col">' + d.categoria + "</span>" : "";
+    const desc = d.descricao ? '<div class="doc-tx">' + d.descricao + "</div>" : "";
+    const tx = (d.page_content || d.content || "").slice(0, 700);
+    const item = _painelItemNovo("[" + (i + 1) + "] " + arq, "fontes");
+    const box = document.createElement("div");
+    box.innerHTML = '<div class="doc-hd"><b>[' + (i + 1) + ']</b> '
+      + '<span class="doc-arq">' + arq + "</span> " + score + col + cat
+      + '</div>' + desc
+      + '<div class="doc-tx">' + tx + "</div>";
+    item.appendChild(box);
+  });
+}
+function abrirFontes(link) {
+  _fontesParaPainel(JSON.parse(link.dataset.fontes || "[]"));
+}
+
+/* ---------- ⬇ ZIP da aba atual (funcionalidade que já existia na API) --- */
+async function baixarAbaZip(btn) {
+  const itens = [...document.querySelectorAll(
+    '#split-corpo .painel-item[data-aba="' + abaAtual + '"]')];
+  if (!itens.length) { alert("a aba " + abaAtual + " está vazia"); return; }
+  const o = btn.textContent; btn.textContent = "…"; btn.disabled = true;
+  try {
+    let url, corpo;
+    if (abaAtual === "midia") {
+      // refs pasta\arquivo — a API resolve em saidas/ e empacota
+      const refs = itens.map(it => {
+        const m = (it.dataset.url || "").match(/\/api\/midia\/(\w+)\/(.+)$/);
+        return m ? decodeURIComponent(m[1]) + "\\" + decodeURIComponent(m[2]) : null;
+      }).filter(Boolean);
+      if (!refs.length) throw new Error("nenhuma mídia com arquivo em disco");
+      url = "/api/midia/zip";
+      corpo = {arquivos: refs};
+    } else {
+      // arquivos (código, com o NOME extraído) e fontes viram {nome, conteudo}
+      corpo = {arquivos: itens.map((it, i) => {
+        const nome = abaAtual === "arquivos"
+          ? (it.dataset.nome || "bloco" + (i + 1) + ".txt")
+          : ("fonte_" + (i + 1) + ".txt");
+        const el = it.querySelector("pre code, pre, .doc-tx, .resposta");
+        return {nome, conteudo: el ? el.innerText : it.innerText};
+      })};
+      url = "/api/zip";
+    }
+    const r = await fetch(url, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(corpo),
+    });
+    if (!r.ok) {
+      let detalhe = "HTTP " + r.status;
+      try { detalhe += " — " + (await r.text()).slice(0, 200); } catch (_e) {}
+      throw new Error(detalhe);
+    }
+    const blob = await r.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "ragaroy_" + abaAtual + "_" + Date.now() + ".zip";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    btn.textContent = "✓";
+  } catch (e) {
+    console.error("zip:", e);
+    alert("falha no zip: " + e.message);
+    btn.textContent = o;
+    btn.disabled = false;
+    return;
+  }
+  btn.disabled = false;
+  setTimeout(() => (btn.textContent = o), 1400);
+}
+
+/* ---------- incluir no contexto (mídia -> referência da próxima msg) ---
+   SUBTENDIDO: não há chip/indicador — a mídia anexada simplesmente
+   acompanha a próxima mensagem (o feedback fica só no botão do painel). */
+let contextoMidia = null;   // {nome}
+function incluirNoContexto(nome, btn) {
+  contextoMidia = {nome};
+  document.getElementById("referencia").value = nome;
+  if (btn) { const o = btn.textContent; btn.textContent = "✓ anexada";
+             setTimeout(() => (btn.textContent = o), 1400); }
+}
+function tirarDoContexto() {
+  contextoMidia = null;
+  document.getElementById("referencia").value = "";
+}
+
+/* ---------- lightbox (imagem ampliada) ---------- */
+function abrirLightbox(url, rotulo) {
+  const lb = document.createElement("div");
+  lb.className = "lightbox";
+  lb.title = "clique para fechar";
+  lb.innerHTML = '<img src="' + url + '" alt="' + (rotulo || "mídia") + '">';
+  lb.onclick = () => lb.remove();
+  document.body.appendChild(lb);
+}
+
+/* ---------- redimensionar: a alça da borda arrasta (botão de expandir
+   removido a pedido do dono — o arraste manual é o único meio) ---------- */
+(function () {
+  const alca = document.getElementById("split-alca");
+  const painel = document.getElementById("split-docs");
+  let arrastando = false;
+  alca.addEventListener("pointerdown", (e) => {
+    arrastando = true; alca.setPointerCapture(e.pointerId);
+    document.body.style.cursor = "col-resize";
+  });
+  alca.addEventListener("pointermove", (e) => {
+    if (!arrastando) return;
+    const w = window.innerWidth - e.clientX;
+    painel.classList.remove("expandido");
+    painel.style.width = Math.max(280, Math.min(w, window.innerWidth * 0.8)) + "px";
+  });
+  const fim = () => { arrastando = false; document.body.style.cursor = ""; };
+  alca.addEventListener("pointerup", fim);
+  alca.addEventListener("pointercancel", fim);
+})();
+
+/* ---------- coletor: varre o escopo e alimenta as abas ---------- */
+function painelColetar(escopo) {
+  if (!escopo || !escopo.querySelectorAll) return;
+  escopo.querySelectorAll(".msg.assistente:not(.stream-ao-vivo)").forEach(msg => {
+    if (msg.dataset.noPainel) return;
+    msg.dataset.noPainel = "1";   // marca mesmo sem código (não re-varre)
+    // DICA de nomes: arquivos CITADOS na prosa da resposta ("salve como
+    // X.py", "crie o arquivo Y.js") na ordem — cada bloco de código pega
+    // o próximo nome sugerido quando o código não traz caminho próprio
+    const prosa = msg.querySelector(".resposta")?.innerText || "";
+    const citados = [...prosa.matchAll(/([\w.-]+\.(?:py|js|ts|sh|rb|php|java|rs|go|dart|cs|html|css|json|md|sql))\b/gi)]
+      .map(m => m[1]).filter((v, i, a) => a.indexOf(v) === i);
+    const pres = [...msg.querySelectorAll(".resposta pre")];
+    if (pres.length) {
+      // 📦 GRUPO da resposta: cabeçalho + ▶ testar resposta + arquivos
+      // dela JUNTOS; a msg guarda o nº do grupo para as EXECUÇÕES do ▶
+      // caírem no grupo certo
+      const grupo = _painelGrupoNovo(pres.length);
+      msg.dataset.grupoPainel = grupo.dataset.g;
+    }
+    const base = document.querySelectorAll("#split-corpo .painel-item[data-aba='arquivos']").length;
+    pres.forEach((pre, i) => {
+      const ling = (pre.querySelector("code")?.className.match(/language-([\w+#.-]+)/)?.[1]) || "txt";
+      const grupo = document.querySelector(
+        `#split-corpo .painel-grupo[data-g="${msg.dataset.grupoPainel}"]`);
+      painelArquivo(pre, ling, base + i + 1, citados[i], grupo);
+    });
+    // FONTES entram SOZINHAS quando a resposta conclui (mesma função do
+    // clique — pedido: "fontes não está sendo utilizada?")
+    const lk = msg.querySelector(".btn-fontes[data-fontes]");
+    if (lk) {
+      try { _fontesParaPainel(JSON.parse(lk.dataset.fontes || "[]")); }
+      catch (e) { /* json inválido: o clique manual segue valendo */ }
+    }
+  });
+  /* MÍDIA no painel: cards de job (ao vivo) E mensagens do histórico
+     (#palco — m.midia da sessão). A marcação de "já coletada" é no
+     PRÓPRIO elemento (o card de job é recriado a cada poll; a mídia do
+     histórico não tem card — marcar no card deixava a da sessão de fora:
+     era o bug "mídia não aparece no painel / painel não abre"). */
+  escopo.querySelectorAll("img.midia, video.midia").forEach(mid => {
+    if (mid.dataset.noPainel) return;
+    if (mid.closest(".stream-ao-vivo") || mid.closest("#split-corpo")) return;
+    const m = (mid.getAttribute("src") || "").match(/\/api\/midia\/(\w+)\/(.+)$/);
+    if (!m) return;
+    mid.dataset.noPainel = "1";
+    const card = mid.closest("[id^='job-']");
+    mostrarMidiaNoPainel(m[1], decodeURIComponent(m[2]),
+      (card?.querySelector(".resumo-job")?.innerText || "mídia").slice(0, 70));
+  });
+}
+
+document.addEventListener("htmx:afterSwap", (ev) => {
+  if (ev.target.id === "palco") {   // trocou de conversa: RECONSTRÓI
+    document.getElementById("split-corpo").innerHTML = "";
+    _grupoSeq = 0;                  // grupos recomeçam (contagem por resposta)
+    _irParaAba("arquivos");
+    painelColetar(ev.target);
+    _contaAbas();
+    if (!document.querySelector("#split-corpo .painel-item")) fecharSplit();
+    return;
+  }
+  painelColetar(document);          // resposta/job novo: incrementa
+});
+painelColetar(document.getElementById("palco"));   // histórico inicial
+
+/* COPIAR a CONVERSA inteira (com contexto, do servidor) */
+async function copiarConversa(btn) {
+  try {
+    const r = await fetch('/hx/conversa/copy');
+    const txt = await r.text();
+    await navigator.clipboard.writeText(txt);
+    const o = btn.textContent; btn.textContent = 'copiado';
+    setTimeout(() => btn.textContent = o, 1500);
+  } catch (e) { alert('falha ao copiar: ' + e); }
+}
+
+/* ═══ COPIAR a mensagem inteira (resposta + raciocinio + tokens) ═══ */
+function copiarMensagem(msg) {
+  const linhas = [];
+  const quem = msg.querySelector(".quem")?.innerText || "";
+  linhas.push("### " + quem);
+  linhas.push(msg.querySelector(".resposta")?.innerText || "");
+  msg.querySelectorAll(".rodape").forEach(r => linhas.push("_" + r.innerText.trim() + "_"));
+  const log = msg.querySelector(".log");
+  if (log) {
+    linhas.push("", "--- raciocinio ---");
+    linhas.push(log.innerText);
+  }
+  const btn = event.target;
+  navigator.clipboard.writeText(linhas.join("\n")).then(() => {
+    const o = btn.textContent; btn.textContent = "\u2713 copiado";
+    setTimeout(() => btn.textContent = o, 1400);
+  });
+}
+
+/* ═══════════ 4. MODO VOZ (TTS automático na resposta final) ═══════════ */
+function marcaModoVoz() {}
+async function falarTexto(texto) {
+  try {
+    const r = await fetch("/hx/tts?texto=" + encodeURIComponent(texto));
+    const buf = await r.arrayBuffer();
+    new Audio(URL.createObjectURL(new Blob([buf], {type: "audio/wav"}))).play();
+  } catch (e) { console.warn("tts falhou", e); }
+}
+document.addEventListener("htmx:afterSwap", (ev) => {
+  if (!document.getElementById("modo-voz")?.checked) return;
+  const fim = document.querySelector("#pensando .msg.assistente .resposta");
+  if (fim) falarTexto(fim.textContent.slice(0, 1200));
+});
+</script>
+{% endblock %}

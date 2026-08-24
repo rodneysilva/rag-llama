@@ -1,0 +1,28 @@
+# nunca entram na imagem
+.git/
+.gitattributes
+.venv/
+node_modules/
+webui/node_modules/
+webui/src/
+webui/index.html
+webui/vite.config.ts
+webui/package*.json
+webui/tsconfig*.json
+
+# dados/estado (volumes no compose)
+datasets/
+sessions/
+saidas/
+logs/
+qdrant_data/
+rabbit_data/
+users.json
+.env
+mcp_servers/
+tests_manual/
+demo_docs/
+docs/
+*.md
+Dockerfile
+docker-compose.yml

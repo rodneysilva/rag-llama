@@ -1,0 +1,49 @@
+# venv e caches
+.venv/
+__pycache__/
+*.pyc
+
+# front
+node_modules/
+
+# dados de execução (pessoais / gerados)
+logs/
+saidas/
+sessions/
+
+# dados NUNCA no git: datasets (clones + seeds), testes manuais, demos
+datasets/
+tests_manual/
+demo_docs/
+
+# volumes docker do projeto (qdrant/rabbit do compose)
+qdrant_data/
+rabbit_data/
+
+# segredo — .env.example é a referência versionada
+.env
+
+# contas (hash de senha) — NUNCA versionar
+users.json
+
+# uploads de pasta via navegador (dados do usuário)
+datasets/upload/
+
+# clones esparsos de terceiros (recuperáveis via sparse-checkout; pesados)
+datasets/cpython/
+datasets/dotnet-docs/
+datasets/langchain-docs/
+datasets/langchain/
+datasets/llama_index/
+datasets/openai-python/
+datasets/transformers/
+
+# repos oficiais clonados pelo seed (datasets/seed/*_repo/)
+datasets/seed/*_repo/
+modelos_voz/
+
+# cache do HuggingFace do reranker (volume do compose - bge-reranker-base ~1,1 GB)
+hf_cache/
+
+# registro das rodadas (conversas com o operador) — privado
+AGENTS-historico.md

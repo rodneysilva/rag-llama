@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block titulo %}Revisão — RagAroy
+<script>
+function removerDoc(b){ const item = b.closest(".doc-item");
+  item.querySelector("input[name=ids]").checked = false;
+  item.style.opacity = ".35"; item.style.textDecoration = "line-through";
+  b.disabled = true; }
+</script>
+{% endblock %}
+{% block conteudo %}
+<h1>Revisão antes de ingerir</h1>
+<section class="cartao" style="border-left:4px solid var(--acento);">
+  <b>{{ resp.resumo.documentos }} documento(s) · {{ resp.resumo.chunks }} pedaço(s) ·
+  {{ resp.resumo.grupos }} grupo(s) · {{ resp.resumo.duplicados }} duplicado(s) ·
+  {{ resp.resumo.ja_existem or 0 }} já na base · {{ resp.resumo.fora_do_tema }} fora do tema</b>
+  {% if resp.resumo_pt %}
+  <div class="resumo-pt">
+    <b>&#128203; O que esta aquisi&#231;&#227;o traz:</b>
+    <p style="margin:.3rem 0 0;">{{ resp.resumo_pt }}</p>
+  </div>
+  {% endif %}
+  <p class="mini" style="margin-top:.4rem;">
+    A <b>aderência</b> é a similaridade do documento com o tema da
+    coleção-alvo — os mais precisos estão no TOPO. <b>Nada foi gravado no
+    Qdrant ainda</b>: só o que estiver marcado e você aplicar é indexado.
+    Rejeitar = nada sobe.
+  </p>
+</section>
+
+<form hx-post="/hx/revisao/aplicar" hx-target="#executando-revisao" hx-swap="afterbegin">
+  <section class="cartao">
+    {# MAIS PRECISOS NO TOPO (o servidor ordena: aderência desc, problemas
+       no fim); o selo de grupo muda quando começam os que exigem atenção #}
+    {% set ns = namespace(aviso=False) %}
+    {% for d in resp.documentos %}
+    {% if not ns.aviso and (d.fora_tema or d.ja_existe or d.duplicado_exato_de is not none) %}
+      {% set ns.aviso = True %}
+      <div class="mini" style="margin:.6rem 0 .4rem; color:var(--aviso); border-top:1px dashed var(--borda); padding-top:.5rem;">⚠ <b>exigem atenção</b> — já na base · duplicados · fora do tema (desmarcados)</div>
+    {% endif %}
+    <div class="doc-item">
+      <header>
+        <input type="checkbox" name="ids" value="{{ d.id }}"
+                {{ "checked" if (d.duplicado_exato_de is none and not d.fora_tema and not d.ja_existe) else "" }}>
+
+        <span class="titulo">{{ d.titulo }}</span>
+        <button type="button" class="conv-x" title="remover da aquisição" onclick="removerDoc(this)">✕</button>
+        {% if d.aderencia is not none %}
+        <span class="selo {{ 'tipo-ingest' if d.aderencia >= 0.5 else 'alerta' }}" title="similaridade do vetor do documento com a definição da coleção-alvo">aderência {{ '%.2f' | format(d.aderencia) }}</span>
+        {% endif %}
+        <span class="mini">{{ d.chunks | length }} pedaço(s)</span>
+        {% if d.duplicado_exato_de is not none %}<span class="selo alerta">duplicado</span>{% endif %}
+        {% if d.ja_existe %}<span class="selo alerta" title="similaridade {{ d.ja_existe.score }} na coleção {{ d.ja_existe.colecao }}{% if d.ja_existe.onde %} · {{ d.ja_existe.onde }}{% endif %}">♻️ já na base ({{ d.ja_existe.score }} · {{ d.ja_existe.colecao }})</span>{% endif %}
+        {% if d.fora_tema %}<span class="selo alerta">fora do tema</span>{% endif %}
+        {% if d.url %}<a class="mini" href="{{ d.url }}" target="_blank" rel="noreferrer">fonte ↗</a>{% endif %}
+      </header>
+      <details>
+        <summary>como vai entrar (limpo + {{ d.chunks | length }} pedaços)</summary>
+        <pre>{{ d.limpo[:1500] }}{% if d.limpo | length > 1500 %}…{% endif %}</pre>
+        {% for c in d.chunks[:3] %}
+        <p class="mini">· [{{ c.i }}/{{ c.n }}] {{ (c.texto or '')[:160] }}…</p>
+        {% endfor %}
+      </details>
+      <details>
+        <summary>como veio (bruto)</summary>
+        <pre>{{ d.bruto[:1200] }}{% if d.bruto | length > 1200 %}…{% endif %}</pre>
+      </details>
+    </div>
+    {% endfor %}
+    {% if resp.descartados %}
+    <p class="mini">descartados na limpeza: {{ resp.descartados | length }} — {{ resp.descardados | map(attribute='fonte') | join(', ') if False }}{% for x in resp.descartados[:5] %}{{ x.fonte }} {% endfor %}</p>
+    {% endif %}
+    <div class="linha">
+      <div><label>coleção de destino</label>
+        <input type="text" name="colecao" value="{{ resp.colecao_alvo or '' }}" placeholder="ex.: culinaria"></div>
+      <input type="hidden" name="preview" value="{{ pid }}">
+      <div class="estreito"><label>&nbsp;</label>
+        <button class="primario" type="submit">✓ aplicar marcados no Qdrant</button>
+      </div>
+      <div class="estreito"><label>&nbsp;</label>
+      <button type="button" class="perigo" hx-post="/hx/revisao/descartar" hx-vals='{"pid": "{{ pid }}"}' hx-confirm="descartar TUDO desta aquisição? Nada será indexado." hx-swap="none" onclick='location.href="/biblioteca"'>✕ rejeitar tudo</button></div>
+    </div>
+  </section>
+</form>
+<div id="executando-revisao"></div>
+{% endblock %}

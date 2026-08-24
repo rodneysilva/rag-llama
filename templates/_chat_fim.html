@@ -1,0 +1,38 @@
+{# FINAL do job do chat: mensagem completa (substitui o tail de polling) #}
+<div class="msg assistente">
+  <div class="cab-msg"><span class="av-msg">&#129302;</span><span class="quem">assistente{% if modelo %} · {{ modelo }}{% endif %}</span></div>
+  <div class="resposta">{{ html | safe }}</div>
+  <div class="acoes-msg">
+    <button type="button" class="acao" onclick="painelAbrir()">&#129513; painel — arquivos e mídia</button>
+    <button type="button" class="acao" onclick="verResposta(this)" title="ler a resposta em tela ampla (modal) — o painel 📚 fica só com as FONTES">&#9726; resposta</button>
+    <button type="button" class="acao" onclick="copiarMensagem(this.closest('.msg'))">&#128203; copiar</button>
+    <a href="#" class="acao" onclick="falarTexto(this.closest('.msg').querySelector('.tts-data').dataset.texto); return false;">&#9654; ouvir</a>
+  </div>
+  {% if cache and cache.usado %}
+  <div class="rodape">⚡ cache semântico ({{ '%.3f'|format(cache.similaridade) }}) — resposta imediata, zero chamada à LLM</div>
+  <details class="cache-conteudo">
+    <summary>o que estava no cache</summary>
+    <div class="log">
+      <div><span class="hora">pergunta guardada</span>{{ cache.pergunta_original }}</div>
+      <div><span class="hora">similaridade</span>{{ '%.3f'|format(cache.similaridade) }} · modo {{ cache.modo or '?' }} · modelo {{ cache.modelo or '?' }}{% if cache.criado_em %} · guardada em {{ cache.criado_em | strftime('%d/%m %H:%M') }}{% endif %}</div>
+      <div><span class="hora">resposta guardada</span>{{ cache.resumo or '' }}{% if (cache.resumo or '') | length >= 280 %}…{% endif %}</div>
+    </div>
+  </details>
+  {% endif %}
+  {% if docs %}
+  <div class="rodape">
+    {# aspas simples: tojson do Jinja escapa ' (&#x27;) mas NÃO escapa "
+       — com data-fontes="..." o JSON quebrava no 1o " e o painel falhava #}
+    <a href="#" class="btn-fontes" onclick="abrirFontes(this); return false;"
+       data-fontes='{{ docs | tojson | e }}'>📚 {{ docs | length }} fonte(s) — ver no painel</a>
+  </div>
+  {% endif %}
+  {% if tokens %}
+  <div class="rodape">🪙 🔻{{ tokens.entrada }} · 🔺{{ tokens.saida }}
+    {%- if tok_s %} · <b style="color:var(--ok)">⚡ {{ tok_s }} tok/s</b>{% endif %}
+    {%- if duracao_s %} · {{ duracao_s }}s{% endif %} · {{ tokens.chamadas }} chamada(s)</div>
+  {% endif %}
+  {% from "_raciocinio.html" import raciocinio %}
+  {{ raciocinio(linhas, passos, aberto=false) }}
+  <span class="tts-data" hidden data-texto="{{ resposta[:1200] | e }}"></span>
+</div>

@@ -1,0 +1,22 @@
+{# job do CHAT em curso: bloco se atualiza (outerHTML). Com PARCIAL
+   (streaming) a resposta aparece SENDO ESCRITA — renderizada em markdown
+   pelo servidor. Raciocínio nasce ABERTO (logs à vista, pedido do dono):
+   recolher é escolha do usuário e o base.html preserva o estado entre os
+   re-renders do polling (600 ms) — nunca mais "fecha sozinho". #}
+<div hx-get="/hx/chat/{{ job }}" hx-trigger="every 600ms" hx-swap="outerHTML">
+  {% if parcial %}
+  <div class="msg assistente stream-ao-vivo">
+    <div class="quem">assistente · escrevendo<span class="ponto" style="display:inline-block;"></span></div>
+    <div class="resposta">{{ parcial_md | safe }}</div>
+  </div>
+  {% else %}
+  <div class="pensando-cab"><span class="ponto"></span> pensando…</div>
+  {% endif %}
+  <details class="raciocinio-vivo" open>
+    <summary>raciocínio · {{ linhas | length }} passo(s)</summary>
+    <div class="log">
+      {% for l in linhas %}<div><span class="hora">{{ l.ts }}</span>{{ l.msg }}</div>{% endfor %}
+      {% if not linhas %}<div class="linha-atual">enviando mensagem…</div>{% endif %}
+    </div>
+  </details>
+</div>

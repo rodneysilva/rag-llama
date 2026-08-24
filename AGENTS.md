@@ -1,0 +1,1003 @@
+﻿# AGENTS.md — rag-llama
+
+RAG local (LangChain + Qdrant + llama.cpp) com chat agêntico MCP e Estúdio de
+Mídia. Projeto **completo e funcional**; este arquivo captura o contexto de
+como operá-lo e modificá-lo sem quebrar nada.
+
+---
+
+## ⚠️ 0. REGRA INEGOCIÁVEL — COMMIT E PUSH SEMPRE
+
+**O ambiente do operador fica na VPS** (ver `INFRA_PAAS.md (doc privada do operador, FORA do repo)`):
+toda alteração de código que NÃO for commitada e enviada **não existe para ele**.
+O fluxo é estação local → `git push` → GitHub Actions → VPS puxa/reconstrói.
+
+**Todo trabalho que altera arquivos DEVE terminar com:**
+
+```powershell
+# 1. verificar o que mudou
+git status --short
+
+# 2. commitar com mensagem descritiva (prefixo convencional)
+git add -A
+git commit -m "feat|fix|docs|refactor: <o que foi feito e por quê>"
+
+# 3. ENVIAR — sem isto o operador não visualiza nada
+git push
+```
+
+**Ferramenta de git do projeto: `gh` (GitHub CLI)** — os comandos de rotina
+(push, PR, status do deploy, acompanhar CI) usam `gh` na estação do operador:
+
+```powershell
+gh repo sync                      # sincroniza com o remote
+gh pr create --fill               # PR de develop p/ main (avanço do gitflow)
+gh pr merge --squash --delete-branch
+gh run list --limit 3             # CI/CD rodando (o deploy aparece aqui)
+gh run view <RUN_ID> --log-failed # log do deploy que falhou
+gh api repos/{owner}/{repo}/branches --jq '.[].name'   # branches
+```
+
+> `gh` autentica com a conta GitHub do operador; push/commit direto via `gh`
+> usa as credenciais dele (sem SSH key manual). Se `git push` pedir senha,
+> use `gh auth login` e `gh config set git_protocol https`.
+
+Regras do gitflow (detalhe na INFRA_PAAS.md §3):
+- Branch de trabalho corrente: **develop** (push roda CI, NÃO publica).
+- Publicar em produção = avanço develop → main (merge --ff-only + push).
+- **Se estiver em `main`**, o push JÁ PUBLICA na VPS — avisar o operador.
+- Se o push falhar (conflito/rewrites), avisar IMEDIATAMENTE — nunca deixar
+  trabalho local não versionado ao encerrar uma tarefa.
+- Arquivos de estado/dados (logs/, sessions/, saidas/, users.json, qdrant_data/,
+  rabbit_data/, hf_cache/, .env) são gitignored — NÃO commitar.
+
+### Nota sobre o harness do agente (DeepSeek)
+
+O agente deste ambiente tem DUAS ferramentas:
+- **Editor de arquivos**: escreve/lê DIRETO no disco Windows (<home-do-operador>\...) —
+  é aqui que o trabalho acontece.
+- **Shell `pwsh`**: roda NATIVO no Windows do operador (PowerShell 5.1) — git/gh
+  funcionam e versionam o repo local de verdade. Sintaxe PS 5.1: separar comandos
+  com `;` (NÃO usar `&&`); caminhos `C:\...`; variáveis `$env:NAME`.
+
+**Ciclo obrigatório ao terminar qualquer tarefa (regra §0):** o próprio agente roda
+`git add` + `git commit` + `git push` via pwsh (sem pedir confirmação) e valida o
+deploy com `gh run list`. Se o push falhar, avisar IMEDIATAMENTE — nunca encerrar
+tarefa com trabalho não versionado.
+
+---
+
+## 1. Stack e ambiente
+
+- **OS:** Windows, shell **PowerShell 5.1** (sem `&&` — usar `;`).
+- **Python:** venv em `.venv/` (`.venv\Scripts\activate`); requisitos com pins
+  em `requirements.txt` (LangChain 1.x — o código já usa a API nova).
+- **Node:** só para desenvolver o front (`webui/`); para USAR não precisa — a
+  API serve o build pronto em `webui/dist/`.
+- **Codificação:** sempre `python -X utf8` ao rodar scripts que imprimem
+  acentos/emoji no console.
+
+### Serviços externos
+
+| Serviço | Onde | Porta | Notas |
+|---|---|---|---|
+| Qdrant | container `mnemosyne-qdrant` | :6333 API / :6334 dashboard | obrigatório |
+| Redis | container `rag-redis` | :6379 | **opcional** — cache/ETA degradam silenciosamente sem ele (no-op) |
+| llama-server chat | `<pasta-do-usuario>\llama.cpp\bin` | :8090 | 4 slots: `-c 24576 -np 4 -fa on -ctk/-ctv q8_0` |
+| llama-server embedding (bge-m3) | idem | :8081 | **SEMPRE ligado** — nada pode derrubá-lo |
+| llama-server visão (Qwen2.5-VL) | idem | :8082 | sob demanda (i2t/v2t) |
+| sd-cli (difusão) | `<pasta-do-usuario>\sdcpp\bin820\sd-cli.exe` | — | master-820: Wan2.2 + Flux; caminho em `core/motor.py` |
+| whisper-cli | `<pasta-do-usuario>\whisper\bin\whisper-cli.exe` | — | modelo `ggml-medium.bin` em `saidas/audio/` |
+
+GGUFs dos modelos ficam em `D:\models` (presets em `core/config.py`:
+`MODELOS`/`EMBEDDINGS`).
+
+### VRAM (8 GB)
+
+Um modelo de conversa por vez + o embedding. O Estúdio **pausa** o chat
+(:8090) e a visão (:8082) para difusão, e **NUNCA** o embedding (:8081).
+`servicos_llm.py` já reinicia tudo ao trocar de modelo.
+
+## 2. Comandos
+
+```powershell
+# subir a API — SEMPRE PELO CONTAINER (nunca python direto):
+# mudou código → docker compose up -d --build api
+# (o estúdio GPU fica bloqueado nesse modo por design — _exigir_host;
+# os modelos seguem no host via host.docker.internal)
+docker compose up -d --build api
+
+# servir publicamente (<sub>.<dominio> — via Traefik na infra central)
+# OBRIGATÓRIO --host 0.0.0.0: o Traefik (Docker) alcança a API por
+# host.docker.internal:8000; router em infra/traefik/dynamic/routers-rag-llama.yml
+python -m uvicorn api.app:app --host 0.0.0.0 --port 8000
+
+# desenvolver o front (hot-reload :5173, /api proxyado para :8000)
+cd webui; npm run dev
+
+# regenerar o build servido pela API
+cd webui; npm run build
+
+# subir/gerenciar os modelos (menu; atualiza LLM_MODEL no .env)
+python servicos_llm.py
+
+# testes de prontidão dos serviços
+python -X utf8 tests_manual\teste_servicos.py
+
+# CLI: ingestão e consulta
+python -X utf8 -m core.ingest caminho\da\pasta
+python -X utf8 -m core.main
+
+# CLI: coleção nova por assunto (seed profundo: definição → rodadas → scores → internos → repos)
+python -X utf8 -m core.seed "assunto" --fontes 12
+
+# E2E completo (login -> cache -> ingestao -> docs -> manutencao -> t2i ->
+# i2t -> restauracao -> limpeza): python -X utf8 tests_manual\e2e_final.py
+# (documento de teste precisa de CONTEUDO REAL: a limpeza descarta textos
+# curtos como ruido — by design)
+
+# varredura LLM das coleções (apaga lixo claro apontado pelo modelo)
+python -X utf8 -m core.varredura <colecao> [outra...]
+
+# REPARO: vetores zerados após crash do Docker (buscas score 0.0)
+python -X utf8 -m core.reembed [colecao ...]   # sem args: todas
+
+# AGENTE DO HOST (obrigatório junto com o container): ergue o chat+embed
+# no BOOT e atende as operações de GPU da API-container (:8010)
+python -X utf8 -m api.agente_host
+
+# popular a coleção prompts_midia (34 prompts exemplares)
+python -X utf8 -m core.prompts_corpus
+```
+
+Outros scripts úteis em `tests_manual/` (teste_api, teste_query,
+teste_sessoes_mcp, servidor_mcp_teste…).
+
+## 3. Arquitetura — 3 subsistemas
+
+### Núcleo RAG
+
+| Módulo | Papel |
+|---|---|
+| `core/config` | `.env` + `reload()` em runtime (a webui edita e aplica sem restart); binários locais (LLAMA_BIN/SD_CLI/WHISPER_CLI) ajustáveis no .env |
+| `core/contadores` | 📊 uso de tokens do llama-server (:8090): wrapper em `rag.llm()` conta CADA chamada (usage do servidor) por serviço via thread-local (chat/ingestão/seed/limpeza/estúdio/manutenção/sistema); acumula em Redis compartilhado (INCR — API e scripts CLI somam no mesmo total), fallback `saidas/uso_llm.json`; `/api/contagem` e `tokens` nas respostas do `/api/query` |
+| `core/auth` | login simples: scrypt+salt em `users.json` (FORA do git), tokens HMAC stateless; bootstrap do admin via AUTH_ADMIN_* do .env; owner isola sessões por conta |
+| `core/rag` | embedding/Qdrant/LLM/chain; modos rag/livre/híbrido; `search` multi-coleção com `SCORE_MIN`, máx 2 chunks/arquivo e teto 4×TOP_K; `reformula` a pergunta usando o histórico |
+| `core/ingest` | wizard de 7 etapas; `rapido=True` pula LLM (modo lote p/ bases grandes); texto LIMPO (`core/limpeza`), split por seções markdown, chunks com cabeçalho contextual `[documento · seção]` e metadata `arquivo/titulo/secao/url/i/n`; descarta ruído e duplicados |
+| `core/limpeza` | limpeza de texto (frases quebradas por links, citações, menus, widgets) + `e_lixo()` (heurística de chunk sem semântica) — usado por ingest, seed e higieniza |
+| `core/higieniza` | limpa coleções JÁ GRAVADAS in-place: re-embeda o texto limpo no mesmo id, apaga pontos de ruído e duplicados; CLI `python -X utf8 -m core.higieniza <colecao>` e `POST /api/higienizar` |
+| `core/catalog` | metadados das coleções na coleção `meta_colecoes` |
+| `core/analyze` | LLM analisa todas as coleções → catálogo |
+| `core/enrich` | destrincha coleção em várias por tema (reaproveita vetores) |
+| `core/sessions` | sessões do CHAT (JSON em `sessions/`) |
+| `core/seed` | seed PROFUNDO seguindo a spec global `pesquisa_web.md`: 1ª onda Serper (atual), aprofundamento DuckDuckGo (internas), LLM decide se vale aprofundar; definição da RAG antes de importar → curadoria com scores (≥6) → download + internos (≥7, máx 3/fonte) + repos oficiais (clone esparso em `datasets/seed/*_repo/`, fora do git) → ingestão em lote → catálogo; job com log (`POST /api/seed`) |
+| `core/varredura` | varredura LLM: julga cada chunk contra o ASSUNTO da coleção e apaga só lixo claro; spec conservadora por design; CLI e `POST /api/varredura` |
+| `core/unificar_arquiteturas` | consolida os melhores chunks por CONCEITO universal (SOLID/DDD/clean arch…) das coleções `arquitetura_*` na `arquitetura_unificada` — coleção de SISTEMA: oculta da webui, entra AUTOMÁTICA como base em qualquer busca que toque coleções `arquitetura_*` (regra no `/api/query` e no modo Auto) |
+| `core/catalog` | metadados das coleções em `meta_colecoes` + `agrupar()`: grupo por objetivo (spec `agrupamento.md`, `POST /api/agrupar`) |
+| `core/specs` | carrega `core/specs/*.md` com `lru_cache` |
+
+### Chat agêntico
+
+| Módulo | Papel |
+|---|---|
+| `core/agent` | ReAct artesanal; portão de aprovação (`pendente` + `uma_vez`\|`sessao`\|`negar`); verificação anti-invenção contra o registro real das ferramentas |
+| `core/mcp_registry` | registro de servidores MCP (`mcp_servers.json`) + catálogo de conhecidos (`mcp_conhecidos.json`) com instalação automática (`POST /api/mcp/instalar`) |
+
+### Estúdio de Mídia
+
+| Módulo | Papel |
+|---|---|
+| `core/midia` | Flux t2i, Wan2.2 t2v/i2v (**saída convertida para .mp4/H.264** via ffmpeg — webm é descartado), Qwen2.5-VL i2t/v2t, whisper a2t, a2v; pausa :8090/:8082 (nunca :8081); `incluir_no_contexto` → `midia_gerada`; webui mostra mídia em tamanho real (lightbox) |
+| `core/modelos` | troca a quente de GGUF; grava `LLM_MODEL` no .env + `config.reload()` |
+| `core/motor` | subprocess com progresso parseado (barras do sd-cli, % do whisper) |
+| `core/modalidades` | modalidades declarativas: chat, dev, t2i, t2v, i2v, i2t, v2t, a2t, a2v (**v2a pendente**) |
+| `core/tarefas` | jobs em background com lock de VRAM/sessão; ETA aprendido no Redis |
+| `core/sessoes` | sessões do ESTÚDIO — **não confundir com `core/sessions`!** |
+| `core/cache` | cache semântico Redis (cosseno ≥ `CACHE_LIMIAR` 0.97); só modos rag/livre |
+| `core/auto` | modo Auto: roteador decide base/web/livre; **web-first** (DuckDuckGo primeiro, Serper de respaldo) com **aprofundamento de até 5 níveis** (crítica a cada nível + refinamento LLM da query); crítica CRAG na base também cai no web aprofundado; aceita `log` (job do chat mostra cada nível) |
+| `core/prompts_corpus` | 34 prompts exemplares → coleção `prompts_midia` (só via CLI) |
+
+## 4. Regras de comportamento = specs (regra de ouro do projeto)
+
+**Toda comunicação com a LLM é via RAG**: comportamento e formato vivem em
+`core/specs/*.md` (21 arquivos) ou no conteúdo do Qdrant; o código só monta o envelope
+(dados + `ETAPA: x`) — nada de instrução hardcoded. Coleções são sempre
+genéricas: nenhum texto do sistema cita coleção específica (contamina o
+modelo — ver o incidente da spec seed antiga). Para mudar comportamento →
+editar a spec. `core/specs.py` usa `lru_cache`: **editar spec exige restart
+da API**.
+
+## 5. Armadilhas
+
+- PowerShell 5.1: sem `&&` (usar `;`); `curl` pede senha → usar
+  `Invoke-RestMethod`.
+- **MODO CONTAINER** (`RAGAROY_CONTAINER=1` no compose): endpoints de infra
+  (Qdrant/Rabbit/Redis/LLM/Embed) vêm do ENVIRONMENT e o `.env` montado
+  NÃO os sobrescreve (`load_dotenv(override=False)`). Estúdio, visão e
+  troca de modelo têm `_exigir_host()`/guards (processos/GPU do host);
+  `embedding_no_ar()` usa `EMBED_BASE_URL` — NUNCA hardcode 127.0.0.1
+  (o container testaria a si mesmo). Rebuild: `docker compose up -d --build`.
+- **Coleções de sistema** (`COLECOES_SISTEMA` em `api/app.py`):
+  `meta_colecoes` (catálogo), `midia_gerada` (contexto RAG das mídias),
+  `prompts_midia` (exemplares de prompt) e `arquitetura_unificada` (base)
+  são FUNCIONAIS mas OCULTAS da webui — `_scan_collections` filtra por
+  padrão; quem precisa consulta direto pelo nome.
+- **Auth**: `users.json` (hash das senhas) e `.env` (AUTH_ADMIN_PASS/AUTH_SECRET)
+  NUNCA no git. Tokens são HMAC — AUTH_SECRET novo derruba todos os logins.
+- **Jobs da webui** vivem no store global + `<JobsManager/>`: NÃO mova o
+  polling de volta para os componentes (saiu da página = perdeu o job).
+- Ingerir a mesma pasta **duplica** chunks — a ingestão NOVA dedupa no
+  mesmo lote; para coleções antigas, rode a **higienização** (✨ na aba
+  Coleções ou `python -X utf8 -m core.higieniza <colecao>`). Para recomeçar
+  do zero, apague a coleção no dashboard Qdrant (:6333/:6334).
+- Coleções `mnemosyne_*` (vetores nomeados) **não são pesquisáveis** por
+  similaridade aqui; só metadados são editáveis.
+- Embedding de dimensão diferente de bge-m3 (1024) exige **reingestão total**.
+- APIs concorrentes: `/api/query` recusa **409/423** quando o Estúdio trava a
+  VRAM ou a sessão está ocupada (por design).
+- **Chat é JOB**: a webui chama `/api/query` com `job=true` (resposta
+  `{job}` na hora — imune ao **524 do Cloudflare**, que mata conexões
+  síncronas >100 s) e faz polling em `/api/query/status/{job}`; cada etapa
+  (cache, reformulação, busca, geração, MCP, tokens) vira linha em tempo
+  real no "pensando…". CLI/tests podem usar a rota síncrona (sem job).
+- `sessions.py` (chat) ≠ `sessoes.py` (estúdio).
+- 8 GB VRAM: um modelo de conversa por vez. **Embedding**: vídeo (t2v/i2v/a2v)
+  SEMPRE o derruba (Wan + VAE 3D pedem toda a VRAM); geração LEVE (t2i,
+  whisper) convive com ele — só sai se `ESTUDIO_PAUSAR_EMBED=1` explícito.
+  Tarefa de difusão ESPERA (≤60 s) respostas do chat em andamento antes de
+  pausar a LLM (`_esperar_chats` — mata o TOCTOU do erro cru no meio da
+  resposta).
+- **MCP é admin-only**: registrar/testar/instalar/remover executa processos
+  no host e grava no .env → `_exigir_admin` em todas as rotas de escrita;
+  chaves de env do instalador passam por allowlist (`_ENV_PROIBIDAS`).
+- **Settings valida tipos ANTES de gravar** (422) e **mascara segredos**
+  (SERPER_API_KEY volta como `••••••••`; PUT ignora quem devolver a máscara).
+- **Sessões**: id validado por regex (`_RE_SID`, anti path-traversal) e
+  DELETE/PATCH conferem owner (chat e estúdio). Tarefa do estúdio sem sessão
+  cai na "Principal" DO DONO (`sessoes.principal`) — mídia nunca fica invisível.
+- **Jobs RE-EXECUTÁVEIS**: a mensagem do Rabbit carrega kind+payload e cada
+  kind registra uma FÁBRICA (`_despachar(fabricar, kind, payload, registry,
+  lock)`) — API reiniciada reconstrói o executor (antes: mensagem descartada
+  em silêncio). A entrada de status é criada ANTES do return (status nunca
+  dá 404 entre publish e pickup). `_podar_concluidos(dic)` mantém os 10
+  últimos concluídos — chame SEGURANDO o lock (Lock não é reentrante;
+  re-adquirir = deadlock, já aconteceu). Estúdio (GPU) segue em thread
+  própria — não é replayable.
+- **Manutenção é JOB**: /api/manutencao {acao: analisar|agrupar|dividir}
+  com log ao vivo (as rotas antigas /api/analyze|agrupar|enrich delegam nela).
+- **Auth em cookie httpOnly** (`ragaroy_token`) além do Bearer: mídia
+  (`<img>/<video>`) autentica sozinha — token SAIU da query string. Login tem
+  rate limit (8 falhas/5 min por ip|usuário → 429). users.json e AUTH_SECRET
+  sob lock (corrida de registros simultâneos).
+- `_scan_collections` tem cache de 30 s (o scan é N+1 no Qdrant e o /api/status
+  roda a cada 15 s na webui). `servido()`/binários (LLAMA_BIN/SD_CLI/WHISPER_CLI)
+  lidos na HORA — editar no .env vale sem restart. TEMPERATURE do .env é
+  respeitada como está (o clamp 0.7 foi removido).
+- **Tarefas × restart**: ativas persistem em `saidas/tarefas_ativas.json`;
+  o `_sweep_reinicio()` (import de `core/tarefas`) re-registra cada uma como
+  ERRO claro ("a API reiniciou durante a geração — dispare novamente") — a
+  GPU não retoma a difusão do meio, mas NADA fica `running` pendurado/404.
+  O `useTarefa` do frontend também desiste com erro após 5 falhas seguidas
+  de polling. Jobs de fila (ingestão/seed/…) são re-executados do zero pela
+  fábrica; jobs em thread-fallback (sem Rabbit) se perdem — o popup marca.
+- **Cache semântico** é keyed por coleções (SORTED no store E no lookup —
+  sem ordenar nos dois lados o escopo multi-coleção, o padrão "todas",
+  nunca batia) E MODELO (resposta de outro modelo não vaza; entradas
+  legadas sem o campo contam como compatíveis); resposta vazia nunca entra;
+  só consultas SEM histórico (follow-up nunca vem do cache).
+- **`/api/ingest/upload`**: `colecao`/`rapido` são `Form()` — sem a
+  anotação o FastAPI lia da QUERY e o slug digitado na webui era
+  silenciosamente ignorado (a coleção caía no nome do arquivo). Escrita
+  em `asyncio.to_thread` (I/O fora do event loop).
+- `fila.publicar` RETENTA 1x com conexão nova: o canal cached do
+  publicador esfria (heartbeat perdido em período ocioso) e a 1ª
+  publicação após a pausa morria com EOF → job caía para thread à toa.
+- **Worker do Rabbit usa `heartbeat=0`**: o job roda INTEIRO dentro do
+  callback do consume (minutos de LLM/difusão) e o BlockingConnection não
+  processa heartbeats enquanto executa — com heartbeat ligado o broker
+  cortava a conexão ("missed heartbeats"), reconectava e REENTREGAVA a
+  mensagem: o job executava 2x. Além disso o `_no_worker` é IDEMPOTENTE
+  com `picked`: a entrada de status nasce `picked=False` (placeholder do
+  _despachar); o worker marca `picked=True` só ao EXECUTAR — reentrega
+  com picked (em curso ou concluído) é ignorada. NUNCA confunda
+  "running=True" com "está executando" (o placeholder pré-publicado também
+  é running=True — checar `picked`, senão o worker se auto-ignora e o
+  job fica running para sempre SEM executar — já aconteceu).
+- **Pensamentos do chat**: as linhas do "pensando…" ficam ANEXADAS à
+  mensagem (`pensamentos` no ChatMsg) após a execução — o painel RETRAI
+  para um resumo clicável (etapas · linhas · duração) acima da resposta,
+  também em erros e cards de aprovação, e persistem na sessão (raw).
+  AO VIVO, grupos concluídos retraem sozinhos (só o em curso fica aberto).
+  A conexão MCP é NARRADA por servidor (`carregar_ferramentas(log=…)` — o
+  npx de um stdio demora dezenas de segundos e o painel não fica mudo).
+  A sessão é salva JÁ NO ENVIO da pergunta (`salvarSessao(pergunta)`), e o
+  job ativo fica anotado no localStorage (`ragaroy.chatJob`, 30 min) —
+  sair da tela/recarregar no meio RETOMA o polling ao voltar: a
+  solicitação não some.
+- **CodePanel merge entre respostas**: os arquivos são acumulados de TODAS
+  as respostas da conversa (última versão vence) — resposta nova que
+  re-gera um arquivo atualiza na TELA e no ZIP. `extrairArquivos` captura
+  o CAMINHO com pastas (`src/domain/News.cs`) e o `/api/zip` preserva a
+  estrutura (sanitizada: sem `..`/drive/absoluto).
+- **Telemetria persistente** (`core/telemetria.py` → `logs/telemetria.jsonl`,
+  volume no container): cada chamada LLM (tokens/duração/serviço), cada job
+  Rabbit (publicado/pego/reentrega ignorada), cada cache hit/miss/store.
+  `GET /api/telemetria?tipo=llm|rabbit|redis` faz o tail — os badges
+  🐇/⚡ do topo da webui abrem o histórico ao clicar (refetch 5 s).
+- **Tokens em tempo real**: o runner do job de chat registra
+  `contadores.set_log` (thread-local) e o `LLMContada` loga
+  `🪙 🔻entrada · 🔺saída · Xs` a CADA chamada — o header do "pensando…"
+  mostra a última (mais o ⚡cache quando há hit).
+- **Cache no modo livre** grava o MESMO escopo do lookup (coleções
+  resolvidas) — gravar vazio nunca bateria.
+- **Qdrant × crash do Docker Desktop**: o crash pode ZERAR os vetores em
+  disco (payloads sobrevivem; buscas voltam score 0.0 para tudo). Remédio:
+  `python -X utf8 -m core.reembed [coleções]` — re-embeda pontos de norma ~0
+  no mesmo id, idempotente. Sintoma de tela: "📚 0 fragmento(s)" para tudo.
+- **Operação pela API = CONTAINER** (`docker compose up -d --build api`):
+  nunca rodar uvicorn direto — o Traefik/healthcheck/stack esperam o
+  container; estúdio GPU segue no modo host (guards avisam na webui).
+  JUNTO ao container roda o **AGENTE DO HOST** (`python -X utf8 -m
+  api.agente_host`, :8010): ergue chat+embedding no BOOT e recebe da
+  API-container as operações de GPU (`modelos.ativar`/`garantir_embedding`
+  proxyam via AGENTE_HOST_URL) — "llama-server não subiu" não existe mais.
+  `D:/models` é montado read-only (MODELS_DIR=/models) para o picker listar.
+- **Voz do chat** (`core/voz.py`, 100% CPU — não disputa a VRAM com
+  bge/qwen): STT faster-whisper small int8 + TTS piper pt_BR-faber;
+  modelos em `modelos_voz/` (volume). Endpoints `/api/voz/{falar,
+  transcrever,disponivel}`; webui: 🎤 dita a pergunta, 🔊 ouve a resposta.
+- **Tokens por BALANÇO LOCAL da thread** (`contadores.balanco_reset/ler`):
+  o diff de totais do Redis cruzava contadores de outros processos/jobs
+  concorrentes — daí a divergência ("ora aumenta ora diminui"). O
+  `tokens` das respostas é o balanço local, determinístico por execução.
+- **Histórico de jobs** (`core/historico.py` → `logs/historico.jsonl`):
+  TODO job de fila registra tipo/duração/ok/resumo ao terminar — o
+  embrulho é na FÁBRICA (cobre caminho direto e replay do worker).
+  `GET /api/historico`; a IngestTab lista as execuções passadas.
+- **Desligar embedding (manual)**: badge 🧬 do topo → `POST /api/embed/{ligar,
+  desligar}` (admin; em container, proxy ao agente). O estado é um MARKER
+  (`saidas/embed_off.marker`) que `garantir_embedding()` respeita — NADA
+  religa sozinho (nem busca/ingestão, nem boot do agente, nem o restore do
+  estúdio); buscas falham com 503 "embedding desligado manualmente — religue
+  no badge 🧬" (quando TODAS as coleções falham, o erro sobe em vez de
+  resposta vazia).
+- **Desligar llama-server (manual)**: badge 🧠 → `POST /api/llm/{ligar,
+  desligar}` (admin; marker `saidas/llm_off.marker`). O BOOT do agente e o
+  restore do estúdio PULAM o chat quando o marker existe — desligado fica
+  desligado entre restarts até o ▶ no badge. Validado: off → agente
+  reinicia → continua off (VRAM só do embedding).
+- **Cada servidor llama é INDEPENDENTE** (por conta de cada um): 🧠 chat
+  (:8090), 🧬 embedding (:8081) e 👁 visão (:8082) têm o PRÓPRIO
+  liga/desliga persistido (markers `saidas/{llm,embed,vl}_off.marker`) —
+  desligar um não afeta os outros (validado: visão ligada/desligada com o
+  chat off o tempo todo). Visão: `_subir_vl` respeita o marker (análise
+  falha com 503 claro "visão desligada manualmente — religue no badge 👁");
+  ▶ ligar remove o marker e PRÉ-AQUECE o Qwen2.5-VL. O badge 👁 mostra
+  "livre" (sobe na 1ª análise) ou "off" (bloqueada) — não se o processo
+  está no ar (é on-demand).
+- **Modo da GPU** (`GPU_MODO` no .env: `todos` | `somente_llms`, badge 🎮 do
+  topo, admin): em 'somente_llms', modalidades de difusão/whisper (t2i/t2v/
+  i2v/a2v/a2t/v2t e contexto de áudio/vídeo) são recusadas com 403 claro —
+  só os llama-servers (chat/embed/visão) usam a GPU. Programas EXTERNOS não
+  são controláveis (o popover avisa). A checagem vem ANTES do `_exigir_host`
+  (o 403 da política é mais útil que o 400 de container).
+- **`set_env_inplace`** (config.py): gravar no .env SEM rename — bind mount
+  de ARQUIVO único no Docker rejeita `os.replace` (o dotenv.set_key padrão
+  morria com 'Device or resource busy'; atingia settings/GPU_MODO/instalador
+  MCP em container). Também atualiza `os.environ` (reload usa override=False
+  e não veria o novo valor).
+- **Layout OOUX do Estúdio Unificado (F1b)**: 5 telas — `Chat` (HOME = porta
+  simples: coleções na LINHA PRINCIPAL, linha de status "📚 N coleções · M
+  fontes", chips 🧠/🎨 + modos + MCPs no disclosure "avançado", rail
+  "Produção" e BANCADA deslizante a 1 clique), `Estúdio` (bancada COMPLETA:
+  modalidades, parâmetros, sessões, galeria + seção FLUXOS), `Pulso`
+  (dashboard), `Biblioteca` (base) e `Sistema`. Hashes antigos redirecionam
+  (`LEGADO`: inicio→chat, midia→estudio). Contexto só entra SE selecionado
+  (D2); intenção de mídia = regras PT/EN (`querMídia`, inclui GIF) +
+  CONFIRMAÇÃO de 1 clique antes de gerar. Store: `modeloChat`/
+  `modeloCriativo` (migração da chave única antiga por categoria, 1x).
+- **GIF no chat (F1b-3)**: "crie um gif de…" → t2v/i2v com `params {gif:
+  true, frames: 17}` → `midia.gerar_video(gif=True)` converte o mp4 final
+  via ffmpeg palettegen/paletteuse (`fps=12,scale=480:-1`) e devolve
+  `tipo="gif"`; serve por `/api/midia/gif/<nome>` (alias da pasta de vídeos
+  com MIME image/gif) — renderiza `<img>` em todo lugar (ChatMsg, rail,
+  galeria, lightbox, MediaPreview). Conversão falhou → fica o .mp4 (a
+  geração não se joga fora).
+- **Fluxos de geração (F1b-4)**: `core/fluxos.py` + `GET /api/fluxos` —
+  registry de CARDS na aba Estúdio: builtins (sd-cli/Flux, wan2.2 — status
+  reflete binário/modelos/GPU_MODO) e EXTERNOS (wan2gp, ComfyUI) com
+  health-check GET (timeout 2 s) na URL do .env (`FLUXO_WAN2GP_URL`/
+  `FLUXO_COMFY_URL`); status pronto|parado|nao_configurado.
+- **🧪 MOCK_LLM (F1b-5)**: `MOCK_LLM=1` no .env (exige restart da API) →
+  `core/mock.py` responde NO TOPO do `_processar_query` — sem cache, sem
+  Qdrant, sem LLM, sem guards de sessão/estúdio. O JOB roda de verdade
+  (log ao vivo com sleeps 0,3 s, docs fake, tokens ~900/~200), `/api/status`
+  expõe `mock: true` e a webui libera o chat SEM llama-server + fita "🧪
+  MODO MOCK". Voltar a 0 e reiniciar para respostas reais.
+- **Busca HÍBRIDA (F2)**: `rag.search` funde densa (k×3) + full-text do
+  Qdrant (`MatchText` no `page_content`, scroll limit 40, termos >3 chars
+  com fallback para o termo mais longo) por **RRF** (1/(60+rank) por chave
+  md5 de conteúdo); achados SÓ-TEXTO entram com score exibido = SCORE_MIN
+  (match exato de ID/código é sinal forte). Índice full-text criado LAZY
+  (1x por coleção, try/except — MatchText funciona sem índice por
+  full-scan). A ordem final é do RRF, não do score bruto.
+- **🎛️ Reranker (F2)**: `core/rerank.py` — CrossEncoder
+  `BAAI/bge-reranker-base` em CPU, LAZY (carrega 1x; ~1,1 GB no cache do
+  HF). Em `_processar_query` (modos rag/hibrido com ≥6 achados): top-15 →
+  rerank → 4, log "🎛️ rerank N→4 (top 0.xx)". Flag `RERANKER` no .env
+  (default 1); DEGRADA em silêncio (retorna None) se torch ausente — log
+  1x. `descarregar()` no ⏹ Parar tudo. requirements += torch,
+  transformers; Dockerfile instala torch do índice CPU (o wheel CUDA do
+  Linux seriam ~2,5 GB à toa); compose monta `./hf_cache:
+  /root/.cache/huggingface` para o download sobreviver a rebuilds.
+- **Specs restritivas (F2)**: `specs/chat.md` (modo RAG) e `specs/hibrido.md`
+  ganham bloco "Regras estritas" — RAG responde ÚNICA E EXCLUSIVAMENTE com
+  o contexto; insuficiente/contradição → "Não possuo dados confiáveis o
+  suficiente nos documentos para responder"; híbrido: base vence conflito e
+  o conflito é DECLARADO. Editar spec ainda exige restart (lru_cache) — ou
+  POST /api/specs/reload.
+- **👁️ MODO REVISÃO (Fase A, 20/08)**: dry-run da ingestão — NADA grava sem
+  aprovação. `core/preview.py` + `POST /api/ingest/preview` {fonte:
+  pasta|hf, query, limite, colecao-alvo} + `dry_run` Form no upload → job
+  `preview` → `GET /api/ingest/preview/{pid}` (relatório: como veio/como
+  vai entrar, chunks com [doc · seção] e i/n, duplicados md5 + quase-dups
+  cosseno ≥0.92, clusters cosseno ≥0.75 com rótulo LLM spec rotulo_cluster.md,
+  GATE DE TEMA com rerank.notas_de contra a definição da coleção-alvo
+  [<0.10 = "revisar"]) → `POST /api/ingest/preview/aplicar` {preview, ids,
+  colecao} ingere SÓ aprovados com `adquirido_em`+`curadoria` (proveniência
+  no Qdrant, finalmente). Preview vive 30 min em memória da API. UI:
+  `RevisaoIngest.tsx` no topo da Biblioteca (master-detail, padrão shadcn+
+  lucide da Fase F); IngestTab tem "revisar antes de ingerir" (default ON)
+  para upload e HF. Trafilatura (2.2.0) no `_html_texto` do seed: HTML→
+  markdown COM estrutura (fallback BeautifulSoup). Fix hf.card: metadata
+  `arquivo` por card (i/n deixaram de ser globais).
+- **🎛️ RERANK_MODEL (Fase C)**: modelo configurável no .env (+ ⚙️
+  Configurações). Primitiva `rerank.notas_de(consulta, textos)` (sigmoid
+  por texto) alimenta o rerank do chat E o gate de tema da Revisão.
+  **Benchmark** `tests_manual\bench_rerank.py` (18 perguntas, nDCG@4):
+  base **0,882** vs v2-m3 **0,867** (Hit@4 0,88) — v2-m3 NÃO paga; base
+  segue default. Ampliar o golden antes de qualquer troca.
+- **JobRegistry (Fase D)**: as 8 famílias de job (ingest/manutenção/
+  higienização/limpeza/seed/varredura/chat/mcp + preview + contexto de
+  mídia) viram UMA classe (`jobs/lock/seq/log/concluir/cancelar/status`)
+  + `TODOS_JOBS` (alimenta `_jobs_ativos` e o ⏹ com locks segurados) +
+  `_rota_status()` (rotas GET de status idênticas geradas). Replay
+  pós-restart SEM dispatch agora cria placeholder já `picked` (reentrega
+  não re-executa). Fixes do pacote: `global` em `tarefas.cancelar_todas`
+  (VRAM ficava presa após ⏹), cache Redis re-testa a cada 60 s (antes:
+  desligado para sempre), tokens SÓ por `balanco_ler()` (último
+  `uso_desde` removido), poison message do Rabbit não loopa mais
+  (json.loads protegido no except), `detectar` MCP ignora flags `-` (`npx
+  -y @scope/server` registrava "-y"), higieniza PULA `camada=codigo`
+  (antes destrói código), portão do agente checa tokens + verbos de
+  escrita ampliados (`search_replace` passava direto), `EnrichIn` morto
+  removido.
+- **🔬 PESQUISA PROFUNDA COM EVIDÊNCIAS (Fase B, 20/08)**: `core/pesquisa.py`
+  + `POST /api/pesquisa` (job `pesq`) + card 🔬 na Biblioteca. O anti-snippet:
+  PLANNER (spec `pesquisa_planner.md`, JSON, fallback) → BUSCA (Wikipedia
+  pt→en + Serper→DDG + READMEs GitHub priorizados, dedupe URL) → FETCH da
+  PÁGINA INTEIRA (Trafilatura via seed) → CLAIMS com evidência (spec
+  `evidencia.md`, ≤5 docs × ≤8 claims) → SÍNTESE com citações [Fn] e CONFLITOS
+  declarados (spec `sintese.md`) → MODO REVISÃO (`result.preview`; nada grava
+  sem aprovação; doc de síntese com metadata `sintese: true`). Budget no
+  código (≤6 consultas, ≤12 fontes, 1 síntese). JobsPopup abre a revisão sozinho
+  quando o job termina.
+- **Infra (política do dono, 20/08)**: push na main = deploy VPS (GH
+  Actions) — sem paths-ignore, docs puro usa `[skip ci]`; domínio em
+  outro servidor (cloudflared+Traefik na infra central); na VPS SÓ o
+  Qdrant fica online. **Validação/retorno SEMPRE pós-push no ambiente
+  publicado (https://<sub>.<dominio>) — NUNCA forçar localhost.**
+- **📦 F5 PILOTO (20/08, noite)**: `core/snapshot.py` — fotografia
+  id+vetor+payload em `logs/snapshots/*.jsonl` + `restaurar()` ponto a
+  ponto SEM re-embedar; rotas admin `/api/snapshot` (listar/criar/
+  restaurar — ⚠️ rota LITERAL antes da path-param!); `reembed` e
+  `unificar_arquiteturas` criam snapshot antes de mexer. `pesquisa.pesquisar
+  (colecao_alvo=)`: FILTRO INCREMENTAL — página aceita é embedada na hora e
+  comparada com o lote (≥0.92) e com o ÍNDICE da alvo (≥0.95); redundante
+  não ocupa vaga. **KI** (Knowledge Item) no `resumo.ki` e no metadata do
+  doc de síntese (fontes com url/revisado_em/claims + conflitos) — auditoria
+  chunk→doc→fonte→data no próprio Qdrant. Wikipedia agora busca EN antes de
+  PT (consultas são sempre inglês — pt trazia páginas irrelevantes).
+  Generalização do KI para coleções existentes: aguarda aprovação do
+  piloto. E2E: `tests_manual\e2e_f5_piloto.py`.
+- **🧭 BUSSOLA PRÉ-TOKEN (F3, 20/08)**: `core/bussola.py` — coleção de
+  sistema `sessoes_chat` indexa cada (pergunta→resposta) respondida nos
+  modos rag/livre sem histórico (embedding bge-m3, id determinístico
+  owner+pergunta = upsert, escopo POR OWNER). No `_processar_query`, após o
+  MISS do cache Redis: ≥0.95 → resposta DIRETA reaproveitada citando a
+  conversa (`cache.tipo "sessão"`, ZERO token — cobre cross-sessão e
+  sobrevive a flush do Redis); 0.85–0.95 → sugestão no campo `bussola`
+  (webui ainda não explora). ARMADILHA: o modo livre tem EARLY-RETURN
+  próprio — o `bussola.registrar` precisa existir LÁ TAMBÉM (bug pego em
+  produção pelo e2e_bussola). Desligada no MOCK; degrada em silêncio.
+- **Pacote crítico de débito (F3 junto)**: sessions.py salvar ATÔMICO
+  (lock + tmp+os.replace — corrida perdia mensagens); auth scrypt 2^14→2^17
+  com `maxmem` explícito (hashlib limita ~32MB!) e REHASH TRANSPARENTE ao
+  logar em hash antigo + users.json atômico + AUTH_SECRET em cache +
+  nomes_permitidos sem reescrever em leitura; varredura COPIA todo ponto
+  apagado para `logs/varredura_backup/<colecao>_<ts>.jsonl` antes de
+  deletar (exclusão reversível; `resumo.backup`); catalog.list_meta scroll
+  PAGINADO (256 único truncava em silêncio); motor.rodar_whisper
+  wait(timeout); seed._curadoria em LOTES de 40 (máx 3 — o resto morria
+  cego); pesquisa._github_readme tira front-matter Jekyll (adeus
+  "{:.no_toc}"); contadores Redis LAZY com re-teste 60s (Redis subindo
+  depois da API agora é adotado).
+- **Fase B+ (20/08, manhã)**: modo Auto rota WEB com **PÁGINAS REAIS**
+  (`auto._web_aprofundado`: baixa via `pesquisa._baixar` — máx 3 páginas ×
+  4000 chars, crítica por material baixado; fallback snippets se nada baixar).
+  `pesquisa.py`: Wikipedia com `revisado_em` (timestamp da última revisão,
+  visível na Revisão) + **conflitos determinísticos** `_conflitos()` (tema
+  por cobertura ≥0,5 da lista menor de tokens SEM os valores; anos/versões
+  por regex NÃO-capturadora — grupo capturador fazia findall devolver "19");
+  conflitos entram no prompt da síntese e no log. **Fase E**:
+  `core/linguagens.py` (rodeiro único LINGUAGENS/EH_DEV — antes 3 listas
+  divergentes), CLI `main.py` usa `rag.search` híbrida, v2a fora do picker.
+  **Fase F onda 1**: lucide em JobsPopup (ícone por kind + CheckCircle2/
+  XCircle), toolbar do Chat (Plus/BookOpen/Code/Copy/Settings2) e títulos
+  da IngestTab; HF mantém o símbolo 🤗 (marca, não decoração). Onda 2
+  (tokens CSS + Header) a planejar com screenshots.
+- **LIQUID INTERFACE + VOZ A2A (20/08, noite 3)**: chat é a HOME em
+  FULLSCREEN (sempre montado); rail mínimo de ícones (`Rail.tsx`);
+  Biblioteca/Estúdio/Pulso/Sistema viram PAINÉIS slide-over POR CIMA da
+  conversa (App.tsx; fecha = volta ao ponto exato); paleta **⌘K/Ctrl+K**
+  (`CommandK.tsx`, evento global `ragaroy:cmdk`): navegação, nova conversa,
+  modo voz, tema. **Composer em PILLS**: [conversas][+][modelo][coleções]
+  [voz][fontes][código][ouvir conversa][copiar][avançado] — popovers abrem
+  PARA CIMA. **Coleções = autocomplete** (busca em foco no abrir, marcar
+  em linha, todas/nenhuma/marcar-filtradas) — ARMADILHA que matou: dropdown
+  `absolute` dentro de toolbar `overflow-x-auto` era CORTADO (lista "não
+  aparecia"); agora vive no composer. **VOZ** (faster-whisper STT + piper
+  TTS pt_BR, opensource/CPU — `core/voz.py`): 🎤 dita a pergunta (a2t),
+  🔊 ouve cada resposta (t2a), **MODO VOZ** = a2a (respostas faladas ao
+  chegar — `modoVoz` no store, persistido; auto-TTS no `tratar`) e
+  **AUDIOLEITURA** da conversa inteira (botão "ouvir conversa", id=-1).
+  Modelos de voz copiados para a VPS (524 MB em `modelos_voz/`, bind já
+  existia no compose) — STT/TTS OK em produção.
+- **UNIFICAÇÃO DO ESTÚDIO NO CHAT (20/08, noite)**: EstudioTab/BancadaEstudio
+  DELETADAS da webui (rail/⌘K/Sidebar/App sem "estudio"; hashes antigos →
+  chat; badge 🎬 do header volta PARA A CONVERSA). A conversa é o centro:
+  mídia é comando de chat com **seletor de modalidade** na confirmação
+  (auto/texto→imagem/→vídeo/GIF; i2v quando há referência) e **mídias da
+  conversa viram REFERÊNCIA** (botão ↰ no rail Produção anexa o ARQUIVO
+  gerado — "anime/descreva esta imagem"; `ChatMsg.midia.arquivo/pasta`).
+  O core segue com a inteligência (midia/tarefas/modelos/fluxos/sessões —
+  rotas mantidas). **`core/conjuntos.py`**: conjunto de modelos POR TAREFA
+  (chat: llm+embed · visao: vl+embed, chat embaixado · difusao: sd-cli por
+  processo, chat/vl embaixados · whisper convive) com `garantir(tarefa)` —
+  MESMO conjunto = **cache da GPU mantido**; troca = **limpeza de VRAM
+  antes de subir** o novo (`saidas/conjunto_ativo.json`; em container,
+  proxy ao agente `/conjunto/{familia}`; integrado no `_rodar_tarefa`).
+  **COLEÇÕES TRI-ESTADO** (regra do dono, NO BACKEND): `collections=[]` =
+  SEM busca (sem reformulação/Qdrant/rerank, log claro; rag responde "não
+  possuo dados…"); `None` = todas (compat CLI); `"x"` = uma. Webui sem
+  regra de negócio (picker mostra estado; status "SEM coleções — sem busca").
+  **MICROFONE — CAUSA RAIZ**: o middleware `security-headers` do TRAEFIK
+  enviava `permissions-policy: microphone=()` em produção (bloqueio NA
+  ORIGEM — não era frontend nem Chrome; local não tem o header, por isso o
+  diagnóstico errava). Corrigido na VPS para `microphone=(self)` (backup
+  `middlewares.yml.bak`); dialog do mic ganha linha de DIAGNÓSTICO
+  (contexto seguro/iframe/featurePolicy). Validado em produção: header ok,
+  tri-estado ok (0 docs com [] e resposta restritiva; docs com 1 coleção).
+- **ETAPAS DE 1 LINHA + MIC SEM PRE-CHECK (20/08, tarde 2)**: o
+  "pensando…" segue o padrão de UI de agente — cada passo é UMA LINHA
+  truncada (`LinhaPasso` em CodePanel.tsx); clique expande o conteúdo
+  COMPLETO (IN/OUT de ferramenta com 400/500 chars, escopo do planner…);
+  ao vivo só o passo corrente abre; concluído fica "✓ raciocínio · N
+  passo(s) · Xs" recolhido. **Microfone**: REMOVIDO o pre-check
+  `permissions.query` — dava FALSO "bloqueado" (o estado do Chrome não
+  reflete Windows/ocupação); agora `getUserMedia` direto e o ERRO REAL
+  classifica o motivo do guia: NotAllowed=site (🔒/chrome:// copiável) ·
+  NotReadable/Abort=dispositivo (privacidade do Windows p/ apps desktop,
+  ocupação por Meet/Teams, entrada padrão) · NotFound=nenhum. Plano B por
+  arquivo de áudio segue garantido. **Dashboard**: histórico para o FIM
+  (destaques primeiro: Conhecimento → Uso da LLM → Histórico). **Docs**:
+  `docs/README.md` = índice único (mapa README/AGENTS/docs + índice das
+  21 specs + regra "código > AGENTS > README > docs"); README corrigido
+  (navegação atual, /api/analyze|agrupar|enrich → manutencao, endpoints
+  novos pesquisa/preview/historico-log/snapshot/fluxos/voz).
+- **CORREÇÕES DO OPERADOR (20/08, tarde)**: **🎤 Microfone** — permissão
+  negada abre GUIA DE RECUPERAÇÃO (`MicrofoneDialog`): status AO VIVO
+  (`permissions.query().onchange` detecta o desbloqueio pelo 🔒 no ato),
+  endereço `chrome://settings/content/microphone` **COPIÁVEL** (páginas
+  NÃO abrem `chrome://` — era por isso que o passo a passo antigo "não
+  funcionava"), botão testar-agora e **PLANO B GARANTIDO: envio de
+  ARQUIVO de áudio** (.wav/.mp3/.webm/.m4a → whisper transcreve igual,
+  zero permissão). **Log de job PLANO** no popup: as linhas da pesquisa
+  caiam no grupo "geral" RECOLHIDO (emoji 🧭 não estava na lista de
+  grupos do `agruparLinhas`) — agora é lista corrida, sem dobras, +
+  botão **TELA CHEIA por job** (`JobTelaCheia`) e polling tolerante (5
+  erros SEGUIDOS → "conexão perdida"; engasgo de gateway não mata mais o
+  job na tela). **Páginas são PÁGINAS** (fim do slide-over horizontal) e
+  o rail mostra **ÍCONE + NOME** do módulo (Chat/Dashboard/Biblioteca/
+  Estúdio/Sistema + Comandos ⌘K). **TEMPERATURE .5→0.1** (local+VPS com
+  restart — o .env estava em 0.5, origem do "delírio") + bloco **"Tom
+  executivo"** na spec hibrido.md (técnico/direto/estruturado, zero
+  recheio, sem repetir a pergunta).
+- **RODAPÉ DE MÉTRICAS + IN/OUT COMPLETOS (20/08, dia)**: cada resposta do
+  chat termina com rodapé estilo operador — `N chamada(s) · N passo(s) ·
+  N ferramenta(s) · Xs · Y tok/s · 🔻in · 🔺out · total tok` (duração do
+  log de pensamentos; tok/s = saída/duração). Agente loga argumentos
+  (400 chars) e observações (500) POR INTEIRO — o painel "pensando…"
+  mostra o par IN/OUT como numa UI de agente (referência do operador:
+  chat DeepSeek). **Anexo de imagem com visão desligada**: aviso com AÇÃO
+  ("religue no badge 👁 e anexe de novo; ou descreva por texto") + toast,
+  não erro cru (o erro "model does not support image input" era da
+  ferramenta de referência — aqui a visão é servidor separado :8082).
+- **AQUISIÇÃO UNIFICADA + DASHBOARD (20/08, madrugada)**: IngestTab tem
+  UMA entrada — seletor de fonte (arquivos do computador | pasta do
+  servidor | HuggingFace | pesquisa web) + coleção-alvo; TODO caminho
+  termina no MODO REVISÃO (scores obrigatórios). "Pulso" virou
+  **Dashboard** com "Histórico de solicitações": clique na execução abre o
+  log COMPLETO (`GET /api/historico/log/{job}` lê `logs/jobs/{job}.jsonl`,
+  job sanitizado por regex). **Jobs sobrevivem ao recarregar**: os running
+  persistem em `ragaroy.jobs` (localStorage) e o polling do JobsPopup
+  retoma no boot — o job NUNCA parou no servidor (RabbitMQ/thread), o que
+  se perdia era só o estado na tela. **Pesquisa sem silêncio**:
+  `_candidatos` loga cada motor com tempo gasto (minutos mudos pareciam
+  travamento — serper são 6 consultas × até 20 s sequenciais). **Guard de
+  saudação** no híbrido: mensagem curta com TODAS as palavras de
+  saudação/identidade ("oi tudo bem?") responde sem buscar (antes: 3.199
+  tokens de contexto aleatório; agora 459 e log "👋"). ARMADILHA: regex
+  única não pega "oi tudo bem?" (duas frases) — tokenização resolveu.
+  **Pensando ABERTO por padrão** (vivo e histórico; retrair é opção —
+  pedido do operador "logs expostos"). **Microfone sempre visível**
+  (indisponível → clique explica, não esconde). Rail Produção rotulado
+  "por sessão".
+- **Migração Qdrant local→VPS (20/08, noite 2)**: as coleções SEMPRE viveram
+  no Qdrant LOCAL — a produção dava "Collection python doesn't exist".
+  `tests_manual\migrar_qdrant_vps.py` snapshota todas (menos sessoes_chat)
+  → scp → restore na VPS (18 coleções, 84k pontos, python 50.515/dotnet
+  28.477). Produção agora é AUTOSUFICIENTE em dados. Pendências: midia_gerada
+  e prompts_midia restauraram 0 na VPS (formato de payload rejeitado pelo
+  server 1.12 — reingerir lá quando precisar); fantasma de coleção no Qdrant
+  exige RESTART do container (rm -rf com ele rodando deixa meta órfão).
+  Fonte de verdade de infra: `INFRA_PAAS.md (doc privada do operador, FORA do repo)` (GitFlow
+  develop/main, domínios, credenciais, NUNCA compose down).
+- **UI (20/08, noite 2)**: PillStatus do header em LINHAS COMPLETAS por
+  serviço (ponto+nome+estado+detail com break-all — badges cortavam nomes
+  de modelo; toggles liga/desliga preservados nos popovers). ChatTab
+  RESTAURA a última conversa ao voltar ao app sem job em curso
+  (`ragaroy.ultimaConversa` no localStorage; raw traz msgs+fontes+
+  pensamentos; novaConversa limpa) — antes a tela voltava vazia.
+- **📜 LOG DE JOB GRAVADO (20/08)**: `JobRegistry.log` escreve CADA linha
+  também em `logs/jobs/{job}.jsonl` (append na hora; retenção: 400 mais
+  recentes) — o registro completo sobrevive ao prune de memória e a
+  restarts; `logs/historico.jsonl` ganha campo `log=` com o caminho.
+  **Chat linha a linha**: a linha de tokens de CADA chamada LLM traz a
+  ETIQUETA da etapa (`contadores.set_etapa`): `[reformulação]`,
+  `[resposta (rag|híbrido|livre|auto)]`, `[roteador (auto)]`,
+  `[refinamento da consulta (web)]`, `[agente passo N]`, `[verificação]` —
+  o par chamada→retorno fica visível no "pensando…". Cache MISS também é
+  narrado ("sem equivalente — seguindo o fluxo completo"). **Agente ReAct
+  narrado** (`agent.responde(log=…)`): cada passo (raciocínio), cada
+  ferramenta (ação ← argumentos + política: sem portão/aprovada/negada),
+  cada observação de retorno (150 chars + duração) e a verificação
+  anti-invenção. E2E: `tests_manual/e2e_log_chat.py` (roda contra o
+  publicado; provisiona coleção de teste própria via upload e remove ao
+  fim — produção não tem as coleções locais).
+- **Compose prod da VPS**: WORKDIR/paths internos diferem do dev
+  (processo escreve em ~/apps/rag-llama/… via bind) — o que
+  importa: `logs/` NO HOST da VPS recebe tudo (validado: logs/jobs/*.jsonl
+  persistem entre recreates). Diagnóstico de path no container:
+  `ls -l /proc/1/cwd` + `docker inspect --format {{.Config.WorkingDir}}`.
+- **⏹ Parar tudo** (`POST /api/parar_tudo`, admin; botão no header e no
+  Sistema): mata jobs (registros → "cancelado"), PURGA fila+DLQ do Rabbit
+  (evento `sistema.parar_tudo`), e desmonta TODOS os motores NO HOST — em
+  container PROXYA ao agente (`/parar_tudo`; sem proxy matava nada e
+  mentia "derrubado") incluindo ZOMBIES (taskkill por NOME pega
+  llama-servers órfãos sem porta que seguram VRAM). Próximo uso recarrega.
+- **🤗 HuggingFace como fonte** (`core/hf.py`, `POST /api/ingest/hf` job
+  na fila): busca datasets no Hub e ingere os CARDS (README.md) pela
+  MESMA esteira de higienização. O `search` do Hub casa o ID (termo
+  único): frase → 0; fallback frase → 1º termo → termo mais longo.
+  `HF_TOKEN` opcional no .env. Card "🤗 HuggingFace" na Biblioteca.
+- **ingest_docs(docs…)**: núcleo do pipeline de ingestão extraído para
+  aceitar Documents de QUALQUER fonte (pasta, HF, futura pesquisa) —
+  `ingest_folder` lê/limpa e delega.
+
+- **Composer (chat)**: controles na ordem do fluxo — 1º TIPO de resposta
+  (📝texto/🖼/🎬/🎞/i2*), 2º MODELO (select RECONSTRUÍDO por tipo: texto
+  mostra SÓ modelos de conversa; imagem só Flux; vídeo/gif só Wan2.2;
+  i2t só o multimodal — cada modelo só aparece para o que serve), 3º MODO
+  (desabilitado em mídia). Tipos i2* (imagem de ENTRADA) exibem **📎 subir
+  imagem** (`/api/upload` → `saidas/entrada/` → campo `referencia`; chip
+  com o nome, clique remove). Busca de coleções/MCP tematizada (variáveis
+  CSS) e itens em estilo pill selecionável (`:has(:checked)` com acento).
+- **Telas do projeto**: `docs/telas/` (GIFs reais de uso + capturas de
+  todas as telas) — regenerar com Playwright contra o ambiente publicado.
+- **Memória privada**: o registro das rodadas de trabalho (conversas com
+  o operador) vive em `AGENTS-historico.md` — **gitignored**; o repositório
+  público exibe apenas documentação do projeto.
+
+- **Serviços LLM**: `python servicos_llm.py` (multi-OS — Windows/Linux/macOS,
+  stdlib): pergunta a pasta dos GGUFs (grava `MODELS_DIR` no .env), lista os
+  modelos, sobe bge-m3 :8081 + o chat escolhido :8090 e grava `LLM_MODEL`;
+  `--listar` só lista, `--parar` encerra (PIDs em `saidas/servicos_llm.json`).
+  Validadado em CI na matrix ubuntu/windows/macos (job `ci-multi-os`).
+- **Cache semântico**: TTL configurável (`CACHE_TTL_DIAS`, default 30; era
+  hardcoded 7) — HIT é 0 s/0 tokens vs ~0,3 s do Qdrant e 10-60 s da LLM:
+  estender o TTL compensa mais que tunar o Qdrant; limpeza manual
+  `DELETE /api/cache` (respostas sobrevivem a reingestões até expirar).
+- **Criação de mídia no chat**: ao selecionar um tipo de mídia o composer
+  fica LIMPO (coleções/MCP ocultos — não se aplicam) e entra o **guia do
+  tipo** com conhecimento de bastidor por modelo (Flux: storytelling em
+  cena única, sem texto na imagem; Wan2.2: cena única ~5 s, movimento
+  suave; gif: 17 frames/12 fps, loop perfeito sem cortes; i2\*: papel da
+  imagem anexa). O ✨ de mídia NÃO usa o histórico da conversa (privacidade
+  — a cena nasce do rascunho; spec `prompt_melhoria.md`).
+
+- **Página Sistema (configurações)**: form GERADO do registro `config.FIELDS`
+  (todas as chaves editáveis do .env, agrupadas por categoria — Serviços,
+  Estúdio, GPU, Aplicação); segredos (`config.SECRETOS`) renderizam como
+  `type=password` com placeholder "•••• definida" (nunca o valor); o PUT
+  genérico valida tipos (422) e vazio/máscara não regrava. Salvamento aplica
+  NA HORA (`set_env_inplace` + `reload`) — inclusive TEMPERATURE e os
+  parâmetros do cache (o `cache.py` lê TTL/limiar/max por getters ao vivo,
+  não por constante de módulo).
+- **Diagnóstico de disco (VPS)**: o `du` sem root SOME com `/root` e
+  `/var/lib/docker` (permissão) — use um container root com bind `-v /:ro`
+  para enxergar tudo (foi assim que 144 GB de cache HuggingFace órfão em
+  `/root/.cache` foram achados e limpos).
+
+- **Vídeo (Wan)**: gerações escolhíveis no combobox — **wan2.1-t2v-1.3b**
+  (leve/estável em 8 GB: Q8 1,4 GB + VAE 2.1 própria + cfg 5.0) e
+  **wan2.2-ti2v-5b** (5 GB + VAE 2.2 + cfg 6.0). ⚠️ **VAEs NÃO são
+  intercambiáveis** — `_vae_video()` escolhe pelo stem do difusor;
+  `_achar_video(modelo)` casa o alias do combobox por substring
+  alfanumérica. GGUFs em `MODELS_DIR/video/` (difusor + umt5 +
+  wan2.1_vae/wan2.2_vae).
+- **Duração de vídeo**: seletor ⏱ (2/3/5/8 s) no composer → frames=s×16+1
+  (spec `core/specs/midia_duracao.md` — tabela + como escalar a AÇÃO do
+  prompt por duração; o ✨ recebe a dica "video Ns"). GIF segue loop fixo
+  de 17 frames. Teto de frames no `_sanear_params`: 129.
+- **Mídia com contexto**: as últimas trocas da SESSÃO viajam como
+  `params["historia"]` e entram no prompt da difusão como continuidade
+  narrativa ("mantenha personagens/ambiente/enredo") — em `_rodar_tarefa`
+  e no espelho do `agente_host`.
+- **Telemetria por modelo**: o `LLMContada` registra o modelo **SERVIDO**
+  (`modelos.servido()`) — `config.LLM_MODEL` fica velho após trocas;
+  gerações rodam na estação (agente), então EM CONTAINER a API regrava o
+  evento de geração na VPS (senão o dashboard de produção nunca vê
+  wan/flux). Filtro de tipo: "cache" é alias só de "redis".
+- **RabbitMQ rico**: `fila.detalhe()` usa a Management API (:15672, auth
+  RABBIT_USER/PASS, host derivado do amqp) — por fila: mensagens/prontas/
+  não-ack/consumidores/publicadas/entregues/pub-s + **PEEK da DLQ**
+  (`ack_requeue_true` = só olha) com job/kind/erro + agregados da
+  telemetria; partial `_fila.html` (dashboard).
+- **Guia de mídia com chips de prompt**: ao escolher um tipo de mídia o
+  guia abre sozinho com dicas CLICÁVEIS que inserem no prompt — 🎨 estilo
+  (realismo/cinematográfico/anime/desenho animado/quadrinhos/3D/aquarela/
+  pixel art/cyberpunk/minimalista), 🌍 ambientes, 💡 luz·câmera e 🎥
+  movimento (vídeo/gif). O ✨ depois transforma o rascunho em storytelling
+  denso.
+
+- **Sandbox (deps + nomes)**: o ▶ testar INSTALA as dependências que o
+  código importa (`_deps_python`: imports de todos os .py → pip com
+  `--break-system-packages` antes de rodar; stdlib fora, mapa
+  PIL→pillow/sklearn→scikit-learn/…). O nome do arquivo no teste por card
+  usa a DICA da prosa (`_nomesCitados`) — nunca diverge do sugerido no chat.
+- **Painel/leitura**: a aba 📚 fica SÓ com fontes (o botão "▪ resposta"
+  abre um MODAL de leitura em tela ampla — não injeta mais na aba). O
+  badge ⚡ do cache é um POPOVER (`/hx/cachepanel`) com as entradas
+  carregadas (pergunta, quando, escopo, resumo) — refresh 30 s.
+- **Feedback de ações**: o salvar do Sistema mostra TOAST (sucesso
+  recarrega; 422 mostra o detalhe do erro sem recarregar) — `#toast-global`.
+- **Dashboard**: seção **Infraestrutura** (Qdrant por coleção, Redis do
+  cache com limpar, resumo Rabbit), cards de modelo com **médias por
+  chamada** (~🔻/~🔺/🪙) e **📜 logs tail ao vivo** por serviço
+  (`/hx/logs/{chat|api|embed|visao}`).
+
+- **Modelos ativos (fonte única)**: `modelos_ativos()` (app.py, cache 10 s)
+  lê dos SERVIDORES chat/visão/embed + difusores + VRAM — serve o
+  `/api/modelo/ativo`, o cabeçalho do Sistema ("no ar: …") e o badge do
+  chat (i2t ⇒ 👁 multimodal). `estatisticas.nome_curto()` agrega telemetria
+  sem sufixo de quant (Wan…-Q8_0 ≡ wan…); a união do dashboard rastreia
+  `_ja` adicionados.
+- **Logs ao vivo (dashboard)**: `/hx/logs/{llm|geracao|eventos|jobs}` lê a
+  TELEMETRIA persistente + tail de logs/jobs — fontes que existem em
+  qualquer host (as antigas apontavam arquivos do llama-server que só
+  vivem na estação com GPU).
+- **Sandbox**: ▶ do card testa SÓ os arquivos daquele retorno (painel =
+  conversa inteira); preview renderiza a URL pública (subdomínio+token).
+  **Negative prompt**: cláusula `negativo: …` no pedido vira o `-n` da
+  difusão (imagem/vídeo; spec midia_duracao).
+- **Teste de SITE (24/08, fix crítico)**: o script antigo fazia
+  `pip install … && python3 app.py > site.log &` — o `&` mandava pip+python
+  ao background e o `kill $SRV` matava o SUBSHELL (o python órfão seguia
+  segurando a porta). Sintoma real: curl respondia em 0,5 s com o servidor
+  de um teste ANTERIOR e `site.log` nem existia. `_cmd_site` agora: porta
+  limpa antes (fuser guardado), pip em FOREGROUND, servidor com `setsid`
+  (grupo próprio), curl `--max-time` com aviso quando a porta não responde,
+  `head` tolerante. Validado em produção: 2 rodadas seguidas, cada uma com
+  a própria home e log (órfão anterior morto com restart do container).
+- **App TEMPORÁRIO público (24/08 — "sandbox.disroy.org por um tempo")**:
+  o teste de site agora NÃO mata o servidor — ele fica hospedado ~30 min
+  (`APPS_VIVOS` + `chave_app` = porta+expiração assinadas com HMAC do
+  AUTH_SECRET). Fluxo: agent ganhou `GET/POST /app/{porta}/{resto}` (proxy
+  urllib p/ 127.0.0.1:porta) ← API expõe `/sandbox/app/{chave}/{path}`
+  (GET/POST/HEAD, sem login — quem tem o link acessa; `follow_redirects=
+  False`: o Location volta ao browser com a chave) ← middleware `_auth_
+  middleware` RESGATA URLs absolutas: 404 + Referer com chave válida →
+  proxy (o Flask gera `/static/x.css` e `Location: /login` SEM a chave).
+  `Cache-Control: no-store` no proxy (Cloudflare negative-caching segurava
+  404 antigo no edge por minutos). Limpar do modal é PULSO com app vivo
+  (o servidor lê templates/ de /tmp/work). Novo teste na mesma porta
+  substitui o app (fuser). **Templates/static**: `_reorganizar_web` move
+  .html soltos p/ `templates/` quando o .py usa `render_template` (bug
+  TemplateNotFound do schopenhauer) e .css/.js p/ `static/` quando
+  QUALQUER arquivo referencia /static/ (a ref. pode estar no template).
+- **Sandbox: SUBDIR por teste + entry C# real (24/08, 12h)**: `/tmp/work`
+  acumulava lixo de testes anteriores (o controller ASP.NET velho do dono
+  quebrava o build seguinte com CS0260/CS8802 — e o `limpar` pulava com
+  app vivo). Agora CADA teste grava/executa em `/tmp/work/{uuid}` (agent
+  `/arquivos {dir}` + `/exec {dir}`; `/ver` acha o arquivo pelo subdir
+  MAIS RECENTE; `/limpar {exceto:[dirs]}` preserva só as pastas dos apps
+  vivos — `APPS_VIVOS[porta]["dir"]`). **C#**: `_preparar_cs` decide o
+  entry de verdade — csproj da conversa tem prioridade; `static Main(`
+  em qualquer arquivo = entry clássico (nada move); top-level statements
+  funcionam em QUALQUER nome de arquivo (o move p/ Program.cs só era
+  necessário para o principal top-level — arquivo de CLASSE movido quebrava
+  CS1585/CS5001); só tipos/biblilioteca → gera Program.cs que compila e
+  AVISA ("projeto compilou ✓… use o ▶ no arquivo com Main"). **ASP.NET**
+  (`Microsoft.AspNetCore`/`WebApplication`/[ApiController] nos fontes):
+  scaffold `Microsoft.NET.Sdk.Web` (o console dava CS0234) e o teste vira
+  SITE (sobe `dotnet run`, captura, link público — loops de espera 120
+  p/ o build/restore).
+- **Modal do sandbox SAME-ORIGIN + hardening (24/08, 13h)**: o iframe do
+  modal usa `d.url` (rota RELATIVA em ai.disroy.org — cookie autentica);
+  `url_publica` fica só no link "abrir em outra aba" (o modal dependia do
+  subdomínio e um engasgo do túnel virava "conexão recusada" com o app
+  abrindo em outra aba). **Hardening do agent** (estudo Piston/Judge0:
+  fork não compensa — one-shot, privilegiado, GPLv2; emprestamos as
+  defesas): `_exec` com `start_new_session` + `os.killpg(SIGKILL)` no
+  timeout (mata filhos E netos — fork-bomb/árvores de servidores; o
+  setsid do app vivo fica fora do grupo e sobrevive) + `ulimit -t`
+  (CPU 4× timeout). ⚠️ ARMADILHAS PROBADAS NO CONTAINER: `preexec_fn`
+  com setrlimit DEADLOCKA (ThreadingHTTPServer + fork); `ulimit -u`
+  mata o dotnet nem em --version (user-namespace conta threads errado);
+  `ulimit -f` gera SIGBUS nos mmaps do .NET. Só -t e killpg são seguros.
+- **▶ testar RESPOSTA (24/08, 14h)**: o botão ▶ vive no CABEÇALHO DO
+  GRUPO da resposta (`grp-testar`; ▶ por arquivo REMOVIDO — o teste é do
+  PROJETO). `principal` vazio no POST → `sandbox.escolher_principal`:
+  Program.cs válido > Main em qualquer .cs > top-level qualquer nome >
+  site Python > WebApplication em qualquer .cs > nomes convencionais >
+  1º executável > HTML puro (preview). ⚠️ o rótulo do grupo vive num
+  `<span>` — `grupo.textContent = …` APAGA o botão filho (aconteceu).
+  **.NET 10 na sandbox**: SDK 10.0.400 via dotnet-install + runtime
+  aspnetcore 10 + shared frameworks do 8 (apt) LIGADOS no MESMO
+  `DOTNET_ROOT=/usr/share/dotnet10` (sem isso: app net8 compilava e não
+  rodava; Sdk.Web net10 não compilava). csproj da conversa é COMPLEMENTADO
+  com `<ImplicitUsings>enable</ImplicitUsings>` quando falta (CS0103
+  'WebApplication' com todas as references corretas).
+- **BUG CRÍTICO de nomes (24/08, 14h30 — a raiz do "dotnet não
+  funciona")**: o sufixo da regex de comentário era OBRIGATÓRIO
+  (`\s*-{2,}>?\s*$` → só `<!-- x -->` casava; `// Program.cs` e
+  `# x` NUNCA casaram) E a dica citada por índice não conferia
+  linguagem — o bloco de TERMINAL `dotnet new webapi…` ganhava o nome
+  "Program.cs" citado na prosa e o Program.cs REAL virava "bloco4.cs":
+  o teste compilava o COMANDO como C# (CS1585 "new" na col 8 era o
+  `dotnet new`!). Fix: sufixo opcional `(?:\s*-{2,}>?)?` + dica só com
+  extensão igual à linguagem do bloco. Com isto a conversa REAL do dono
+  (TucupiApi) compilou, subiu e `/api/pratos` respondeu pelo link
+  público. Spec arquivo_codigo.md ganhou "Projetos que RODAM" (entry
+  único, sem misturar tipo+top-level no mesmo arquivo, ImplicitUsings,
+  ports 5000/8000).
+- ⚠️ **Deploy VPS é SEMPRE pelo CI**: `docker compose up` MANUAL na VPS
+  recria a API SEM o override da infra (`~/infra/services/rag-llama/
+  docker-compose.prod.yml`, que a coloca na `traefik_net`) → Traefik
+  perde a origem e TUDO fica 502. Se precisar manual:
+  `docker compose -f docker-compose.yml -f /home/rodney/infra/services/
+  rag-llama/docker-compose.prod.yml up -d --force-recreate --no-deps api`.
+- **Apps temporários COEXISTEM + páginas amigáveis (24/08, 15h)**: a
+  porta do app é LIDA DO CÓDIGO (`_porta_do_codigo`: `port=NNNN`,
+  `://127.0.0.1:NNNN`, `localhost:`, `--port`; default 5000/8000 só sem
+  declaração) — antes era FIXA por framework e todo teste novo fazia
+  `fuser -k 5000`, MATANDO o app anterior do dono ("o link de 30 min
+  morreu sozinho"). Spec `arquivo_codigo.md` pede porta própria
+  5000–5099. Erros AMIGÁVEIS no subdomínio (`_sandbox_fora.html`,
+  `no-store`): raiz 200 explica o que vive ali · link expirado/
+  substituído 410 "⏳ este link expirou" · app caído 502 "🔌 saiu do ar"
+  — sempre com "rode o ▶ testar resposta de novo" (antes: 404/JSON cru).
+  ⚠️ `_pag_fora` devolve status POR MAPA (raiz=200) — o ternário
+  "expirou?410:502" mandava 502 até na raiz (bug da 1ª versão).
+  O 502 do Cloudflare em ai.disroy.org durante ~20 s = restart da API
+  no deploy (CI `--force-recreate`) — janela normal de publicação; a UI
+  aberta se recupera sozinha (polling/toast).
+- **🌐 Provedores EXTERNOS de LLM (24/08, 16h)**: `core/provedores.py` —
+  qualquer endpoint OpenAI-compatible (glm/deepseek/openai/anthropic…
+  e o PRÓPRIO llama-server remoto) vira grupo 🌐 no seletor do chat.
+  Config no .env (`PROV_<id>_BASE_URL/_API_KEY/_MODELOS/_NOME`) com
+  AUTO-DESCOBERTA por `PROV_*_BASE_URL`; modelos são a lista REAL
+  (`GET /models` aceita OpenAI {data} E llama-server {models}; fallback
+  manual/sugestões; cache 5 min). Multimodal por heurística de nome
+  (`e_multimodal` — 👁 no option + `data-tipo="multimodal"`: serve i2t).
+  Fluxo: `body.model="prov:modelo"` → `_processar_query` seta
+  `rag.set_override` (thread-local; LLMContada usa e a telemetria grava
+  `[prov] modelo`; LIMPEZA nos chamadores finally — worker Rabbit reusa
+  thread) → a troca de GGUF local é PULADA (5080) e o cache usa o modelo
+  externo na chave. i2t externo: `/api/tarefas` intercepta ANTES do
+  guard de host/agente (roda NA API) e `legendar_imagem(modelo=)`
+  chama o endpoint com image_url. `/api/provedores` (chaves nunca
+  saem) · Sistema edita PROV_* com máscara (`_campos_config()`
+  compartilha a lista entre tela e save). ⚠️ decorator EMPILHADO já
+  fez /api/query responder o catálogo (rota colada no def roubou o @app
+  original) — cada rota com SEU decorator. E2E real: provedor `estacao`
+  = túnel llm.disroy.org; chat respondeu com telemetria `[estacao]`.
+- **Painel AGRUPADO por resposta (24/08)**: cada resposta com código ganha
+  cabeçalho `📦 resposta N · M arquivo(s)`; arquivos ficam juntos sob ele
+  (`_inserirNoGrupo` rastreia `grupo._fim`) e as EXECUÇÕES do ▶ testar
+  viram registros `▶ nome · ✓/✕ · Xs · saída` NO GRUPO da resposta que as
+  originou (`msg.dataset.grupoPainel`; ▶ do painel → último grupo —
+  `:last-of-type` NÃO serve, itens são divs após o grupo). `_irParaAba`
+  filtra por `[data-aba]` (grupos/execs têm aba); `_contaAbas` continua
+  contando só `.painel-item`. **✎ renomear** em cada arquivo (extração
+  pode errar — o dono corrige e vale para ▶ testar — que lê o nome NO
+  clique — e para o .zip). `_nomeArquivo` pula shebang `#!` e varre 6
+  linhas; spec `arquivo_codigo.md` exige comentário de nome em TODA
+  linguagem (shell/SQL/CSS inclusos).
+- **Conversa NATURAL (23/08)**: `rag.naturalizar()` (guardrail de código,
+  aplicado no `_gerar` e na resposta do agente) remove o eco do envelope
+  ("Contexto recuperado da base:", "(nada foi recuperado…)", "Resposta:")
+  e a seção final "Fontes:" (≤8 linhas curtas — heurística conservadora).
+  Specs `chat.md`/`hibrido.md`/`ferramentas.md` agora PROÍBEM rótulos de
+  sistema e seção Fontes: citação é `[n]` INLINE; as fontes ficam no
+  PAINEL (btn-fontes vem dos docs recuperados, não do texto).
+- **🔎 pesquisa-web (NATIVA) selecionável (23/08)**: pseudo-MCP
+  `MCP_WEB="pesquisa-web"` aparece em PRIMEIRO no box 🔌 do chat (vem do
+  JS, não do mcp_servers.json); marcado → `_web_aprofundado` baixa
+  páginas INTEIRAS que entram como fragmentos `[n]` (colecao "🌐 web",
+  visíveis no painel de fontes) e desativa resposta-direta. Seleção de
+  MCPs PERSISTE no localStorage (`ragaroy.mcps`). `_mcps_reais` filtra o
+  pseudo-MCP da conexão de servidores (e da trivialidade de saudação).
+- **Apagar conversa = JOB na fila (23/08)**: `_conv` (kind
+  `conversa_apagar`) faz mídias+cache+sessão em 2º plano; o DELETE
+  responde NA HORA com o item em "⏳ apagando…" (`_APAGANDO` por owner) e
+  a lista auto-pola (`every 2s`) até o item sumir — clicáveis em
+  sequência sem travar. 502 no ✕ → ⚠️ com retry; toast global
+  (`window.toast`) avisa engasque de rede nos swaps (throttle 12 s).
+- **Estado de `<details>` UNIFICADO (base.html)**: chave estável =
+  `data-mi da mensagem | id do card | doc` + summary (raciocinio-vivo →
+  `::raciocinio` fixo); INTENÇÃO no `pointerdown` (capture) para vencer a
+  corrida com o polling de 600 ms; afterSwap aplica só chaves tocadas
+  (server-render `open` segue valendo como default). Raciocínio ao vivo
+  nasce ABERTO; recolher/abrir PERMANECE em qualquer re-render.
+- **Tailwind no front (23/08)**: `static/vendor/tailwind.js` (Play v3,
+  VENDOR local — funciona offline) carregado DEPOIS do app.css:
+  utilitários VENCEM no empate (migração incremental), PREFLIGHT off (o
+  reset não quebra o legado) e cores mapeadas nos tokens do tema
+  (`bg-card`, `text-suave`, `border-borda`, `text-acento`…). Componentes
+  NOVOS usam utilitários; legado migra na touch. Sem Node/build.
+- **Composer**: textarea nasce em 1 linha e cresce com o texto até 12rem
+  (`ajustarAlturaTA` — cálculo em PX; o antigo min(scrollHeight,12)+"rem"
+  travava); `.alta` de fábrica REMOVIDA (pedido do dono).
+- **Setup/comunidade**: `scripts/setup.sh` (Linux/macOS: venv+compose+
+  modelos via flag `--modelos`) · `scripts/baixar_modelos.py` (catálogo
+  multi-tipo: chat embed visao imagem video video2 audio — retomável,
+  pula existentes) · `setup.ps1 -Modelos`. README: novo slogan, diagrama
+  isométrico C4-N2 (`docs/arquitetura.svg` — regenerado pelo gerador em
+  temp; blocos 3D flat + cartões de legenda + cilindros laranja),
+  pilares open source + lista completa em <details>.
+
+## 6. Estado e decisões históricas
+
+- Origem do Estúdio: `docs/pesquisa-midia.md` — crítica do plano original:
+  **Wan2.2** em vez de Hunyuan, GGUFs city96, LTX-Video fora (é diffusers).
+- Análise viva do código (20/08/2026): `docs/core-analise.md` (módulo a módulo,
+  bugs confirmados, duplicações) · `docs/guia-conceitos-rag.md` (fundamentos de
+  dados/RAG/frameworks, tabela de modelos de rerank) · `docs/plano-qualidade-rag.md`
+  (diagnóstico da aquisição, fases A-F aprováveis: modo Revisão de ingestão,
+  F4 core/pesquisa, bugs, UI). Atualizar esses docs ao mudar o que eles descrevem.
+- Datasets: clones esparsos de fontes oficiais (coleções .NET e Python/IA)
+  em `datasets/` (fora do git) + `datasets/seed/` (versionado; os seeds da
+  web gravam os fontes .md lá).
+- Git: `webui/dist/` é versionado de propósito (usar sem Node); `.env` NUNCA
+  (contém `SERPER_API_KEY`); `sessions/`, `saidas/`, `logs/` fora.
+
+---
+
+---
+
+## Historico de rodadas
+
+O registro completo das rodadas de trabalho (contexto das conversas com o
+operador) vive em AGENTS-historico.md — arquivo PRIVADO, fora do git.

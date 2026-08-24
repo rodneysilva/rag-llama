@@ -1,0 +1,29 @@
+{# RACIOCÍNIO SINTETIZADO — passos semanticamente coerentes (embedding):
+   o título resume o passo (linha mais central) e as linhas COMPLETAS
+   ficam a um clique (details). Compat: `passos` ausente/legado → linhas
+   cruas como passos de 1 linha (mesma renderização). #}
+{% macro raciocinio(linhas, passos=None, aberto=true, vivo=false) %}
+{% set aberto = aberto if aberto is defined else true %}
+{% set passos = passos if passos else linhas %}
+<details {% if aberto %}open {% endif %}{% if vivo %}class="raciocinio-vivo"{% endif %}>
+  <summary>raciocínio · {{ passos | length }} passo(s) · {{ linhas | length }} linha(s)</summary>
+  <div class="log">
+    {% for p in passos %}
+    {% if p.linhas is defined %}
+    <div class="passo">
+      <div class="passo-titulo"><span class="hora">{{ p.ts }}</span>{{ p.titulo }}</div>
+      {% if p.linhas | length > 1 %}
+      <details class="passo-mais">
+        <summary>+{{ p.linhas | length - 1 }} linha(s) deste passo</summary>
+        {% for l in p.linhas %}<div><span class="hora">{{ l.ts }}</span>{{ l.msg }}</div>{% endfor %}
+      </details>
+      {% endif %}
+    </div>
+    {% else %}
+    <div><span class="hora">{{ p.ts }}</span>{{ p.msg }}</div>
+    {% endif %}
+    {% endfor %}
+    {% if not passos %}<div class="linha-atual">enviando mensagem…</div>{% endif %}
+  </div>
+</details>
+{% endmacro %}

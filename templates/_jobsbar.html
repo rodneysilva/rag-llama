@@ -1,0 +1,12 @@
+{# JOBS EM SEGUNDO PLANO — barra global (polling 4s) — vazio quando nada roda #}
+{% if jobs %}
+<div class="jobsbar">
+  {% for j in jobs %}
+  <span class="jobchip">
+    <span class="ponto" style="display:inline-block;"></span>
+    {{ j.rotulo }}
+    <a href="/biblioteca" title="ver na Biblioteca">abrir ↗</a>
+  </span>
+  {% endfor %}
+</div>
+{% endif %}
