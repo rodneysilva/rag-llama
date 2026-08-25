@@ -614,12 +614,20 @@ def _md_basico(texto: str) -> str:
     for n, bloco in enumerate(blocos):
         saida = saida.replace(f"\x00BLOCO{n}\x00", bloco)
     return saida
-def _md_fallback(esc: str) -> str:
+
+
+def _md_fallback(texto: str) -> str:
     """Parser mínimo (usado só sem a lib markdown): recebe o texto JÁ com os
     blocos extraídos em placeholders \x00BLOCOn\x00 (substituídos pelo
-    chamador) — inline, negrito, títulos e listas."""
+    chamador) — inline, negrito, títulos e listas.
+
+    ⚠️ SEGURANÇA: ESCAPA o HTML de entrada ANTES de tudo (os testes de XSS
+    pegaram o fallback deixando <script> passar cru — qualquer ambiente sem
+    a lib `markdown` virava buraco de XSS; os placeholders \x00 não são
+    afetados pelo escape)."""
+    import html as _h
     import re as _re
-    p = esc
+    p = _h.escape(texto, quote=False)
     p = _re.sub(r"`([^`\n]+)`", r"<code>\1</code>", p)
     p = _re.sub(r"\*\*([^*\n]+)\*\*", r"<b>\1</b>", p)
     p = _re.sub(r"(?m)^#{1,3}\s+(.+)$", r"<h3>\1</h3>", p)

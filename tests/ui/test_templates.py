@@ -51,6 +51,10 @@ class TestChatRender:
            "colecoes": [{"nome": "culinaria", "points": 10}],
            "cache": {"online": True, "entradas": 3},
            "modelos_chat": [{"nome": "qwen", "gb": 4.7, "ativo": True}],
+           "modelos_chat_grupos": [],
+           # seletor de GERAÇÃO do composer (imagem/vídeo/gif — fluxo F1b):
+           # dicionário por tipo; vazio esconde os optgroups
+           "modelos_geracao": {"imagem": [], "video": []},
            "mcps": []}
 
     def test_composer_completo(self):
@@ -62,7 +66,7 @@ class TestChatRender:
 
     def test_colecoes_abertas_por_padrao(self):
         html = _env().get_template("chat.html").render(**self.CTX)
-        assert 'class="colecoes-box" open' in html
+        assert 'id="colecoes-box" open' in html
 
     def test_mensagens_da_sessao_renderizam(self):
         html = _env().get_template("_palco.html").render(
@@ -78,11 +82,14 @@ class TestChatRender:
 
 
 class TestJobCard:
-    def test_barra_de_progresso_presente(self):
+    def test_polling_e_log_ao_vivo(self):
+        # o card do job é o LOG AO VIVO (a barra pbar-job saiu com o log
+        # em linhas): valida o polling htmx e a zona de log
         html = _env().get_template("_job.html").render(
             job="x", kind="pesquisa", rotulo="teste",
             linhas=[], running=True)
-        assert "pbar-job" in html
+        assert 'hx-get="/hx/job/pesquisa/x"' in html
+        assert "aguardando as primeiras linhas" in html
 
     def test_erro_aparece_no_card(self):
         html = _env().get_template("_job.html").render(
