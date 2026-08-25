@@ -35,7 +35,7 @@ from core.auto import responde_auto, _web_aprofundado
 from core.analyze import analyze_all
 from core.enrich import enrich_collection
 from core.higieniza import higienizar_colecao
-from core.ingest import ingest_folder
+from core.ingest import ingest_docs, ingest_folder
 from core.seed import seed_collection
 from core.varredura import varredura_colecao
 
@@ -3403,6 +3403,63 @@ def preview_ver(pid: str):
         raise HTTPException(status_code=410,
                             detail="pré-visualização expirada (30 min) — rode de novo")
     return resp
+
+
+class WebSalvarIn(BaseModel):
+    """Ensinar a base com as FONTES de uma resposta do chat (pedido do
+    dono: 'o que precisa para o qdrant ficar inteligente' — o conhecimento
+    que a 🌐 pesquisa-web trouxe ficava só NA CONVERSA e se perdia)."""
+    colecao: str
+    documentos: list[dict] = []   # [{titulo, url, content}]
+
+
+@app.post("/api/ingest/web-salvar")
+def web_salvar(body: WebSalvarIn, request: Request):
+    """Grava os documentos usados numa resposta (web/base) na coleção —
+    job normal de ingestão com proveniência 'web via chat'. A partir daí
+    a MESMA pergunta responde no modo rag, sem web e sem custo."""
+    _usuario(request)
+    colecao = (body.colecao or "").strip()
+    if not re.fullmatch(r"[a-z0-9_\-]{2,40}", colecao):
+        raise HTTPException(status_code=400,
+                            detail="coleção inválida (a-z, 0-9, _ -)")
+    docs = [d for d in (body.documentos or [])
+            if str(d.get("content") or d.get("page_content") or "").strip()]
+    if not docs:
+        raise HTTPException(status_code=400, detail="nenhum documento com conteúdo")
+    job = _ingest.novo_id()
+
+    def fabricar(p: dict):
+        jid = p["job"]
+
+        def rodar():
+            contadores.set_servico("ingestao")
+            _ingest.iniciar(jid)
+            try:
+                from datetime import datetime, timezone
+                agora = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                from langchain_core.documents import Document
+                langdocs = []
+                for d in docs[:12]:
+                    conteudo = str(d.get("content") or d.get("page_content"))
+                    url = str(d.get("url") or "")[:500]
+                    titulo = str(d.get("titulo") or url or "fonte web")[:200]
+                    langdocs.append(Document(
+                        page_content=conteudo,
+                        metadata={"arquivo": titulo, "titulo": titulo,
+                                  "url": url, "adquirido_em": agora,
+                                  "curadoria": "web via chat"}))
+                _ingest_log(jid, f"📚 ensinando a base: {len(langdocs)} fonte(s) "
+                                 f"→ '{colecao}' (proveniência: web via chat)")
+                r = ingest_docs(langdocs, colecao, rapido=True,
+                                log=lambda m: _ingest_log(jid, m))
+                _ingest.concluir(jid, result=r)
+            except Exception as e:
+                _ingest.concluir(jid, error=str(e)[:300])
+        return rodar
+
+    _despachar(fabricar, "ingest_web", {"job": job}, _ingest)
+    return {"job": job, "status": f"/api/ingest/status/{job}"}
 
 
 @app.post("/api/ingest/preview/aplicar")

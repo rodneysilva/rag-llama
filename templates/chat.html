@@ -1379,6 +1379,34 @@ function respostaNoSplit() { verResposta({closest: () => null}); }
 // fontes entram no painel SOZINHAS (pedido do dono), não só no clique.
 function _fontesParaPainel(dados) {
   _irParaAba("fontes");
+  // 📚 ENSINAR A BASE com as fontes DESTE lote (pedido do dono: o que a
+  // web trouxe ficava só na conversa e se perdia — gravado, a mesma
+  // pergunta passa a responder no modo rag, sem web e sem custo)
+  if (dados.length) {
+    const cab = _painelItemNovo("ensinar a base com " + dados.length + " fonte(s)", "fontes");
+    const b = document.createElement("button");
+    b.className = "copiar-btn"; b.textContent = "📚 ensinar a base";
+    b.title = "grava estas fontes numa coleção — depois a pergunta responde só pela base";
+    b.onclick = () => {
+      const col = prompt("gravar em qual coleção? (a-z, 0-9, _ -)", "culinaria");
+      if (!col) return;
+      b.textContent = "⏳ ensinando…";
+      // cookie httpOnly autentica; content completo (não o recorte do painel)
+      fetch("/api/ingest/web-salvar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ colecao: col.trim(),
+                               documentos: dados.map(d => ({
+                                 titulo: d.titulo || d.source || "",
+                                 url: d.url || d.source || "",
+                                 content: d.page_content || d.content || "" })) }),
+      }).then(r => r.json()).then(j => {
+        if (j.job) { window.toast?.("📚 ensinando a base (job " + j.job + ") — acompanhe no histórico"); b.textContent = "✓ enviado"; }
+        else { window.toast?.("falhou: " + (j.detail || "?"), "erro"); b.textContent = "📚 ensinar a base"; }
+      }).catch(() => { window.toast?.("falhou a conexão", "erro"); b.textContent = "📚 ensinar a base"; });
+    };
+    cab.querySelector(".doc-hd").appendChild(b);
+  }
   dados.forEach((d, i) => {
     const arq = (d.source || d.arquivo || "?").replace(/\\/g, "/").split("/").pop();
     const score = typeof d.score === "number"
