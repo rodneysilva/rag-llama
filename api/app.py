@@ -28,7 +28,7 @@ from pydantic import BaseModel
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct
 
-from core import agent, auth, bussola, cache, catalog, config, contadores, fila, hf, limpeza, midia, modalidades, modelos, mcp_registry, rag, rerank, sessoes, sessions, tarefas, voz
+from core import agent, auth, bussola, cache, catalog, config, contadores, fila, grafo, hf, limpeza, midia, modalidades, modelos, mcp_registry, rag, rerank, sessoes, sessions, tarefas, voz
 from core import historico, resolucoes, telemetria
 from core.linguagens import LINGUAGENS
 from core.auto import responde_auto, _web_aprofundado
@@ -5121,6 +5121,45 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
         "you", "beleza", "com", "está", "esta", "tchau", "adeus",
     }
     _palavras = re.findall(r"[a-zà-ú]+", (body.question or "").lower())
+    # 🧭 LANGGRAPH — A INTELIGÊNCIA VEM ANTES (pedido do dono): o grafo
+    # roteia a pergunta ANTES de cache/Qdrant/rerank — pedido de CRIAÇÃO
+    # em modo rag é orientado na hora (antes: pagava ~7 s de busca para
+    # no fim recusar), saudação responde direto. "fluxo" não toca em nada.
+    try:
+        _rota = grafo.rotear(body.question, body.mode, log=log)
+    except Exception as _e:
+        _rota = {"rota": "fluxo", "tipo": "", "motivo": f"erro: {str(_e)[:40]}"}
+    if _rota["rota"] == "orientar_criacao":
+        contadores.set_etapa("resposta (roteador)")
+        answer = ("Não possuo dados confiáveis o suficiente nos "
+                  "documentos para responder.\n\n💡 Seu pedido parece "
+                  "ser de **criação** (página, código, API…): troque "
+                  "para o modo **híbrido** — a base orienta o estilo e "
+                  "o modelo escreve. Dica: para código, selecione só a "
+                  "coleção da tecnologia (ex.: dotnet) — misturar "
+                  "assuntos dilui a busca.")
+        contadores.set_etapa(None)
+        return {"question": body.question, "mode": body.mode,
+                "collections": colecoes, "docs": [], "answer": answer,
+                "erros": {}, "ferramentas": [], "mcp_erros": {},
+                "pendente": None, "aprovacoes_sessao": body.aprovacoes_sessao or {},
+                "pergunta_busca": "", "bussola": None,
+                "model": modelos.servido(modelos.CHAT_PORTA) or config.LLM_MODEL,
+                "provider": body.provider or "llama-server",
+                "tokens": contadores.balanco_ler(), "busca": None}
+    if _rota["rota"] == "conversa" and body.mode != "livre":
+        log("👋 roteador: saudação — resposta direta, SEM busca", "busca")
+        contadores.set_etapa("resposta (roteador)")
+        answer = rag.answer_free(body.question, body.history)
+        contadores.set_etapa(None)
+        return {"question": body.question, "mode": body.mode,
+                "collections": colecoes, "docs": [], "answer": answer,
+                "erros": {}, "ferramentas": [], "mcp_erros": {},
+                "pendente": None, "aprovacoes_sessao": body.aprovacoes_sessao or {},
+                "pergunta_busca": "", "bussola": None,
+                "model": modelos.servido(modelos.CHAT_PORTA) or config.LLM_MODEL,
+                "provider": body.provider or "llama-server",
+                "tokens": contadores.balanco_ler(), "busca": None}
     # MCP_WEB não conta como "ferramenta MCP" para a trivialidade: saudação
     # com busca marcada continua saudação (não se pesquisa "oi" na web)
     _mcps_reais = [m for m in (body.mcps or []) if m != MCP_WEB]
