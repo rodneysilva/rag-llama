@@ -575,11 +575,19 @@ def reformula(question: str, history) -> str:
 
 
 def _termos_busca(pergunta: str) -> str:
-    """Palavras >3 chars da pergunta, em minúsculo — a consulta do filtro
-    full-text (MatchText casa TODOS os termos: frases completas afinam,
-    IDs/códigos exatos são o alvo)."""
+    """Termos da pergunta p/ o filtro full-text (MatchText casa TODOS os
+    termos — o alvo são IDs/códigos/técnicos exatos).
+
+    v2: inclui termos de 3 chars ("api", "net", "web" — caíam no filtro
+    >3 e o full-text ficava cego ao ÚNICO termo compartilhado PT×EN) e
+    descarta stopwords latinas ("cria"? não — mas "uma", "dos", "para"
+    entopem a conjunção AND sem agregar)."""
+    from .idioma import _STOPWORDS_LATIN
     limpos = [p.strip(".,;:!?\"'()[]{}").lower() for p in pergunta.split()]
-    return " ".join(t for t in limpos if len(t) > 3)
+    uteis = [t for t in limpos
+             if len(t) >= 3 and len(t) < 40
+             and not _STOPWORDS_LATIN.fullmatch(t)]
+    return " ".join(uteis)
 
 
 # índices full-text já criados (1x por coleção por processo)

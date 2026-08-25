@@ -5350,6 +5350,35 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
                     "contexto da base", "busca")
             achados, erros = rag.search(client, escopo, pergunta_busca,
                                         log=lambda m, g="busca": log(m, g))
+            # 🔁 RESGATE PT→EN (bug real do dono: "Cria uma api no padrão
+            # .net 10" → 0 fragmentos numa coleção dotnet de 28k docs): a
+            # pergunta em PORTUGUÊS contra base EM INGLÊS afunda o score
+            # denso E o full-text (termos PT não existem no texto EN; o
+            # termo técnico "api" caía no filtro >3 chars). A pesquisa da
+            # Biblioteca SEMPRE normalizou p/ inglês (idioma.py) — o chat
+            # não tinha. NADA acima do corte → 1 chamada barata (temp 0)
+            # traduz a pergunta e REBUSCA; só roda sem histórico (com
+            # histórico a reformulação já cumpre o papel) e 1x.
+            if (not achados and not body.history and escopo
+                    and body.mode in ("rag", "hibrido")):
+                try:
+                    from core import idioma as _idioma
+                    pergunta_en = _idioma.para_busca_inglesa(
+                        pergunta_busca, log=lambda m, g="busca": log(m, g))
+                    if pergunta_en.strip().lower() != pergunta_busca.strip().lower():
+                        log(f"🔁 resgate: rebuscando com a pergunta em "
+                            f"inglês “{pergunta_en[:80]}”…", "busca")
+                        achados2, _ = rag.search(
+                            client, escopo, pergunta_en,
+                            log=lambda m, g="busca": log(m, g))
+                        if achados2:
+                            achados = achados2
+                            pergunta_busca = pergunta_en
+                            log(f"🔁 resgate trouxe {len(achados)} "
+                                "fragmento(s) — seguindo com eles", "busca")
+                except Exception as e:
+                    log(f"⚠️ resgate PT→EN indisponível ({str(e)[:60]})",
+                        "busca")
             # TODAS as coleções EXISTENTES falharam (embedding desligado,
             # Qdrant fora): resposta vazia não ajuda — erro claro com a CAUSA
             if escopo and erros and not achados and len(erros) >= len(escopo):
