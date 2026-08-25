@@ -65,10 +65,15 @@ REGISTRO = {
 # Padrões de nome para categorizar arquivos que chegarem sem registro
 PADROES = [
     ("embed",  r"bge|embed|e5-|gte-|minilm|nomic-embed"),
+    ("encoder", r"umt5|t5xxl|t5-encoder|clip|mmproj|text-encoder"),
     ("visao",  r"-vl\b|vision|moondream|llava|minicpm-v"),
     ("imagem", r"flux|stable-diffusion|sdxl|^sd|qwen-image|illustrious|pony|dev1"),
     ("video",  r"hunyuan|wan2|ltx|cogvideo|mochi|animatediff|svd|video"),
 ]
+# ⚠️ encoders de TEXTO de difusão (umt5/t5xxl do Wan, clip do Flux, mmproj
+# da visão) NÃO são modelos de conversa: sem esta categoria eles caíam no
+# default "chat" e apareciam no menu do servicos_llm (bug real: umt5 de
+# 6 GB listado como opção de conversa).
 
 # Tag de uso para o seletor da webui (agrupa por finalidade)
 USO = {"qwen2.5-coder-7b": "programacao"}

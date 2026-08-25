@@ -352,9 +352,28 @@ def _boot():
             elif not modelos.servido(modelos.CHAT_PORTA):
                 m = next((x for x in modelos.listar()
                           if x["nome"] == config.LLM_MODEL), None)
+                # PADRÃO COMPATÍVEL COM A VRAM (pedido do dono): o modelo do
+                # .env que NÃO cabe (ou não existe) é TROCADÌO pelo melhor
+                # chat compatível — o boot nunca tenta carregar o que a
+                # placa não aguenta (OOM na madrugada)
+                if m and not m.get("compativel", True):
+                    print(f"⚠️ '{config.LLM_MODEL}' {m.get('motivo', '')} — "
+                          "trocando pelo maior modelo COMPATÍVEL")
+                    m = None
+                if not m:
+                    cand = [x for x in modelos.listar()
+                            if x.get("categoria") == "chat"
+                            and x.get("compativel", True)]
+                    if cand:
+                        m = max(cand, key=lambda x: x.get("gb") or 0)
+                        print(f"🧠 padrão VRAM-compatível: {m['nome']} "
+                              f"({m.get('gb')} GB)")
                 if m:
-                    modelos._subir_chat(config.LLM_MODEL, m["caminho"])
-                    print(f"✅ chat {config.LLM_MODEL} no ar (boot do agente)")
+                    modelos._subir_chat(m["nome"], m["caminho"])
+                    print(f"✅ chat {m['nome']} no ar (boot do agente)")
+                else:
+                    print("⚠️ nenhum modelo de chat compatível com a VRAM "
+                          "encontrado em MODELS_DIR — só o embedding sobe")
         except Exception as e:
             print(f"⚠️ chat não subiu no boot: {e}")
         try:

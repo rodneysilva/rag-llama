@@ -164,7 +164,12 @@ def main() -> int:
         return 1
     ggufs = listar_ggufs(pasta)
     embeds = [g for g in ggufs if "bge-m3" in g.name.lower()]
-    chats = [g for g in ggufs if g not in embeds]
+    # só GGUFs de CONVERSA: o menu antigo listava difusores (flux/wan) como
+    # "modelo de conversa" — escolher um deles tentava bootar imagem no
+    # llama-server. A categoria vem do mesmo _categorizar do modelos.listar
+    from core.modelos import _categorizar
+    chats = [g for g in ggufs
+             if g not in embeds and _categorizar(g.stem) == "chat"]
     if not ggufs:
         print(f"nenhum .gguf em {pasta}")
         return 1
@@ -177,11 +182,32 @@ def main() -> int:
     print(f"chat :{CHAT_PORTA} [{'NO AR: ' + servido(CHAT_PORTA)}" if saude(CHAT_PORTA) else f":{CHAT_PORTA} FORA]", end=" · ")
     print(f"embedding :{EMBED_PORTA} [{'NO AR' if saude(EMBED_PORTA) else 'FORA'}]")
     print("\nModelo de conversa (embedding bge-m3 sobe junto sempre):")
+    # marcação de VRAM + DEFAULT COMPATÍVEL (pedido do dono): o Enter escolhe
+    # o PRIMEIRO que cabe na placa, não o 1º alfabético; incompatíveis vêm
+    # marcados e exigem confirmação explícita
+    limite = 6.0  # GB de GGUF que convive com o bge-m3 numa VRAM de 8 GB
+    compat = [g for g in chats if _gb(g) <= limite]
+    sugerido = compat[0] if compat else None
     for i, g in enumerate(chats, 1):
-        print(f"  [{i}] {_gb(g):5.1f} GB  {g.name}")
+        marca = ("" if _gb(g) <= limite
+                 else f"  ⚠️ {_gb(g):.1f} GB NÃO CABEM na VRAM de 8 GB "
+                      "(com o embedding no ar)")
+        seta = "  ← sugerido" if sugerido and g == sugerido else ""
+        print(f"  [{i}] {_gb(g):5.1f} GB  {g.name}{marca}{seta}")
+    if not sugerido:
+        print("  ⚠️ nenhum modelo cabe na VRAM junto do embedding — "
+              "escolha um menor ou apague/renomeie os grandes")
     try:
-        n = input("número (Enter = 1): ").strip() or "1"
+        n = input(f"número (Enter = {chats.index(sugerido) + 1 if sugerido else 1}): ").strip() \
+            or (str(chats.index(sugerido) + 1) if sugerido else "1")
         escolhido = chats[int(n) - 1]
+        if sugerido and escolhido != sugerido and _gb(escolhido) > limite:
+            conf = input(f"  '{escolhido.name}' tem {_gb(escolhido):.1f} GB e "
+                         "pode estourar a VRAM com o embedding no ar. "
+                         "continuar? (s/N): ").strip().lower()
+            if conf != "s":
+                print("   cancelado — rode de novo e escolha o sugerido")
+                return 1
     except (ValueError, IndexError):
         print("escolha inválida")
         return 1
