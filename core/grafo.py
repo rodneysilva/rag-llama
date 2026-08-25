@@ -40,18 +40,38 @@ class Estado(TypedDict, total=False):
     rota: str      # fluxo|orientar_criacao|conversa
 
 
-# ── triagem léxica (custo zero — PT/EN cobrem o uso real; OUTROS idiomas
+# ── triagem léxica (custo zero — PT/EN/ES cobrem o uso real; OUTROS idiomas
 #    e ambíguos caem no nó LLM, que segue a spec multilíngue) ────────────
+# 🖥️ LINGUAGEM DE PROGRAMAÇÃO é sinal de primeira classe (pedido do dono:
+# "a linguagem que falo é de programação, não somente idioma"): o usuário
+# mistura PT/EN com nomes de tech — o rodeiro ÚNICO é core/linguagens.py
+from .linguagens import EH_DEV as _TECHS
 _RE_CRIAR = re.compile(
     r"\b(quer[oa]|cri[ae]|criar|faç|faz|fazer|mont[ae]|montar|ger[ae]|"
     r"gerar|escrev|desenvolv|implement|constru|cod|code|program|"
     r"create|build|make|write|generate|develop|scaffold|quiero|crea|haz|"
     r"créer|erstelle)\w*", re.I)
+# artefatos: produto final do pedido — WEB + CONCEITOS DE PROGRAMAÇÃO de
+# qualquer stack (controller, service, hook, migration, query, schema…)
 _RE_COISA = re.compile(
     r"\b(p[áa]gina|site|c[óo]digo|api|app|aplica|projeto|programa|script|"
     r"componente|aba|tela|formul[áa]rio|banco|tabela|servidor|dashboard|"
     r"crud|servi[çc]o|fun[çc][ãa]|classe|endpoint|website|web\s?app|page|"
-    r"form|library|lib)\w*", re.I)
+    r"form|library|lib|"
+    # o "idioma" do programador — termos de qualquer stack/framework
+    r"rota|route|controller|middleware|hook|migra[çc][ãa]|migration|model|"
+    r"schema|query|procedure|trigger|view|reposit[óo]ry|service|dto|"
+    r"entidade|entity|m[óo]dulo|module|package|parser|crawler|cli|"
+    r"lambda|handler|worker|job|pipeline|template|layout|seed|fixture|"
+    r"component|directive|store|composable|endpoint|backend|frontend)\w*",
+    re.I)
+# nomes de TECH (linguagens do rodeiro único + frameworks/bancos comuns):
+# citar tech + verbo de criação já é sinal FORTE mesmo sem artefato clássico
+_RE_PROG = re.compile(
+    r"\b(" + "|".join(sorted(_TECHS)) +
+    r"|flask|fastapi|django|spring|laravel|rails|express|gin|fiber|"
+    r"actix|axum|ktor|docker|k8s|postgres|mysql|mongo|redis|"
+    r"asp\s?net|blazor|maui|xamarin|unity|godot)\b", re.I)
 _RE_MIDIA = re.compile(
     r"\b(gif|imagem|v[íi]deo|desenh|foto|ilustra|anime|caricatura|quadro|"
     r"anima|picture|drawing|illustration|render|imagen|vidéo|dibuj)\w*",
@@ -89,8 +109,12 @@ def _triagem_lexica(estado: Estado) -> Estado:
         return {**estado, "tipo": "", "motivo": "follow-up curto"}
     if _RE_MIDIA.search(q):
         return {**estado, "tipo": "midia", "motivo": "pedido de mídia"}
-    if _RE_CRIAR.search(q) and _RE_COISA.search(q):
-        return {**estado, "tipo": "criacao", "motivo": "verbo+artefato"}
+    if _RE_CRIAR.search(q) and (_RE_COISA.search(q)
+                                or (_RE_PROG.search(q) and len(palavras) >= 3)):
+        # verbo de criação + artefato — OU verbo + nome de TECH com
+        # contexto ("escreve em rust um parser", "faz em go um worker"):
+        # falar DE programação é o idioma nativo do usuário
+        return {**estado, "tipo": "criacao", "motivo": "verbo+artefato/tech"}
     if _RE_FACTUAL.search(q):
         return {**estado, "tipo": "factual", "motivo": "abertura interrogativa"}
     return {**estado, "tipo": "", "motivo": "ambíguo"}
