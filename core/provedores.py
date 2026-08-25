@@ -30,8 +30,6 @@ import time
 
 import httpx
 
-from . import config
-
 # heurística de visão por nome (minúsculo) — lista REAL de cada provedor
 # muda rápido demais para hardcode total; o padrão cobre o essencial
 _RE_VISAO = re.compile(

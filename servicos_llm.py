@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -166,10 +167,19 @@ def main() -> int:
     embeds = [g for g in ggufs if "bge-m3" in g.name.lower()]
     # só GGUFs de CONVERSA: o menu antigo listava difusores (flux/wan) como
     # "modelo de conversa" — escolher um deles tentava bootar imagem no
-    # llama-server. A categoria vem do mesmo _categorizar do modelos.listar
-    from core.modelos import _categorizar
-    chats = [g for g in ggufs
-             if g not in embeds and _categorizar(g.stem) == "chat"]
+    # llama-server.
+    # ⚠️ CÓPIA LOCAL da heurística do core.modelos._categorizar: este script
+    # é STANDALONE (100% stdlib — fresh clone sem pip install) e NÃO pode
+    # importar core.modelos (que puxa httpx/dotenv). Mantenha em sincronia
+    # com PADROES de core/modelos.py.
+    _NAO_CHAT = re.compile(
+        r"bge|embed|e5-|gte-|minilm|nomic-embed"            # embeddings
+        r"|umt5|t5xxl|t5-encoder|clip|mmproj|text-encoder"  # encoders de difusão
+        r"|-vl\b|vision|moondream|llava|minicpm-v"          # visão (sobe na :8082)
+        r"|flux|stable-diffusion|sdxl|^sd|qwen-image|illustrious|pony|dev1"
+        r"|hunyuan|wan2|ltx|cogvideo|mochi|animatediff|svd|video", re.I)
+    chats = [g for g in ggufs if g not in embeds
+             and not _NAO_CHAT.search(g.stem)]
     if not ggufs:
         print(f"nenhum .gguf em {pasta}")
         return 1
