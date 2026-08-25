@@ -5130,24 +5130,16 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
                              historia=body.history)
     except Exception as _e:
         _rota = {"rota": "fluxo", "tipo": "", "motivo": f"erro: {str(_e)[:40]}"}
-    if _rota["rota"] == "orientar_criacao":
-        contadores.set_etapa("resposta (roteador)")
-        answer = ("Não possuo dados confiáveis o suficiente nos "
-                  "documentos para responder.\n\n💡 Seu pedido parece "
-                  "ser de **criação** (página, código, API…): troque "
-                  "para o modo **híbrido** — a base orienta o estilo e "
-                  "o modelo escreve. Dica: para código, selecione só a "
-                  "coleção da tecnologia (ex.: dotnet) — misturar "
-                  "assuntos dilui a busca.")
-        contadores.set_etapa(None)
-        return {"question": body.question, "mode": body.mode,
-                "collections": colecoes, "docs": [], "answer": answer,
-                "erros": {}, "ferramentas": [], "mcp_erros": {},
-                "pendente": None, "aprovacoes_sessao": body.aprovacoes_sessao or {},
-                "pergunta_busca": "", "bussola": None,
-                "model": modelos.servido(modelos.CHAT_PORTA) or config.LLM_MODEL,
-                "provider": body.provider or "llama-server",
-                "tokens": contadores.balanco_ler(), "busca": None}
+    if _rota["rota"] == "criar_como_hibrido":
+        # 🧭 ESCALADA AUTOMÁTICA (pedido do dono: "como ele não sabe o que
+        # estou falando?"): criação é impossível no rag (só o que está na
+        # base) — em vez de recusar com um texto genérico, ESTA pergunta
+        # sobe para o híbrido sozinha: a base orienta o estilo e o modelo
+        # ESCREVE o que foi pedido. O modo escolhido segue salvo para as
+        # próximas (perguntas factuais continuam no rag).
+        log("🧭 pedido de CRIAÇÃO no modo rag — respondendo no modo "
+            "HÍBRIDO automaticamente (a base orienta o estilo)", "mensagem")
+        body.mode = "hibrido"
     if _rota["rota"] == "conversa" and body.mode != "livre":
         log("👋 roteador: saudação — resposta direta, SEM busca", "busca")
         contadores.set_etapa("resposta (roteador)")

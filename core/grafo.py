@@ -135,7 +135,9 @@ def _decidir(estado: Estado) -> Estado:
     """tipo×modo → rota. O grafo NÃO responde — só evita o caminho errado."""
     tipo, modo = estado.get("tipo", ""), estado.get("modo", "")
     if tipo == "criacao" and modo == "rag":
-        return {**estado, "rota": "orientar_criacao"}
+        # criação é IMPOSSÍVEL no modo rag (só o que está literalmente na
+        # base) — em vez de recusar, o pipeline sobe para o HÍBRIDO sozinho
+        return {**estado, "rota": "criar_como_hibrido"}
     if tipo == "conversa" and not estado.get("pergunta"):
         return {**estado, "rota": "fluxo"}
     if tipo == "conversa" and modo in ("rag", "hibrido", "livre"):
