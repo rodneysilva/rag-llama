@@ -374,7 +374,9 @@ def _exigir_host(recurso: str) -> None:
 class IngestIn(BaseModel):
     folder: str
     collection: str | None = None  # categoria/coleção (padrão: a do .env)
-    rapido: bool = False  # modo lote: sem chamada de LLM por arquivo
+    rapido: bool = True  # modo lote (DEFAULT — pedido do dono: ingestão é
+    # SÓ RAG, sem LLM por arquivo; a categoria é a própria coleção). Quem
+    # quiser categorização com LLM manda rapido=false explicitamente.
 
 
 class HigienizarIn(BaseModel):
@@ -1055,6 +1057,7 @@ def hx_chat_poll(job: str, request: Request):
            "tokens": res.get("tokens"), "modelo": res.get("model"),
            "tok_s": res.get("tok_s"), "duracao_s": res.get("duracao_s"),
            "cache": res.get("cache") or None,
+           "busca": res.get("busca"),
            "docs": res.get("docs") or []}
     return TEMPLATES.TemplateResponse(request, "_chat_fim.html", ctx)
 
@@ -5299,6 +5302,8 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
     found, docs, erros, bases = [], [], {}, None
     resposta_direta = None  # texto que responde por si (score alto; já sanitizado)
     pergunta_busca = body.question  # reformulada na busca (quando há histórico)
+    # 🗄️ métrica da busca p/ o rodapé (None = não houve busca: cache/sem coleções)
+    busca_stats = None
     if body.estado_agente:
         colecoes = body.collections or colecoes
     elif not colecoes:
@@ -5309,6 +5314,7 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
             "(marque coleções ou 'todas' para consultar)", "busca")
     else:
         try:
+            t_busca0 = time.time()  # 🗄️ métrica do QDRANT no rodapé
             client = QdrantClient(url=config.QDRANT_URL, timeout=30)
             if body.history:
                 log("🔎 reformulando a pergunta com o histórico…", "busca")
@@ -5399,7 +5405,13 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
                                     "aproveitável — seguindo para o modelo",
                                     "geração")
                         else:
-                            resposta_direta = conteudo
+                            # 🧹 HEADER DE CHUNK fora (bug real do dono: a
+                            # resposta-direta abria com "[frango ao leite
+                            # passo a passo]" — o cabeçalho contextual do
+                            # chunk é METADADO de indexação, não conteúdo)
+                            limpo = re.sub(r"^\s*\[[^\]\n]{1,140}\][ \t]*\r?\n",
+                                           "", conteudo, count=1)
+                            resposta_direta = (limpo.strip() or conteudo).strip()
                     except Exception as e:
                         log(f"⚠️ sanitização do fragmento falhou "
                             f"({str(e)[:80]}) — seguindo para o modelo",
@@ -5461,6 +5473,14 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
             for d, score, colecao in achados
         ]
         docs = [d for d, _, _ in achados]
+        # 🗄️ MÉTRICA DA BUSCA (pedido do dono: tokens/velocidade SEMPRE no
+        # rodapé — e "isso se aplica ao qdrant também"): tempo real da
+        # consulta (Qdrant + rerank), nº de fragmentos e o top score —
+        # visível inclusive na resposta-direta (que não gasta LLM)
+        busca_stats = {"ms": int((time.time() - t_busca0) * 1000),
+                       "fragmentos": len(found),
+                       "top": (round(top_score, 3)
+                               if achados else None)}
     # 🔎 PESQUISA-WEB (NATIVA) marcada no seletor do chat: o motor de busca
     # do RagAroy roda AGORA e as páginas INTEIRAS baixadas (DuckDuckGo/
     # Serper → download real via Trafilatura — não snippets) entram como
@@ -5585,6 +5605,7 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
             "pergunta_busca": pergunta_busca if not body.estado_agente else "",
             "bussola": bussola_sugestao,
             "model": modelo_usado, "provider": provider,
+            "busca": busca_stats,
             "tokens": contadores.balanco_ler()}  # ÚNICO método (o antigo
             # uso_desde(marcador) cruzava processos e divergia — removido)
 

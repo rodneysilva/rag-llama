@@ -30,7 +30,11 @@
   {% if tokens %}
   <div class="rodape">🪙 🔻{{ tokens.entrada }} · 🔺{{ tokens.saida }}
     {%- if tok_s %} · <b style="color:var(--ok)">⚡ {{ tok_s }} tok/s</b>{% endif %}
-    {%- if duracao_s %} · {{ duracao_s }}s{% endif %} · {{ tokens.chamadas }} chamada(s)</div>
+    {%- if duracao_s %} · {{ duracao_s }}s{% endif %} · {{ tokens.chamadas }} chamada(s)
+    {%- if busca %} · 🗄️ {{ busca.ms }}ms · {{ busca.fragmentos }} frag{% if busca.top is not none %} · top {{ busca.top }}{% endif %}{% endif %}</div>
+  {% elif busca %}
+  {# resposta-direta/cache: zero chamadas à LLM — a velocidade que resta é a da BUSCA #}
+  <div class="rodape">🗄️ busca {{ busca.ms }}ms · {{ busca.fragmentos }} frag{% if busca.top is not none %} · top {{ busca.top }}{% endif %} · 0 chamada(s) à LLM</div>
   {% endif %}
   {% from "_raciocinio.html" import raciocinio %}
   {{ raciocinio(linhas, passos, aberto=false) }}
