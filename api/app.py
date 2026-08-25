@@ -171,6 +171,29 @@ def _no_worker(msg: dict) -> None:
 
 fila.iniciar_worker(_no_worker, log=lambda m: print(f"🐇 {m}"))
 
+
+# ⏱️ PRÉ-AQUECIMENTO do reranker (pedido do dono — "por que demorou tanto?"):
+# o bge-reranker (~1,1 GB) é LAZY e a 1ª pergunta pagava ~36 s de
+# download+ carga na CPU. Uma thread daemon aquece no BOOT (5 s de folga
+# para a API subir primeiro); falha em silêncio — o comportamento lazy
+# original segue como fallback.
+def _preaquecer_reranker() -> None:
+    def _aq():
+        time.sleep(5)
+        try:
+            if rerank.disponivel() and getattr(config, "RERANKER", True):
+                rerank.notas_de("aquecimento", ["texto de aquecimento"],
+                                log=lambda m, g="": print(f"🎛️ {m}"))
+                print("🎛️ reranker pré-aquecido no boot — a 1ª pergunta "
+                      "não paga o carregamento")
+        except Exception as e:
+            print(f"🎛️ pré-aquecimento do reranker pulado: {str(e)[:80]}")
+    threading.Thread(target=_aq, daemon=True,
+                     name="preaquecer-reranker").start()
+
+
+_preaquecer_reranker()
+
 # ---------- autenticação (login simples, isolamento por conta) ----------
 
 # rotas que não exigem login: auth em si, status (o lock da LLM funciona
