@@ -5126,7 +5126,8 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
     # em modo rag é orientado na hora (antes: pagava ~7 s de busca para
     # no fim recusar), saudação responde direto. "fluxo" não toca em nada.
     try:
-        _rota = grafo.rotear(body.question, body.mode, log=log)
+        _rota = grafo.rotear(body.question, body.mode, log=log,
+                             historia=body.history)
     except Exception as _e:
         _rota = {"rota": "fluxo", "tipo": "", "motivo": f"erro: {str(_e)[:40]}"}
     if _rota["rota"] == "orientar_criacao":

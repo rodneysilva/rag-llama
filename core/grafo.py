@@ -34,41 +34,59 @@ from langgraph.graph import END, START, StateGraph
 class Estado(TypedDict, total=False):
     pergunta: str
     modo: str
+    historia: list          # últimas trocas (contexto p/ follow-ups)
     tipo: str      # criacao|midia|conversa|factual|"" (indefinido)
     motivo: str
     rota: str      # fluxo|orientar_criacao|conversa
 
 
-# ── triagem léxica (custo zero — cobre os casos evidentes) ──────────────
+# ── triagem léxica (custo zero — PT/EN cobrem o uso real; OUTROS idiomas
+#    e ambíguos caem no nó LLM, que segue a spec multilíngue) ────────────
 _RE_CRIAR = re.compile(
     r"\b(quer[oa]|cri[ae]|criar|faç|faz|fazer|mont[ae]|montar|ger[ae]|"
-    r"gerar|escrev|desenvolv|implement|constru|cod|code|program)\w*", re.I)
+    r"gerar|escrev|desenvolv|implement|constru|cod|code|program|"
+    r"create|build|make|write|generate|develop|scaffold|quiero|crea|haz|"
+    r"créer|erstelle)\w*", re.I)
 _RE_COISA = re.compile(
     r"\b(p[áa]gina|site|c[óo]digo|api|app|aplica|projeto|programa|script|"
-    r"componente|aba|tela|formul[áa]rio|banco|tabela|servidor|site|"
-    r"dashboard|crud|servi[çc]o|fun[çc][ãa]|classe|endpoint)\w*", re.I)
+    r"componente|aba|tela|formul[áa]rio|banco|tabela|servidor|dashboard|"
+    r"crud|servi[çc]o|fun[çc][ãa]|classe|endpoint|website|web\s?app|page|"
+    r"form|library|lib)\w*", re.I)
 _RE_MIDIA = re.compile(
-    r"\b(gif|imagem|imagine|imagem|v[íi]deo|desenh|foto|ilustra|anime|"
-    r"caricatura|quadro|anima)\w*", re.I)
+    r"\b(gif|imagem|v[íi]deo|desenh|foto|ilustra|anime|caricatura|quadro|"
+    r"anima|picture|drawing|illustration|render|imagen|vidéo|dibuj)\w*",
+    re.I)
 _RE_FACTUAL = re.compile(
     r"^(o\s+que|que\s+é|qual|quais|como\s+(funciona|fa[zs]|se|us[oa])|"
-    r"quando|onde|quem|por\s*qu[eê]|porqu[eê]|explique|explica|diferen[çc]a|"
-    r"compare|liste|mostre|cite)\b", re.I)
+    r"quando|onde|quem|por\s*qu[eê]|porqu[eê]|explique|explica|"
+    r"diferen[çc]a|compare|liste|mostre|cite|"
+    r"what|how|when|where|who|why|which|explain|describe|compare|list|"
+    r"tell\s+me|c[óo]mo|qu[ée]|cu[áa]l|cu[áa]ndo|d[óo]nde|pourquoi|"
+    r"comment|was\s+ist|wie)\b", re.I)
 _TRIVIAIS = {
-    "oi", "olá", "ola", "hey", "hello", "bom", "dia", "boa", "tarde",
-    "noite", "tudo", "bem", "como", "vai", "voce", "você", "é", "e", "um",
-    "uma", "robo", "robô", "ia", "quem", "o", "que", "faz", "qual", "seu",
-    "nome", "obrigado", "obrigada", "valeu", "vlw", "thanks", "thank",
-    "you", "beleza", "com", "está", "esta", "tchau", "adeus", "e",
+    "oi", "olá", "ola", "hey", "hello", "hi", "yo", "sup", "hola",
+    "salut", "bonjour", "buenos", "buenas", "gracias", "merci", "ciao",
+    "bom", "dia", "boa", "tarde", "noite", "morning", "evening", "night",
+    "tudo", "bem", "how", "are", "you", "como", "vai", "voce", "você",
+    "é", "e", "um", "uma", "robo", "robô", "ia", "quem", "o", "que",
+    "faz", "qual", "seu", "nome", "obrigado", "obrigada", "valeu", "vlw",
+    "thanks", "thank", "you", "beleza", "com", "está", "esta", "tchau",
+    "adeus", "bye", "goodbye", "muy", "gracias",
 }
 
 
 def _triagem_lexica(estado: Estado) -> Estado:
     """Regex pura: decide os casos EVIDENTES e marca ambíguos p/ LLM."""
     q = (estado.get("pergunta") or "").strip()
+    # follow-up curtíssimo SEM sinais próprios: o tipo vem da CONVERSA —
+    # deixa o nó LLM decidir com o histórico (não adivinha aqui)
     palavras = re.findall(r"[a-zà-ú]+", q.lower())
-    if q and len(palavras) <= 6 and all(p in _TRIVIAIS for p in palavras):
+    tem_historia = bool(estado.get("historia"))
+    if (q and not tem_historia and len(palavras) <= 6
+            and all(p in _TRIVIAIS for p in palavras)):
         return {**estado, "tipo": "conversa", "motivo": "saudação curta"}
+    if tem_historia and len(palavras) <= 3:
+        return {**estado, "tipo": "", "motivo": "follow-up curto"}
     if _RE_MIDIA.search(q):
         return {**estado, "tipo": "midia", "motivo": "pedido de mídia"}
     if _RE_CRIAR.search(q) and _RE_COISA.search(q):
@@ -79,15 +97,28 @@ def _triagem_lexica(estado: Estado) -> Estado:
 
 
 def _classificar_llm(estado: Estado) -> Estado:
-    """Nó LLM — SÓ chamado para ambíguos (temperature 0, spec roteador)."""
-    from . import rag
+    """Nó LLM — ambíguos e outros idiomas (temperature 0, spec roteador:
+    multilíngue, decide COM a conversa recente quando há follow-up)."""
+    from . import contadores, rag
     from .specs import spec
     try:
+        hist = estado.get("historia") or []
+        trecho = ""
+        if hist:
+            partes = []
+            for m in hist[-4:]:
+                papel = "usuário" if m.get("role") == "user" else "assistente"
+                partes.append(f"{papel}: {str(m.get('content', ''))[:200]}")
+            trecho = ("CONVERSA RECENTE (contexto):\n" + "\n".join(partes)
+                      + "\n\nMENSAGEM ATUAL:\n")
         chain = rag.build_prompt() | rag.llm(temperature=0.0)
+        contadores.set_etapa("roteador")   # etiqueta própria: não suja as
+        # métricas das etapas de resposta (pedido: "não comprometer a llm")
         saida = chain.invoke({
             "system_text": spec("roteador"),
             "context": "", "history": [],
-            "question": f"MENSAGEM DO USUÁRIO:\n{estado['pergunta'][:400]}"})
+            "question": trecho + f"{estado['pergunta'][:400]}"})
+        contadores.set_etapa(None)
         texto = str(saida.content if hasattr(saida, "content") else saida)
         m = re.search(r"\{.*\}", texto, re.S)
         dados = json.loads(m.group(0)) if m else {}
@@ -130,13 +161,16 @@ def _compilar():
     return g.compile()
 
 
-def rotear(pergunta: str, modo: str, log=print) -> dict:
+def rotear(pergunta: str, modo: str, log=print, historia: list | None = None) -> dict:
     """Ponto de entrada: {"tipo","rota","motivo"} — ANTES de qualquer
-    busca/cache. Custa ~0 (léxico) ou 1 chamada barata (ambíguos)."""
+    busca/cache. `historia` (últimas trocas) contextualiza follow-ups.
+    Custa ~0 (léxico PT/EN) ou 1 chamada barata (outros idiomas/ambíguos)."""
     app = _compilar()
-    est = app.invoke({"pergunta": (pergunta or "").strip(), "modo": modo or ""})
+    est = app.invoke({"pergunta": (pergunta or "").strip(),
+                      "modo": modo or "",
+                      "historia": historia or []})
     rota = est.get("rota", "fluxo")
-    if rota != "fluxo" or est.get("motivo") == "ambíguo":
+    if rota != "fluxo" or est.get("motivo") in ("ambíguo", "follow-up curto"):
         log(f"🧭 roteador: tipo={est.get('tipo') or 'ambíguo'} → {rota} "
             f"({est.get('motivo', '')})", "mensagem")
     return {"tipo": est.get("tipo", ""), "rota": rota,
