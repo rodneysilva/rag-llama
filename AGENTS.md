@@ -903,6 +903,18 @@ da API**.
   O 502 do Cloudflare em ai.disroy.org durante ~20 s = restart da API
   no deploy (CI `--force-recreate`) — janela normal de publicação; a UI
   aberta se recupera sozinha (polling/toast).
+- **🎮 Padrão VRAM-compatível + NPU opcional (25/08)**: o boot do agente
+  NÃO tenta mais carregar modelo que não cabe (ou não existe): troca pelo
+  MAIOR chat compatível (`GB_MAX_CHAT` 6 GB + embedding em 8 GB). O menu
+  do `servicos_llm.py` sugere o 1º compatível (Enter), marca ⚠️ os que
+  estouram e exige confirmação explícita; encoders de difusão (umt5/
+  t5xxl/clip/mmproj) ganharam categoria própria `encoder` em `PADROES`
+  (antes caiam no default "chat" e o umt5 de 6 GB aparecia como opção
+  de conversa). **FastFlowLM (NPU) é apenas um PROVEDOR opcional**
+  (`PROV_FLM_BASE_URL` — flm serve é OpenAI-compatible; sem NPU nada
+  muda): máquina com Ryzen AI pode pôr leitura de documentação longa/
+  logs na NPU enquanto a GPU cuida do chat — arquitetura híbrida sem
+  código novo (o sistema de provedores já cobre).
 - **🤗 HF com SELEÇÃO + TEMPERATURE única (24/08, 20h)**: Biblioteca →
   fonte `huggingface (datasets)` abre VITRINE (`GET /api/hf/datasets` sem
   `q` = mais baixados; com `q` = busca do `hf.buscar`) com CHECKBOXES —

@@ -145,6 +145,11 @@ PROV_ANTHROPIC_API_KEY=sk-ant-...
   externo fica visível ao lado do local.
 - Chaves nunca aparecem na UI (mascaradas como segredo) e o embedding
   segue local (bge-m3) para a base não perder dimensão.
+- **🧠 NPU opcional (FastFlowLM)**: em máquinas com NPU (ex.: Ryzen AI),
+  `flm serve` expõe uma API OpenAI-compatible — configure
+  `PROV_FLM_BASE_URL` e a NPU vira um provedor 🌐 para tarefas de fundo
+  (documentação longa, logs, RAG de repo) enquanto a GPU cuida do chat
+  rápido. Sem NPU: nada a configurar, nada muda.
 
 </details>
 

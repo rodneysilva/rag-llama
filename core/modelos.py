@@ -1,4 +1,4 @@
-﻿"""
+﻿r"""
 Registro e troca dos modelos de D:\models, organizados por categoria.
 
 Categorias (derivadas do nome do arquivo — novos GGUFs aparecem sozinhos):
