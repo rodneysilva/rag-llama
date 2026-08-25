@@ -5480,6 +5480,29 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
                             f"{config.SCORE_FRACO}) — a base não sustenta esta "
                             "pergunta; descartados do contexto", "busca")
                         achados = []
+                        # 🔁 2º resgate PT→EN: o rerank bilíngue também não
+                        # salvou — última carta é traduzir a PERGUNTA e
+                        # rebuscar (conhecimento real que caiu na zona fraca
+                        # por idioma; criação/mistura de assuntos não salva —
+                        # a recusa orientada cuida desses)
+                        if not body.history and body.mode in ("rag", "hibrido"):
+                            try:
+                                from core import idioma as _idioma2
+                                _en = _idioma2.para_busca_inglesa(
+                                    pergunta_busca,
+                                    log=lambda m, g="busca": log(m, g))
+                                if _en.strip().lower() != pergunta_busca.strip().lower():
+                                    achados2, _ = rag.search(
+                                        client, escopo, _en,
+                                        log=lambda m, g="busca": log(m, g))
+                                    if achados2 and max(float(s) for _, s, _ in achados2) >= config.SCORE_FRACO:
+                                        achados = achados2
+                                        pergunta_busca = _en
+                                        log(f"🔁 resgate tardio (EN) trouxe "
+                                            f"{len(achados)} fragmento(s) "
+                                            "relevantes", "busca")
+                            except Exception:
+                                pass
         except HTTPException:
             raise  # 503 já traz a CAUSA — não re-empacota como "Qdrant indisponível"
         except Exception as e:
@@ -5606,15 +5629,37 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
             contadores.set_etapa(None)
         else:
             # spec restritiva (F2-8): SEM contexto não há o que responder —
-            # a frase exata, sem gastar chamada de LLM
-            answer = ("Não possuo dados confiáveis o suficiente nos "
-                      "documentos para responder.")
+            # a frase exata, sem gastar chamada de LLM.
+            # 💡 PEDIDO DE CRIAÇÃO em modo rag (bug real do dono: "quero uma
+            # página em .net 10 sobre culinária" → recusa nua): criar algo
+            # novo é trabalho do HÍBRIDO (base orienta o estilo, modelo
+            # escreve) — a recusa ORIENTA em vez de só negar
+            _RE_CRIAR = re.compile(
+                r"\b(quer[oa]|cri[ae]|criar|faç|faz|fazer|mont[ae]|montar|"
+                r"ger[ae]|gerar|escrev|desenvolv|implement|constru|code|"
+                r"program)\w*", re.I)
+            _RE_COISA = re.compile(
+                r"\b(p[áa]gina|site|c[óo]digo|api|app|aplica|projeto|"
+                r"programa|script|componente|aba|tela|formul[áa]rio|"
+                r"banco|tabela|servidor|fun[çc][ãa]|classe)\w*", re.I)
+            if body.mode == "rag" and _RE_CRIAR.search(body.question or "") \
+                    and _RE_COISA.search(body.question or ""):
+                answer = ("Não possuo dados confiáveis o suficiente nos "
+                          "documentos para responder.\n\n💡 Seu pedido parece "
+                          "ser de **criação** (página, código, API…): troque "
+                          "para o modo **híbrido** — a base orienta o estilo "
+                          "e o modelo escreve. Dica: para código, selecione "
+                          "só a coleção da tecnologia (ex.: dotnet) — misturar "
+                          "assuntos dilui a busca.")
+            else:
+                answer = ("Não possuo dados confiáveis o suficiente nos "
+                          "documentos para responder.")
     if pendente:
         log(f"🔐 aguardando sua aprovação para usar {pendente['ferramenta']}", "mcp")
         print(f"\n🔐 Ferramenta aguardando aprovação: {pendente['ferramenta']} "
               f"← {pendente['argumento'][:120]}")
     else:
-        print(f"\n🔗 Pergunta (modo híbrido): {body.question} [coleções: {colecoes}]"
+        print(f"\n🔗 Pergunta (modo {body.mode}): {body.question} [coleções: {colecoes}]"
               f"\n🔌 MCPs: {body.mcps or []} — {len(usos)} chamada(s) de ferramenta"
               f"\n📚 {len(found)} documento(s)\n🤖 Resposta: {answer}\n")
     if cacheavel and not pendente and not body.history:
