@@ -127,6 +127,36 @@ def limpar_sid(sid: str) -> int:
     return n
 
 
+def limpar_colecoes(colecoes: list[str]) -> int:
+    """Apaga as entradas cujo ESCOPO toca qualquer das coleções ingeridas
+    (invalidação por REINGESTÃO — bug real: a base ganhou o doc do frango
+    e o cache devolvia a recusa ANTIGA com 0.979; com "ensinar a base" no
+    chat, a resposta obsoleta na hora errada virou mentira).
+
+    Escopos "todas" (sem coleções na chave) também caem: a ingestão
+    afeta quem consulta sem filtro."""
+    cliente = _redis_client()
+    if cliente is None or not colecoes:
+        return 0
+    alvo = {str(c) for c in colecoes if c}
+    n = 0
+    try:
+        for eid in cliente.zrange(_IDX, 0, -1):
+            d = cliente.hgetall(_PREFIXO + eid.decode())
+            if not d:
+                continue
+            escopo = d.get(b"colecoes", b"").decode()
+            # escopo = "owner|colA|colB" (sorted no store) — vazio = "todas"
+            cols = {x for x in escopo.split("|")[1:] if x}
+            if not cols or (cols & alvo):
+                cliente.delete(_PREFIXO + eid.decode())
+                cliente.zrem(_IDX, eid)
+                n += 1
+    except Exception:
+        pass
+    return n
+
+
 def lookup(pergunta: str, colecoes: list[str] | None = None,
            modelo: str = "", owner: str = "") -> dict | None:
     """Resposta em cache para a pergunta (ou parecida), ou None.

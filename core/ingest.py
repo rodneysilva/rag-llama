@@ -337,6 +337,19 @@ def ingest_docs(docs, collection=None, rapido=False, log=None):
     total = client.count(collection).count
     log(f"✅ Ingestão concluída! Coleção '{collection}' tem {total} pontos no Qdrant")
 
+    # 5b) INVALIDA o cache semântico da coleção (regra nova com "ensinar a
+    # base": resposta antiga em cache virava mentira — a base mudou mas o
+    # cache devolvia a recusa obsoleta com 0.979 de confiança). Escopos
+    # "todas" também caem (a ingestão afeta quem consulta sem filtro).
+    try:
+        from . import cache as _cache
+        n = _cache.limpar_colecoes([collection])
+        if n:
+            log(f"⚡ cache: {n} resposta(s) em cache desta coleção "
+                "invalidada(s) — a base mudou")
+    except Exception:
+        pass  # cache é refinamento: nunca trava a ingestão
+
     return {
         "colecao": collection,
         "folder": str(docs[0].metadata.get("source", "?")).split("/")[0]
