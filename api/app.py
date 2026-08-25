@@ -5490,6 +5490,18 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
         except Exception as e:
             log(f"⚠️ pesquisa-web falhou: {str(e)[:120]}", "mcp")
     usos, mcp_erros, pendente, aprovacoes = [], {}, None, body.aprovacoes_sessao or {}
+    # 🛡️ GUARDA DE VERSÃO (dinâmica, contra o Qdrant — pedido do dono): a
+    # pergunta cita "C# 14/.NET 10/python 3.12" e NENHUM fragmento traz?
+    # O contexto do prompt ganha o aviso (rag proíbe inventar; híbrido
+    # exige declarar) — e o "pensando…" mostra o porquê da resposta curta
+    try:
+        _ausentes = rag.versoes_ausentes(body.question, docs or [])
+        if _ausentes:
+            log(f"⚠️ versão citada ({', '.join(_ausentes)}) não está nos "
+                "fragmentos — modelo instruído a não inventar (responda "
+                "com o que a base cobre)", "busca")
+    except Exception:
+        pass
     # 📦 TRANSPARÊNCIA DO PROMPT (pedido: "sem ruídos — specs, digitado,
     # cache e rag"): o que EXATAMENTE vai para o modelo, em tokens
     # estimados — dá para ver de onde vem o tamanho antes de gerar

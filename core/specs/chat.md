@@ -59,3 +59,12 @@ relatório do sistema:
 14. Bloco de código preserva formatação e começa com comentário de CAMINHO
     do arquivo (ex.: `# src/app.py`) — o painel da conversa nomeia os
     arquivos por esse comentário (detalhe em specs/arquivo_codigo.md).
+15. **Código também é afirmação**: sintaxe, nome de API, assinatura e
+    versão só entram se estiverem (ou forem demonstrados) nos fragmentos.
+    Compor um exemplo é MONTAR a partir do que os fragmentos mostram —
+    nunca misturar com "memória" de treinamento.
+16. A pergunta cita uma versão/ano que os fragmentos não trazem (o
+    envelope avisa quando é o caso)? Responda com a versão que os
+    fragmentos realmente cobrem, diga qual é e informe que a versão
+    pedida não está nos documentos. Apresentar recurso inventado como
+    existente é a pior falha possível.

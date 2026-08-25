@@ -378,11 +378,77 @@ def _gerar(chain, payload: dict, on_token=None) -> str:
     return naturalizar(''.join(buf))
 
 
+# ─── GUARDA DE VERSÃO (código, dinâmico — "a spec monta com base no
+# qdrant", pedido do dono): a pergunta cita versão/ano de tecnologia
+# (C# 14, .NET 10, python 3.12…) e NENHUM fragmento recuperado traz? o
+# contexto ganha um REGISTRO DA BUSCA avisando o modelo para não inventar
+# recursos daquela versão — o modelo 8B "conhece" o mundo antigo do
+# treinamento e apresentava sintaxe inventada como se fosse da versão
+# pedida. Zero fato hardcoded: a checagem é a MESMA regex contra a
+# pergunta e contra os fragmentos que vieram do Qdrant. ───
+_RE_TECH_VERSAO = re.compile(
+    r"(?:\.\s?net\s*(?:core\s*|framework\s*)?v?(\d{1,2})(?:\.\d+)?"
+    r"|\bdotnet\s*v?(\d{1,2})\b"
+    r"|\b(?:c\s*#|csharp)\s*v?(\d{1,2})\b"
+    r"|\b(python|java|node(?:js)?|deno|bun|typescript|javascript|react|vue|"
+    r"angular|django|flask|fastapi|rails|ruby|rust|golang|php|laravel|"
+    r"kotlin|swift|spring|svelte)\s+v?(\d{1,2})(?:\.\d+)?)", re.I)
+
+
+def _pares_versao(texto: str) -> set[str]:
+    """{"C# 14", ".NET 10", "python 3"} citados no texto (canônico)."""
+    pares = set()
+    for m in _RE_TECH_VERSAO.finditer(texto or ""):
+        g = m.groups()
+        if g[0]:
+            pares.add(f".NET {g[0]}")
+        elif g[1]:
+            pares.add(f".NET {g[1]}")
+        elif g[2]:
+            pares.add(f"C# {g[2]}")
+        elif g[3] and g[4]:
+            pares.add(f"{g[3].lower()} {g[4]}")
+    return pares
+
+
+def versoes_ausentes(question: str, docs) -> list[str]:
+    """Versões citadas na pergunta que NÃO aparecem em nenhum fragmento
+    recuperado — a distância entre o que foi pedido e o que a base traz."""
+    citadas = _pares_versao(question or "")
+    if not citadas or not docs:
+        return []
+    na_base = _pares_versao("\n".join(str(d.page_content) for d in docs))
+    return sorted(c for c in citadas if c not in na_base)
+
+
+def _ctx_com_guarda(contexto: str, question: str, docs, hibrido: bool = False) -> str:
+    """Anexa ao contexto o REGISTRO DA BUSCA quando a versão pedida não
+    está nos fragmentos (rag: proíbe inventar; híbrido: exige declarar
+    que não vem da base)."""
+    ausentes = versoes_ausentes(question, docs)
+    if not ausentes:
+        return contexto
+    rigido = ("NÃO invente recursos, sintaxe, APIs ou exemplos desta(s) "
+              "versão(ões): responda com o que os fragmentos realmente "
+              "trazem, informe qual versão os documentos cobrem e diga que "
+              "a versão pedida não está na base.")
+    flexivel = ("Se complementar com conhecimento próprio sobre ela(s), "
+                "DIGA explicitamente que não vem da base e pode estar "
+                "desatualizado — nunca apresente como conteúdo dos documentos.")
+    return (contexto
+            + "\n\n[REGISTRO DA BUSCA] A pergunta cita "
+            + ", ".join(ausentes)
+            + ", mas NENHUM fragmento recuperado menciona esta(s) versão(ões). "
+            + (flexivel if hibrido else rigido))
+
+
 def answer(question, docs, history=None, bases=None, on_token=None):
     """Resposta completa em uma string (usada pela API/webui)."""
     chain = build_prompt() | llm() | StrOutputParser()
     return _gerar(chain, {"system_text": _system_text("chat"),
-                          "context": _contexto_com_bases(bases, format_docs(docs)),
+                          "context": _ctx_com_guarda(
+                              _contexto_com_bases(bases, format_docs(docs)),
+                              question, docs),
                           "question": question, "history": _history_messages(history)},
                   on_token)
 
@@ -432,6 +498,9 @@ def answer_hybrid(question, docs, history=None, bases=None, on_token=None):
     ]) | llm() | StrOutputParser())
     contexto = format_docs(docs) if docs else "(nada foi recuperado da base para esta pergunta)"
     contexto = _contexto_com_bases(bases, contexto)
+    # guarda de versão também no híbrido (aviso flexível: pode completar,
+    # mas tem que DECLARAR que não veio da base)
+    contexto = _ctx_com_guarda(contexto, question, docs, hibrido=True)
     # ENVELOPE (dados, não comportamento): pergunta CURTA de continuação
     # ganha o ÚLTIMO CÓDIGO da conversa colado — o 7B não reconecta sozinho
     # e respondia fora do assunto (Hello World para um pedido de culinária).
@@ -670,7 +739,9 @@ def answer_stream(question, docs, history=None, bases=None):
     """Resposta em streaming (usada pelo CLI)."""
     chain = build_prompt() | llm() | StrOutputParser()
     return chain.stream({"system_text": _system_text("chat"),
-                         "context": _contexto_com_bases(bases, format_docs(docs)),
+                         "context": _ctx_com_guarda(
+                             _contexto_com_bases(bases, format_docs(docs)),
+                             question, docs),
                          "question": question, "history": _history_messages(history)})
 
 
