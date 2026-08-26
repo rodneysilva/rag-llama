@@ -1046,6 +1046,24 @@ da API**.
   formatos (com [Route] e só [HttpGet]) — app NO AR com preview.
   Estação tem dotnet 10.0.301: `gera_boot.py` recria o caso em
   `Temp\kilo\boot_cs` para compilar antes de publicar.
+- **🧹 CS5001 COM CSPROJ + FASTAPI MUDO (26/08, noite 3)**: (1) conversa
+  com `app.csproj` + classes SEM entry voltava `return` cedo no
+  `_preparar_cs` — CS5001 na cara (bootstrap/placeholder só rodavam SEM
+  csproj). Agora o ENTRY-CHECK vem PRIMEIRO (bootstrap aspnet /
+  placeholder console valem nos DOIS caminhos) E a complementação de
+  `ImplicitUsings` no csproj da conversa também (o bootstrap gerado
+  herdava csproj sem usings → CS0103 WebApplication). ⚠️ heurística
+  `_e_toplevel` só em `.cs`: o XML do csproj "parece" top-level (sem
+  declaração de tipo, com linhas úteis) e fazia tem_entry=True errado.
+  (2) **python fastapi**: `python3 app.py` NÃO sobe servidor NENHUM
+  quando o código só declara `app = FastAPI()` (sem uvicorn.run/__main__
+  o processo morre na hora, porta nunca responde, site.log vazio) —
+  runner agora é `python3 -m uvicorn {stem}:app --host --port` quando o
+  código não se auto-sobe (uvicorn garantido nas deps; flask segue
+  direto). Provado em produção: csproj+classes → "app no ar";
+  fastapi → "Uvicorn running… app NO AR". Página 🧭 "esta rota não
+  existe" num preview VIVO é o app GERADO com link morto (spec regra
+  9) — não é bug da sandbox.
 - **🧹 SANDBOX: `#` estilo Python em .cs (26/08, noite)**: a LLM às vezes
   emite `# src/X.cs` (comentário de nome no marcador errado) na 1ª linha
   de blocos csharp → CS1024 "Preprocessor directive expected" matava o
