@@ -63,7 +63,12 @@
         {# ══ LINHA DE ENTRADA: [mic] [textarea flex] [enviar] — flexbox, alinhados ══ #}
         <div class="entrada-linha">
           <button type="button" class="mic-btn" id="btn-mic" onclick="alternarMic()" title="ditar — para sozinho ao detectar silêncio (VAD) e envia">&#127908;</button>
-          <textarea id="pergunta" name="question" rows="1" placeholder="pergunte… (⏎ envia · ⇧⏎ linha · ↑ última)" required></textarea>
+          {# ⚠️ SEM required: o htmx valida o form DEPOIS do meu listener de
+             submit (que limpa a caixa "no ato") — com required a textarea
+             vazia fazia o htmx abortar com htmx:validation:halted
+             SILENCIOSO (nenhum POST saía: "enviando…" eterno). O bloqueio
+             de vazio é feito no submit com preventDefault. #}
+          <textarea id="pergunta" name="question" rows="1" placeholder="pergunte… (⏎ envia · ⇧⏎ linha · ↑ última)"></textarea>
           <button class="primario enviar-btn" type="submit" title="enviar">&#10148;</button>
         </div>
         {# mídia anexada ao contexto (📎 no painel) — IMPLÍCITO: tudo que
@@ -325,6 +330,11 @@ FORM.addEventListener("htmx:beforeRequest", (e) => {
     return;
   }
   _enviando = true;   // agora o request vai sair: bloqueia duplicados
+  // ⚡ a caixa limpa AQUI (não no submit!): a este ponto o htmx JÁ capturou
+  // os parâmetros do form — limpar antes fazia o POST sair com question=""
+  // (ou com required, abortar em validation:halted silencioso)
+  TA.value = "";
+  ajustarAlturaTA();
 });
 FORM.addEventListener("htmx:afterRequest", (e) => {
   if (e.target !== FORM) return;
@@ -352,15 +362,12 @@ FORM.addEventListener("htmx:afterRequest", (e) => {
    voltar — pedido do dono: "deve ser instantâneo, mesmo que precise
    pensar depois"). O servidor devolve SÓ o card do job (header
    X-Otimista) e o placeholder "enviando…" sai quando ele chega. */
-FORM.addEventListener("submit", () => {
+FORM.addEventListener("submit", (e) => {
   const v = TA.value.trim();
-  if (!v) return;   // required cuida, mas garantimos
-  // ⚡ a caixa limpa NO ATO (antes do POST sair — fim do "texto aparece na
-  // tela e ainda fica na textarea"); o afterRequest devolve se falhar.
-  // (o flag _enviando NÃO sobe aqui — sobe no beforeRequest do htmx)
+  if (!v) { e.preventDefault(); return; }   // vazio: NEM o htmx envia
+  // a limpeza da caixa NÃO é aqui (ver beforeRequest: os parâmetros do
+  // form ainda não foram capturados pelo htmx)
   _ultimoEnvio = v;
-  TA.value = "";
-  ajustarAlturaTA();
   const bolha = document.createElement("div");
   bolha.className = "msg usuario otimista";
   bolha.innerHTML = '<div class="cab-msg"><span class="av-msg">&#128100;</span>' +
