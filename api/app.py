@@ -975,17 +975,13 @@ def hx_chat(request: Request, question: str = Form(""), mode: str = Form("hibrid
     try:
         anterior = sessions.get_session(sid) or {}
         bruto = anterior.get("raw") or []
-        # 1ª mensagem da conversa → TÍTULO SEMÂNTICO por embedding
-        # (tema da coleção mais próxima · pergunta curta)
-        titulo_calc = None
-        if not bruto:
-            try:
-                titulo_calc = sessions.titulo_semantico(question, colecoes)
-            except Exception:
-                titulo_calc = None
+        # 1ª mensagem → o título NASCE "(sem título)" e o TÍTULO SEMÂNTICO
+        # (embedding) é calculado no POLL de conclusão — o POST NUNCA
+        # espera pelo embed (era o delay do envio: até 3,5 s pendurados
+        # antes da caixa limpar)
         bruto.append({"role": "user", "content": question})
         sessions.save_session(bruto, sid=sid, owner=anterior.get("owner", ""),
-                              titulo=titulo_calc, modo=mode, colecoes=colecoes,
+                              titulo="", modo=mode, colecoes=colecoes,
                               aprovacoes=anterior.get("aprovacoes", {}),
                               raw=bruto,
                               job_ativo={"kind": "chat", "job": r["job"]})
@@ -1054,8 +1050,22 @@ def hx_chat_poll(job: str, request: Request):
                           "cache": res.get("cache") or None,
                           "pensamentos": passos or [l for l in s["lines"]],
                           "pensamentos_sintetizados": bool(passos)})
+            # 🏷️ TÍTULO SEMÂNTICO ADIADO: nasceu "(sem título)" no envio
+            # (o POST nunca espera embed) — aqui, na CONCLUSÃO da 1ª
+            # resposta, o embedding roda com calma (o usuário já lê a
+            # resposta; embed quente do job, ~centenas de ms)
+            titulo_calc = None
+            if (anterior.get("titulo") or "") in ("", "(sem título)"):
+                try:
+                    primeira = next((m.get("content", "") for m in bruto
+                                      if m.get("role") == "user"), "")
+                    if primeira:
+                        titulo_calc = sessions.titulo_semantico(
+                            primeira, anterior.get("colecoes"))
+                except Exception:
+                    titulo_calc = None
             sessions.save_session(bruto, sid=sid, owner=anterior.get("owner", ""),
-                                  titulo=None, modo=res.get("mode", "hibrido"),
+                                  titulo=titulo_calc, modo=res.get("mode", "hibrido"),
                                   aprovacoes=anterior.get("aprovacoes", {}),
                                   raw=bruto, job_ativo=None)  # concluiu: limpa
             if passos:

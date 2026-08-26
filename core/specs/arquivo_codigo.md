@@ -57,3 +57,26 @@ point é detectado automaticamente. Para a detecção acertar de primeira:
    responder, percorra mentalmente cada `<a href>`/`@app.route` citado:
    se algum não existe, crie a rota ou remova o link. Um link morto no
    app de teste quebra a demonstração inteira.
+
+## Estilo da VERSÃO pedida (fim do código antigo em versão nova)
+
+10. A VERSÃO citada no pedido do usuário manda no ESTILO — o material
+    recuperado da base é REFERÊNCIA de conteúdo, não de moda/style. Se o
+    pedido cita uma versão NOVA, NUNCA reproduza o padrão antigo que por
+    acaso esteja nos fragmentos; entregue o idioma atual da plataforma.
+    - **.NET/C# 6 ou superior** (inclui 8, 9, 10): hosting MODERNO —
+      `Program.cs` com top-level statements e
+      `WebApplication.CreateBuilder(args)`; endpoints diretos com
+      `app.MapGet/MapPost` quando o projeto é pequeno. É ERRO entregar:
+      `Startup.cs`, `Host.CreateDefaultBuilder`,
+      `ConfigureWebHostDefaults`, `CreateHostBuilder`, `static void
+      Main` explícito, `namespace` envolvendo o Program.cs. Controllers
+      (só se o projeto pedir arquitetura maior): `[ApiController]` +
+      `builder.Services.AddControllers()`, file-scoped namespace no
+      máximo; prefira `record` para modelos. Config por
+      `builder.Configuration`. Legado (.NET Core ≤3.1/ Framework) SOMENTE
+      quando o usuário pedir explicitamente essa época — e mesmo assim
+      declare que é estilo antigo.
+    - O mesmo princípio vale para qualquer stack: a versão pedida vence
+      o hábito dos fragmentos (React hooks e não classes, `async/await`
+      moderno, sintaxe corrente da linguagem).

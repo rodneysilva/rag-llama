@@ -293,18 +293,25 @@ document.body.addEventListener("htmx:afterSwap", (e) => {
   }
 });
 ajustarAlturaTA();
-// limpa a caixa SOMENTE depois que o htmx enviou de verdade
+// limpa a caixa NO ATO do envio (pedido do dono: zero delay) — se o envio
+// FALHAR, o texto VOLTA para reeditar/reenviar
+let _ultimoEnvio = "";
 FORM.addEventListener("htmx:afterRequest", (e) => {
   if (e.target === FORM && e.detail.successful) {
-    TA.value = "";
-    ajustarAlturaTA();
     tirarDoContexto();   // a referência foi consumida pelo envio
+    _ultimoEnvio = "";
   }
   if (e.target === FORM && !e.detail.successful) {
-    // 🫧 envio FALHOU (rede): a bolha otimista sai para o usuário tentar
-    // de novo sem fantasma na conversa
+    // 🫧 envio FALHOU (rede): a bolha otimista sai, o texto VOLTA à caixa
+    // para o usuário tentar de novo sem fantasma na conversa
     document.querySelectorAll("#pensando .otimista, #pensando .otimismo")
       .forEach(n => n.remove());
+    if (_ultimoEnvio && !TA.value.trim()) {
+      TA.value = _ultimoEnvio;
+      ajustarAlturaTA();
+      TA.focus();
+    }
+    _ultimoEnvio = "";
   }
 });
 
@@ -316,6 +323,11 @@ FORM.addEventListener("htmx:afterRequest", (e) => {
 FORM.addEventListener("submit", () => {
   const v = TA.value.trim();
   if (!v) return;   // required cuida, mas garantimos
+  // ⚡ a caixa limpa NO ATO (antes do POST sair — fim do "texto aparece na
+  // tela e ainda fica na textarea"); o afterRequest devolve se falhar
+  _ultimoEnvio = v;
+  TA.value = "";
+  ajustarAlturaTA();
   const bolha = document.createElement("div");
   bolha.className = "msg usuario otimista";
   bolha.innerHTML = '<div class="cab-msg"><span class="av-msg">&#128100;</span>' +
