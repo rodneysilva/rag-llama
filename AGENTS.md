@@ -941,6 +941,24 @@ da API**.
   inválido degrada em silêncio (log ⚠️, seção some — nunca quebra a
   vitrine). E2E `Temp\kilo\e2e_hf_tudo.py` (WAF da borda BLOQUEIA
   User-Agent "Python-urllib" → 403 sem body; UA custom passa).
+- **⚡ ENVIO INSTANTÂNEO + ESTILO DA VERSÃO + BUG top_score (26/08)**:
+  (1) **textarea limpa NO ATO do submit** (era no `afterRequest` — o
+  texto ficava na caixa até o POST voltar); se o envio FALHA o texto
+  VOLTA (`_ultimoEnvio`). (2) **título semântico SAIU do POST** — o
+  `titulo_semantico` (embed, guard 3,5 s) pendurava o envio na 1ª
+  mensagem; agora a sessão nasce "(sem título)" e o título é calculado
+  no POLL de conclusão (embed quente, usuário já lendo). POST medido:
+  **0,03–0,05 s** em produção. (3) **spec `arquivo_codigo.md` regra 10**:
+  a VERSÃO citada no pedido manda no ESTILO — .NET 6+ (inclui 10) =
+  minimal hosting (`WebApplication.CreateBuilder`, top-level, MapGet/
+  MapPost; PROIBIDO Startup.cs/CreateHostBuilder/ConfigureWebHostDefaults/
+  Main explícito/namespace no Program); o material recuperado é
+  referência de CONTEÚDO, não de moda — provado: mesmo pedido que gerou
+  Startup.cs agora gera `// src/Program.cs` top-level. (4) **BUG
+  UnboundLocalError `top_score`**: resgate por versão com densa VAZIA
+  reabastecia `achados` e o rodapé lia `top_score` (só nascia no
+  `if achados`) — a resposta MORRIA inteira ("cannot access local
+  variable"); nasce 0.0 junto da busca e recalcula com os extras.
 - **🌐 Provedores EXTERNOS de LLM (24/08, 16h)**: `core/provedores.py` —
   qualquer endpoint OpenAI-compatible (glm/deepseek/openai/anthropic…
   e o PRÓPRIO llama-server remoto) vira grupo 🌐 no seletor do chat.
