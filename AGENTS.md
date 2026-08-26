@@ -989,6 +989,29 @@ da API**.
   (`Temp\kilo\checa_js.py`) — sintaxe OK não pega ERRO DE LÓGICA de
   ordem de eventos; para guard de envio, pensar na SEQUÊNCIA submit →
   beforeRequest → afterRequest.
+- **🚨 CAUSA RAIZ FINAL do chat mudo (26/08, tarde 3 — htmx
+  validation:halted SILENCIOSO)**: o textarea tinha `required` E o meu
+  listener de submit limpava a caixa "no ato" — listeners rodam na
+  ordem de registro (o meu script inline vem ANTES do init do htmx),
+  então o htmx validava o form COM A CAIXA JÁ VAZIA →
+  `htmx:validation:halted` → **request abortado sem NENHUM erro de
+  console/rede** (achado com Playwright: `configRequest` nunca chegava
+  a disparar; `form.querySelectorAll(':invalid')` mostrava
+  `question|textarea|valueMissing:true`). FIX: `required` REMOVIDO
+  (vazio bloqueado com `e.preventDefault()` no submit) e a limpeza da
+  caixa mudou para o `htmx:beforeRequest` — os PARÂMETROS do form são
+  capturados pelo htmx ENTRE o submit e o configRequest: limpar no
+  submit mandava `question=""` no POST (a resposta viria "pergunta
+  vazia"). REGRA HTMX: nunca mutar inputs do form no listener de
+  submit; mutar só em `beforeRequest`/`configRequest` (parâmetros já
+  capturados). DIAGNÓSTICO que provou: Playwright headless + listener
+  de `htmx:validation:halted` + patch de
+  `XMLHttpRequest.prototype.open` (o evento `response` do Playwright
+  engoliu o POST em 1 script — patch de XHR é a captura confiável;
+  `Temp\kilo\e2e_browser2.py` é o E2E de referência: login → Enter →
+  POST → card → resposta). jobsbar em branco é ESTADO NORMAL: só
+  lista jobs de pesquisa/preview/ingest/seed/manutencao — job de CHAT
+  vive na conversa (#pensando), nunca no jobsbar.
 - **🌐 Provedores EXTERNOS de LLM (24/08, 16h)**: `core/provedores.py` —
   qualquer endpoint OpenAI-compatible (glm/deepseek/openai/anthropic…
   e o PRÓPRIO llama-server remoto) vira grupo 🌐 no seletor do chat.
