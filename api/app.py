@@ -5495,10 +5495,13 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
             log(f"📚 {len(achados)} fragmento(s): "
                 + ", ".join(f"{c} ({n})" for c, n in por_colecao.items()), "busca")
             # 🎛️ reranker (F2-7): com contexto largo, o cross-encoder local
-            # reordena os top-15 por relevância real e devolve os 4 melhores
+            # reordena os top por relevância real e devolve os 4 melhores
             # (menos ruído no prompt). Degrada em silêncio sem torch/flag.
+            # ⚡ TOP-8 (era 15): ~1 s/par na CPU de 2 vCPUs da VPS — 15 pares
+            # eram 15 s por pergunta; o top-4 sai de 8 candidatos fácil e o
+            # gate fraco revalida os MESMOS 8 (cache de pares = grátis).
             if body.mode in ("rag", "hibrido") and len(achados) >= 6:
-                rr = rerank.rerank(pergunta_busca, achados[:15], top_n=4,
+                rr = rerank.rerank(pergunta_busca, achados[:8], top_n=4,
                                    log=lambda m, g="busca": log(m, g))
                 if rr:
                     ordenados, topo = rr
