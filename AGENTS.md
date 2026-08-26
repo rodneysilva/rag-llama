@@ -1028,6 +1028,24 @@ da API**.
   push (fila) — `gh workflow run ci-cd --ref main` dispara manual
   (workflow_dispatch existe); conferir o commit na VPS
   (  `git log -1` em ~/apps/rag-llama) vale mais que o status do run.
+- **🚀 BOOTSTRAP ASP.NET quando falta o Program.cs (26/08, noite 2)**: a
+  conversa às vezes traz SÓ CONTROLLERS/modelos (arquivo de classe sem
+  Main/top-level) — o teste "compilava" com o placeholder "sem ponto de
+  entrada" e o site NUNCA subia. `_preparar_cs` caso 5 com aspnet=True
+  agora GERA o hosting: `AddControllersWithViews` + `MapControllers`
+  (rotas de atributo [Route]/[ApiController]) + `MapControllerRoute`
+  padrão (convencional `/{controller}/{acao}` para quem só tem
+  [HttpGet]) + `MapGet("/")` com dica + `Run` na porta lida do código;
+  log "🚀 bootstrap ASP.NET gerado". Console sem entry segue com o
+  placeholder. ⚠️ LIÇÃO do CS1003: código C# GERADO pela sandbox é
+  ASCII puro e UMA declaração por linha — a 1ª versão com travessão +
+  literais adjacentes concatenados em linhas separadas dava
+  `CS1003 ',' expected` no container (compilava local?? não testado —
+  a simples compila). VALIDAÇÃO: dotnet 10 LOCAL (build limpo, home
+  responde, `/api/Culinaria` devolve o JSON) + produção nos DOIS
+  formatos (com [Route] e só [HttpGet]) — app NO AR com preview.
+  Estação tem dotnet 10.0.301: `gera_boot.py` recria o caso em
+  `Temp\kilo\boot_cs` para compilar antes de publicar.
 - **🧹 SANDBOX: `#` estilo Python em .cs (26/08, noite)**: a LLM às vezes
   emite `# src/X.cs` (comentário de nome no marcador errado) na 1ª linha
   de blocos csharp → CS1024 "Preprocessor directive expected" matava o
