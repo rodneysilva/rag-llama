@@ -5593,48 +5593,36 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
         # ACHADOS FINAIS; caso real do dono: 978 pontos de ".NET 10" na
         # coleção dotnet e NENHUM vinha — a pergunta multi-assunto
         # "gastronomia + .NET 10" dilui o vetor denso e os slots iam para
-        # o outro assunto). Versão citada ausente dos recuperados → scroll
-        # FULL-TEXT pelo termo cru nas coleções do escopo e COMPLEMENTA.
+        # o outro assunto). Versão citada ausente dos recuperados →
+        # busca LEXICAL (com ÍNDICE full-text criado lazy pelo
+        # rag._busca_lexical — scroll cru SEM índice é full-scan e
+        # SATUROU o Qdrant em produção) SÓ nas coleções DEV do escopo.
         if body.mode in ("rag", "hibrido") and escopo:
             try:
+                from core.linguagens import EH_DEV as _EH_DEV
                 docs_atuais = [d for d, _, _ in (achados or [])]
                 ausentes = rag.versoes_ausentes(body.question, docs_atuais)
                 if ausentes:
-                    from qdrant_client.models import (
-                        FieldCondition as _FC, Filter as _F, MatchText as _MT)
-                    from langchain_core.documents import Document as _D
                     termos_crus = [m.group(0) for m in
                                    rag._RE_TECH_VERSAO.finditer(body.question or "")]
                     extras = []
                     vistos = {d.page_content for d in docs_atuais}
-                    for termo in termos_crus[:3]:
+                    for termo in termos_crus[:2]:
                         for col in escopo:
-                            try:
-                                pts, _ = client.scroll(
-                                    collection_name=col, limit=3,
-                                    with_payload=True,
-                                    scroll_filter=_F(must=[_FC(
-                                        key="page_content",
-                                        match=_MT(text=termo))]))
-                                for p in pts:
-                                    pl = p.payload or {}
-                                    texto = str(pl.get("page_content") or "")
-                                    if not texto or texto in vistos:
-                                        continue
-                                    vistos.add(texto)
-                                    extras.append((
-                                        _D(page_content=texto,
-                                           metadata=dict(pl.get("metadata") or {})),
-                                        config.SCORE_MIN, col))
-                            except Exception:
-                                pass
+                            if col not in _EH_DEV:
+                                continue  # versão de TECH busca em coleção DEV
+                            for d in rag._busca_lexical(
+                                    client, col, termo, limite=3):
+                                if d.page_content and d.page_content not in vistos:
+                                    vistos.add(d.page_content)
+                                    extras.append((d, config.SCORE_MIN, col))
                     if extras:
                         achados = list(achados or []) + extras[:4]
                         log(f"🎯 resgate por versão: +{min(len(extras), 4)} "
                             "fragmento(s) do material específico de "
-                            f"{', '.join(termos_crus[:2])} (full-text direto — "
-                            "a busca densa multi-assunto não os trouxe)",
-                            "busca")
+                            f"{', '.join(termos_crus[:2])} (full-text "
+                            "indexado — a busca densa multi-assunto não os "
+                            "trouxe)", "busca")
             except Exception as e:
                 log(f"⚠️ resgate por versão falhou: {str(e)[:60]}", "busca")
         found = [
