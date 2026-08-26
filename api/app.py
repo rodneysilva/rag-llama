@@ -3399,19 +3399,25 @@ def _preview_disparar(docs_fn, colecao_alvo: str | None) -> str:
 
 
 @app.get("/api/hf/datasets")
-def hf_datasets(q: str = "", limite: int = 12, request: Request = None):
+def hf_datasets(q: str = "", limite: int = 24, request: Request = None):
     """Datasets do HuggingFace para SELECIONAR na Biblioteca (pedido do
     dono: "aparecer tudo o que o HF oferece, selecionar e incluir numa
     coleção"). Busca por relevância com ordenação por downloads; `q` vazio
-    lista os MAIS BAIXADOS (trending-like). Token do .env (se configurado
-    na tela Sistema) amplia o rate-limit — sem token a API pública serve."""
+    lista os MAIS BAIXADOS (tudo, paginável pelo limite). Com HF_TOKEN a
+    resposta ganha `meus` — TODOS os datasets da CONTA do dono (inclusive
+    privados) em seção própria na UI. Sem token a API pública serve."""
     _usuario(request)
     from core import hf as _hf
+    limite = max(1, min(limite, 200))
     if not (q or "").strip():
         achados = _hf.populares(limite, log=lambda m, g="": None)
     else:
         achados = _hf.buscar(q.strip(), limite, log=lambda m, g="": None)
-    return {"datasets": achados, "token": bool(getattr(config, "HF_TOKEN", ""))}
+    conta = _hf.meus(log=lambda m, g="": None)
+    return {"datasets": achados,
+            "token": bool(getattr(config, "HF_TOKEN", "")),
+            "usuario": conta["usuario"],
+            "meus": conta["datasets"]}
 
 
 @app.post("/api/ingest/preview")

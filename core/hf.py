@@ -41,6 +41,45 @@ def populares(limite: int = 12, log=print) -> list[dict]:
         return []
 
 
+def quem_sou_eu(log=print) -> dict | None:
+    """Whoami do Hub com o HF_TOKEN → {name, type}; None sem token/erro.
+    É o "vc tem meus dados?" respondido pela própria conta do dono."""
+    if not str(getattr(config, "HF_TOKEN", "") or "").strip():
+        return None
+    try:
+        r = httpx.get(f"{_API}/whoami-v2", headers=_headers(), timeout=_TIMEOUT)
+        r.raise_for_status()
+        d = r.json()
+        return {"name": d.get("name", ""), "type": d.get("type", "")} \
+            if d.get("name") else None
+    except Exception as e:
+        log(f"⚠️ HF whoami: {str(e)[:80]}")
+        return None
+
+
+def meus(log=print) -> dict:
+    """TODOS os datasets da CONTA do token (author=me, inclusive os
+    PRIVADOS) — "o meu HF" aparecendo na Biblioteca antes da vitrine.
+    Sem token (ou token inválido) → {"usuario": None, "datasets": []},
+    nunca erro: a vitrine pública segue servindo."""
+    if not str(getattr(config, "HF_TOKEN", "") or "").strip():
+        return {"usuario": None, "datasets": []}
+    eu = quem_sou_eu(log=log)
+    if not eu:
+        return {"usuario": None, "datasets": []}
+    try:
+        r = httpx.get(f"{_API}/datasets",
+                      params={"author": eu["name"], "sort": "updatedAt",
+                              "direction": -1, "limit": 100},
+                      headers=_headers(), timeout=_TIMEOUT)
+        r.raise_for_status()
+        lista = [x for x in (_resumo(d) for d in r.json()) if x]
+        return {"usuario": eu["name"], "datasets": lista}
+    except Exception as e:
+        log(f"⚠️ HF meus datasets: {str(e)[:80]}")
+        return {"usuario": eu["name"], "datasets": []}
+
+
 def _resumo(d: dict) -> dict | None:
     """Item da API do Hub → formato da UI (sem campos desnecessários)."""
     rid = d.get("id") or ""

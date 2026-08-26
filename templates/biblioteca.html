@@ -79,20 +79,21 @@
     }
     sel.addEventListener("change", ajusta); ajusta();
 
-    /* 🤗 datasets do Hub: lista (vitrine/busca) com MARCAÇÃO — os ids
-       marcados vão no submit; sem marcação, a query segue como antes */
-    async function hfBuscar() {
+    /* 🤗 datasets do Hub: SUA CONTA primeiro (com token) + vitrine/busca
+       com MARCAÇÃO — os ids marcados vão no submit; "mostrar mais"
+       amplia a lista (o dono pediu TUDO visível) */
+    let hfLimite = 50;
+    async function hfBuscar(mais) {
+      hfLimite = mais ? hfLimite + 50 : 50;
       const btn = document.getElementById("btn-hf");
       const lista = document.getElementById("hf-lista");
       const aviso = document.getElementById("hf-aviso");
       btn.textContent = "… buscando";
       try {
         const q = encodeURIComponent(document.getElementById("entrada").value.trim());
-        const r = await fetch("/api/hf/datasets?q=" + q + "&limite=24");
+        const r = await fetch("/api/hf/datasets?q=" + q + "&limite=" + hfLimite);
         const d = await r.json();
-        aviso.textContent = (d.token ? "🤗 token ativo" : "🤗 sem token (API pública — rate limit menor; configure na tela Sistema)")
-          + " — marque os datasets que quer incluir";
-        lista.innerHTML = (d.datasets || []).map(ds => {
+        const item = ds => {
           const k = (ds.downloads >= 1000000 ? (ds.downloads/1000000).toFixed(1)+"M"
                      : ds.downloads >= 1000 ? Math.round(ds.downloads/1000)+"k"
                      : ds.downloads);
@@ -100,7 +101,22 @@
             + '<input type="checkbox" class="hf-id" value="' + ds.id + '"> '
             + '<b>' + ds.id + '</b> <span class="mini">⬇ ' + k + ' · ♥ ' + ds.likes + '</span>'
             + '<div class="mini" style="opacity:.7;">' + (ds.descricao || "").slice(0, 120) + '</div></label>';
-        }).join("") || '<p class="mini">nada encontrado — tente outro termo</p>';
+        };
+        let html = "";
+        if (d.usuario) {
+          html += '<p class="mini" style="margin:.4rem 0 .2rem;"><b>👤 seus datasets</b> (conta @' + d.usuario + ' — inclusive privados)</p>'
+            + ((d.meus || []).map(item).join("")
+               || '<p class="mini" style="opacity:.7;">sua conta ainda não tem datasets</p>');
+        }
+        html += '<p class="mini" style="margin:.6rem 0 .2rem;"><b>Hub</b> — ' + (q ? "resultado da busca" : "mais baixados") + '</p>';
+        html += (d.datasets || []).map(item).join("") || '<p class="mini">nada encontrado — tente outro termo</p>';
+        if ((d.datasets || []).length >= hfLimite)
+          html += '<button type="button" class="mini" style="margin:.4rem 0; padding:.2rem .6rem; cursor:pointer;" onclick="hfBuscar(true)">mostrar mais…</button>';
+        lista.innerHTML = html;
+        aviso.textContent = (d.token
+            ? "🤗 token ativo" + (d.usuario ? " — @" + d.usuario : "")
+            : "🤗 sem token — cole o HF_TOKEN na tela Sistema (rate limit menor e seus datasets ficam de fora)")
+          + " — marque os datasets que quer incluir";
       } catch {
         aviso.textContent = "indisponível agora — tente de novo";
       }
