@@ -193,6 +193,22 @@ def _e_toplevel(conteudo: str) -> bool:
     return bool(uteis)
 
 
+def _sanear_cs(escrever: dict) -> dict:
+    """Comentário de NOME estilo Python (`# src/X.cs`) na 1ª linha de um
+    arquivo C# é DIRETIVA DE PREPROCESSADOR inválida → CS1024 mata o build
+    inteiro (bug real: a LLM às vezes emite `#` em blocos csharp). Qualquer
+    `# texto` no topo de .cs vira comentário `// texto` — mesmo que não
+    fosse nome de arquivo, `# ` já é inválido em C# de qualquer forma."""
+    for nome, conteudo in escrever.items():
+        if not nome.lower().endswith(".cs"):
+            continue
+        linhas = str(conteudo).splitlines(keepends=True)
+        if linhas and re.match(r"\s*#\s+\S", linhas[0]):
+            linhas[0] = re.sub(r"^(\s*)#\s+", r"\1// ", linhas[0])
+            escrever[nome] = "".join(linhas)
+    return escrever
+
+
 def _preparar_cs(escrever: dict, principal: str, aspnet: bool = False):
     """(cmd, extras, mover) do projeto C# com o ENTRY POINT certo.
 
@@ -530,7 +546,8 @@ def testar(arquivos: list[dict], principal: str, timeout: int = 300,
     if not arquivos or not principal:
         raise ValueError("informe o arquivo principal e o contexto (arquivos)")
     escrever = {str(a.get("nome") or "").strip(): str(a.get("conteudo") or "")
-                for a in arquivos if a.get("nome")}
+                 for a in arquivos if a.get("nome")}
+    escrever = _sanear_cs(escrever)
     # 🧹 SUBDIR PRÓPRIO por teste (bug real: /tmp/work acumulava arquivos
     # de testes ANTERIORES — um controller ASP.NET velho quebrava o build
     # do projeto console novo com CS0260/CS8802). Cada teste nasce limpo;

@@ -10,7 +10,9 @@ deve deixar claro o ARQUIVO a que pertence:
    `-- setup.sql` (SQL) · `/* styles.css */` (CSS). Em shell com shebang,
    o `#!/bin/bash` pode vir antes E o comentário de nome vem logo na
    linha seguinte. NUNCA entregue um bloco sem o nome do arquivo —
-   "bloco3.sh" genérico quebra o teste na sandbox.
+   "bloco3.sh" genérico quebra o teste na sandbox. ⚠️ O MARCADOR segue
+   a linguagem: em C#/Java/JS/TS use SEMPRE `//` — `# src/X.cs` é
+   diretiva de pré-processador inválida e quebra o build (CS1024).
 2. Se o bloco é um trecho/EXCERPT de um arquivo (não roda sozinho),
    indique no comentário: `# trecho de src/service.py`.
 3. Um bloco = um arquivo (não misture arquivos diferentes no mesmo bloco).

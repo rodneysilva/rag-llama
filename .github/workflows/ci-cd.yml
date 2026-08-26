@@ -7,6 +7,14 @@ on:
     branches: [main, develop]
   workflow_dispatch: {}
 
+# runs superseded se cancelam: pushes rápidos em sequência não empilham
+# deploys na fila (um run "queued" zumbi do GitHub já atrasou deploy e um
+# dispatch manual bateu startup_failure na corrida); o deploy mais NOVO
+# é o que vale — `git pull --ff-only` na VPS garante o commit da ponta.
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ci:
     runs-on: ubuntu-latest
