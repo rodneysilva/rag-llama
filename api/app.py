@@ -2747,8 +2747,15 @@ class JobRegistry:
         with self.lock:
             if jid not in self.jobs:
                 return
-            self.jobs[jid]["lines"].append(
-                {"ts": time.strftime("%H:%M:%S"), "msg": msg, **extra})
+            # 🧹 DEDUPE: linha IDÊNTICA consecutiva no mesmo segundo é eco de
+            # callback duplo (bug real: a linha 🪙 de tokens aparecia 2× no
+            # raciocínio) — o jsonl/SQLite já não registra duplicata nenhuma
+            linhas = self.jobs[jid]["lines"]
+            agora = time.strftime("%H:%M:%S")
+            if (linhas and linhas[-1].get("msg") == msg
+                    and linhas[-1].get("ts") == agora):
+                return
+            linhas.append({"ts": agora, "msg": msg, **extra})
         try:
             from core import logsdb
             logsdb.log_evento(jid, str(msg), extra.get("etapa"))
@@ -2757,8 +2764,7 @@ class JobRegistry:
         try:
             caminho = PASTA_LOGS_JOBS / f"{jid}.jsonl"
             with open(caminho, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"ts": time.strftime("%H:%M:%S"),
-                                    "msg": msg, **extra},
+                f.write(json.dumps({"ts": agora, "msg": msg, **extra},
                                    ensure_ascii=False) + "\n")
         except Exception:
             pass  # disco cheio/permissão: o log ao vivo segue valendo
@@ -5026,6 +5032,10 @@ def query(body: QueryIn):
 
         def rodar():
             _n_hist = len(corpo.history or [])
+            # modo ORIGINAL pedido no composer (o roteador pode escalar para
+            # híbrido DENTRO do _processar_query — o pedido foi "rag", é isto
+            # que decide se o modelo aparece no header)
+            _modo_pedido = corpo.mode
             _query_log(jid, f"📜 histórico da sessão: {_n_hist} msg(s) anteriores"
                           + (" (contexto ATIVO)" if corpo.history else " (SEM contexto)"),
                        "mensagem")
@@ -5058,6 +5068,17 @@ def query(body: QueryIn):
                     _query_log(jid, f"🪙 pedido completo: 🔻{t['entrada']} recebidos · "
                                     f"🔺{t['saida']} gerados · {t['chamadas']} chamada(s){_vel}",
                                "tokens")
+                # 🙈 MODELO SÓ QUANDO A LLM FOI CONSULTADA (pedido do dono):
+                # zero chamadas (cache/resposta direta da base) OU pedido no
+                # modo rag ("só a base" — mesmo escalado a híbrido pelo
+                # roteador) → o header da mensagem não cita modelo
+                try:
+                    if isinstance(res, dict) and res.get("model"):
+                        _ch = (res.get("tokens") or {}).get("chamadas") or 0
+                        if _ch == 0 or _modo_pedido == "rag":
+                            res["model"] = None
+                except Exception:
+                    pass
                 _query.concluir(jid, result=res)
             except HTTPException as e:
                 detalhe = (e.detail if isinstance(e.detail, str)
@@ -5340,8 +5361,8 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
                 f"respondendo com o modelo atual "
                 f"({_servido_agora or config.LLM_MODEL})", "modelo")
     elif body.model:
-        log(f"🧠 modelo {body.model} já está no ar — sem recarga "
-            "(cache da GPU e contexto mantidos)", "modelo")
+        pass  # modelo já no ar: silêncio (linha "🧠 ... sem recarga" era ruído —
+              # pedido do dono; trocas/recargas seguem logadas acima)
     modelo_usado = _servido_agora or modelos.servido(modelos.CHAT_PORTA) or config.LLM_MODEL
     # com override externo, o modelo desta resposta (cache/telemetria) é o
     # ESCOLHIDO — não o servido localmente
