@@ -257,8 +257,14 @@ def _preparar_cs(escrever: dict, principal: str, aspnet: bool = False,
         _e_toplevel(str(c)) for n, c in escrever.items()
         if n.lower().endswith(".cs"))
     if not tem_entry:
+        # scaffold de PROJETO quando a conversa não trouxe csproj (bug real:
+        # o bootstrap só gravava o Program.cs → "Couldn't find a project
+        # to run" — 3 arquivos .cs sem csproj não são projeto p/ o dotnet)
+        extras = {} if csprojs else {
+            "app.csproj": _CSPROJ_WEB if aspnet else _CSPROJ}
+        projeto = csprojs[0] if csprojs else "."
         if aspnet:
-            extras = {"Program.cs": (
+            extras["Program.cs"] = (
                 "// Program.cs gerado pela sandbox: a conversa trouxe somente\n"
                 "// controllers/tipos - este bootstrap registra e sobe o site.\n"
                 "var builder = WebApplication.CreateBuilder(args);\n"
@@ -267,19 +273,16 @@ def _preparar_cs(escrever: dict, principal: str, aspnet: bool = False,
                 "app.MapControllers();\n"
                 "app.MapControllerRoute(\"default\", \"{controller}/{action=Index}/{id?}\");\n"
                 "app.MapGet(\"/\", () => \"app no ar - endpoints: /{controller}/{acao}\");\n"
-                f"app.Run(\"http://127.0.0.1:{porta or 5000}\");\n")}
-            projeto = csprojs[0] if csprojs else None
-            return (["dotnet", "run", "--project", projeto or "."],
-                    extras, "")
+                f"app.Run(\"http://127.0.0.1:{porta or 5000}\");\n")
+            return ["dotnet", "run", "--project", projeto], extras, ""
         # console sem entry: compila como VERIFICAÇÃO + aviso
-        extras = {"Program.cs": (
+        extras["Program.cs"] = (
             "// gerado pela sandbox: nenhum arquivo tem Main/top-level —\n"
             "// aponte o ▶ para o arquivo de entrada quando ele existir\n"
             f"System.Console.WriteLine(\"projeto compilou \\u2713 ({len(escrever)} \"\n"
             "    + \"arquivo(s)); sem ponto de entrada — o teste valida a \"\n"
-            "    + \"compilação; use o \\u25B6 no arquivo com Main ou top-level\");")}
-        return (["dotnet", "run", "--project",
-                 csprojs[0] if csprojs else "."], extras, "")
+            "    + \"compilação; use o \\u25B6 no arquivo com Main ou top-level\");")
+        return ["dotnet", "run", "--project", projeto], extras, ""
     if csprojs:
         return ["dotnet", "run", "--project", csprojs[0]], {}, ""
     extras = {"app.csproj": _CSPROJ_WEB if aspnet else _CSPROJ}

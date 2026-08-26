@@ -58,7 +58,11 @@ point é detectado automaticamente. Para a detecção acertar de primeira:
    `url_for('rota')`… nada de href para rota inexistente. Antes de
    responder, percorra mentalmente cada `<a href>`/`@app.route` citado:
    se algum não existe, crie a rota ou remova o link. Um link morto no
-   app de teste quebra a demonstração inteira.
+   app de teste quebra a demonstração inteira. **Todo app web NASCE com
+   rota `/` (home)**: uma página/JSON que se apresente e LINKE os
+   endpoints (ex.: `@app.get("/")` listando as rotas) — app sem home
+   abre num 404 morto no preview público. FastAPI: além da home,
+   o `/docs` é automático — cite-o na home.
 
 ## Estilo da VERSÃO pedida (fim do código antigo em versão nova)
 

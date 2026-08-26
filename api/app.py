@@ -1357,6 +1357,20 @@ async def _proxy_app_api(porta: int, request: Request,
         # GERADO — aba/link morto no código do modelo — vazava o "Not
         # Found… check your spelling" sem contexto). JSON 404 passa reto
         # (apps de API seguem com a semântica deles).
+        # ⚡ 404 na RAIZ: app gerado às vezes nasce SEM rota "/" (só
+        # /api/...) — antes de mostrar a página morta, tenta o /docs
+        # (Swagger automático do FastAPI): respondendo, o browser é
+        # REDIRECIONADO para a documentação interativa do app.
+        if r.status_code == 404 and resto in ("/", "") and chave:
+            try:
+                d = httpx.get(f"{_sb._base()}/app/{porta}/docs", timeout=5)
+                if d.status_code == 200:
+                    print(f"⚡ app :{porta} sem rota / — redirecionando ao "
+                          "/docs (Swagger) do app")
+                    return RedirectResponse(f"/sandbox/app/{chave}/docs",
+                                            status_code=302)
+            except Exception:
+                pass
         if (r.status_code == 404
                 and "text/html" in (r.headers.get("Content-Type") or "")):
             home = f"/sandbox/app/{chave}/" if chave else ".."
