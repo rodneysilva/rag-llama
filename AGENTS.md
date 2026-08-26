@@ -1046,6 +1046,18 @@ da API**.
   formatos (com [Route] e só [HttpGet]) — app NO AR com preview.
   Estação tem dotnet 10.0.301: `gera_boot.py` recria o caso em
   `Temp\kilo\boot_cs` para compilar antes de publicar.
+- **🧹 SEM-CSPROJ + HOME 404 NO PREVIEW (26/08, noite 4)**: (1) o
+  refactor do bootstrap tinha PERDIDO o scaffold `app.csproj` no ramo
+  sem-entry (só gravava o Program.cs → "Couldn't find a project to
+  run" com 3 .cs soltos): `extras = {} if csprojs else {"app.csproj":
+  _CSPROJ_WEB/_CSPROJ}` ANTES do bootstrap/placeholder — compilado 0
+  erros no dotnet 10 local e em produção. (2) **app python sem rota
+  `/`** (fastapi só com /api/...): o link público abria na página 🧭
+  morta. `_proxy_app_api`: 404 na RAIZ tenta `/docs` (Swagger
+  automático do FastAPI) e REDIRECIONA (302) — provado: app sem home
+  abre na documentação interativa; sem /docs segue a página amigável.
+  Spec regra 9 ganhou "todo app web NASCE com rota / (home) que
+  LINKE os endpoints" (a raiz do problema: app sem home).
 - **🧹 CS5001 COM CSPROJ + FASTAPI MUDO (26/08, noite 3)**: (1) conversa
   com `app.csproj` + classes SEM entry voltava `return` cedo no
   `_preparar_cs` — CS5001 na cara (bootstrap/placeholder só rodavam SEM
