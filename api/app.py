@@ -264,7 +264,8 @@ async def _auth_middleware(request: Request, call_next):
             if porta and request.method in ("GET", "POST", "HEAD"):
                 try:
                     return await _proxy_app_api(porta, request,
-                                                request.url.path)
+                                                request.url.path,
+                                                chave=m.group(1))
                 except HTTPException:
                     pass   # app caiu no meio: segue o 404 original
     return resposta
@@ -1307,7 +1308,7 @@ def sandbox_ver(arquivo: str, request: Request, k: str = ""):
 
 
 async def _proxy_app_api(porta: int, request: Request,
-                         resto: str = "/") -> Response:
+                         resto: str = "/", chave: str = "") -> Response:
     """Repassa o pedido ao app VIVO na sandbox (mesma rede do compose).
 
     Segue redirect? NÃO: o Location volta ao BROWSER (mesma chave na URL
@@ -1327,6 +1328,35 @@ async def _proxy_app_api(porta: int, request: Request,
                           timeout=30, follow_redirects=False)
         # no-store: o Cloudflare faz NEGATIVE caching (404 do app fica ~3 min
         # no edge — o app é TEMPORÁRIO, nada dele pode ser cacheado)
+        # 🧭 404 do APP (navegação HTML): página amigável em vez do 404 cru
+        # do Flask/Werkzeug (bug real do dono: rota inexistente no app
+        # GERADO — aba/link morto no código do modelo — vazava o "Not
+        # Found… check your spelling" sem contexto). JSON 404 passa reto
+        # (apps de API seguem com a semântica deles).
+        if (r.status_code == 404
+                and "text/html" in (r.headers.get("Content-Type") or "")):
+            home = f"/sandbox/app/{chave}/" if chave else ".."
+            corpo = ("<!doctype html><html lang=pt-BR><head><meta charset=utf-8>"
+                     "<title>rota não existe neste app</title><style>"
+                     "body{font-family:Segoe UI,sans-serif;background:#f6f7f9;"
+                     "color:#1a1d21;display:grid;place-items:center;min-height:100vh;"
+                     "margin:0}.c{max-width:32rem;margin:1rem;padding:2rem;background:#fff;"
+                     "border:1px solid #e2e8f0;border-radius:14px;text-align:center}"
+                     "a{display:inline-block;margin-top:1rem;padding:.55rem 1.2rem;"
+                     "border-radius:10px;background:#2563eb;color:#fff;"
+                     "text-decoration:none;font-weight:600}</style></head><body>"
+                     "<div class=c><div style=font-size:2.4rem>🧭</div>"
+                     "<h2>esta rota não existe no aplicativo</h2>"
+                     "<p>O app de teste não tem a página que você abriu — "
+                     "geralmente um <b>link/aba morto</b> no código gerado. "
+                     "Volte à home do app ou peça no chat para corrigir a "
+                     "rota.</p>"
+                     f"<a href='{home}'>← home do aplicativo</a></div></body></html>")
+            print(f"🧭 app :{porta} 404 em {resto[:80]} (rota ausente no app "
+                  "gerado — página amigável devolvida)")
+            return Response(content=corpo, status_code=404,
+                            media_type="text/html",
+                            headers={"Cache-Control": "no-store"})
         return Response(content=r.content, status_code=r.status_code,
                         media_type=r.headers.get("Content-Type", "text/html"),
                         headers={"Cache-Control": "no-store"})
@@ -1381,7 +1411,7 @@ async def sandbox_app(chave: str, path: str, request: Request):
     porta = _sb.chave_app_ok(chave)
     if not porta:
         return _pag_fora(request, "expirou")
-    return await _proxy_app_api(porta, request, "/" + (path or ""))
+    return await _proxy_app_api(porta, request, "/" + (path or ""), chave=chave)
 
 
 @app.post("/api/sandbox/limpar")

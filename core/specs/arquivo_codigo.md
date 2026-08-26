@@ -50,3 +50,10 @@ point é detectado automaticamente. Para a detecção acertar de primeira:
    use `net8.0` ou `net10.0` (SDKs presentes) e inclua
    `<ImplicitUsings>enable</ImplicitUsings>` no PropertyGroup (sem isso,
    `WebApplication`/top-level sem `using` não compilam — CS0103).
+9. **Site AUTOCONSISTENTE** (fim do "Not Found" em aba morta): TODO
+   link/aba/form action/redirect que o próprio código referencia precisa
+   de ROTA implementada no MESMO código — `/sobre`, `/contato`, abas,
+   `url_for('rota')`… nada de href para rota inexistente. Antes de
+   responder, percorra mentalmente cada `<a href>`/`@app.route` citado:
+   se algum não existe, crie a rota ou remova o link. Um link morto no
+   app de teste quebra a demonstração inteira.
