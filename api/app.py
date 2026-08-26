@@ -5447,6 +5447,13 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
                     "contexto da base", "busca")
             achados, erros = rag.search(client, escopo, pergunta_busca,
                                         log=lambda m, g="busca": log(m, g))
+            # ⚠️ top_score NASCE AQUI (0 quando a densa não traz nada): os
+            # RESGATES adiante (rerank/EN/versão) podem REABASTECER achados
+            # depois do `if achados` — e o rodapé lê top_score fora dele
+            # (bug real: ".NET 10" com densa vazia + resgate por versão
+            # preenchendo → UnboundLocalError matava a resposta)
+            top_score = (max(float(s) for _, s, _ in achados)
+                         if achados else 0.0)
             # 🔁 RESGATE PT→EN (bug real do dono: "Cria uma api no padrão
             # .net 10" → 0 fragmentos numa coleção dotnet de 28k docs): a
             # pergunta em PORTUGUÊS contra base EM INGLÊS afunda o score
@@ -5638,6 +5645,9 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
                                     extras.append((d, config.SCORE_MIN, col))
                     if extras:
                         achados = list(achados or []) + extras[:4]
+                        # top_score honesto: os extras trazem score próprio
+                        top_score = max([top_score]
+                                        + [float(s) for _, s, _ in extras[:4]])
                         log(f"🎯 resgate por versão: +{min(len(extras), 4)} "
                             "fragmento(s) do material específico de "
                             f"{', '.join(termos_crus[:2])} (full-text "
