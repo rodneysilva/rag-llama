@@ -209,7 +209,8 @@ def _sanear_cs(escrever: dict) -> dict:
     return escrever
 
 
-def _preparar_cs(escrever: dict, principal: str, aspnet: bool = False):
+def _preparar_cs(escrever: dict, principal: str, aspnet: bool = False,
+                 porta: int = 5000):
     """(cmd, extras, mover) do projeto C# com o ENTRY POINT certo.
 
     Bug real do dono: arquivo de CLASSE testado era MOVIDO para Program.cs
@@ -221,7 +222,9 @@ def _preparar_cs(escrever: dict, principal: str, aspnet: bool = False):
     2. arquivo com `static … Main(` → entry clássico, NADA move;
     3. arquivo com top-level statements (qualquer nome) → entry, NADA move;
     4. principal top-level → move para Program.cs (única exigência do SDK);
-    5. só arquivos de TIPOS (biblioteca) → gera Program.cs que compila e
+    5. só arquivos de TIPOS: ASP.NET → BOOTSTRAP de verdade (AddControllers
+       + MapControllers + rota convencional + Run na porta — o site SOBE e
+       o preview público funciona); console → Program.cs que compila e
        AVISA (o ▶ deve apontar para o arquivo de entrada)."""
     csprojs = [n for n in escrever if n.lower().endswith(".csproj")]
     if csprojs:
@@ -250,7 +253,29 @@ def _preparar_cs(escrever: dict, principal: str, aspnet: bool = False):
     if _e_toplevel(str(escrever.get(principal) or "")):
         mover = "" if principal == "Program.cs" else "Program.cs"
         return ["dotnet", "run", "--project", "."], extras, mover
-    # biblioteca de tipos sem entry: compila como VERIFICAÇÃO + aviso
+    # 🚀 BOOTSTRAP ASP.NET (bug real: a conversa traz SÓ CONTROLLERS/modelos
+    # — sem Program.cs o teste "compilava" com placeholder e o site NUNCA
+    # subia). Gera o hosting mínimo: registra os controllers, mapeia rotas
+    # de atributo ([Route]/[ApiController]) E convencional (/{controller}/
+    # {acao} para quem só tem [HttpGet] sem [Route]) e sobe na PORTA lida
+    # do código (a mesma que o _cmd_site espera no curl).
+    if aspnet:
+        extras["Program.cs"] = (
+            "// Program.cs gerado pela sandbox: a conversa trouxe só\n"
+            "// controllers/tipos — este bootstrap registra e sobe o site.\n"
+            "var builder = WebApplication.CreateBuilder(args);\n"
+            "builder.Services.AddControllersWithViews();\n"
+            "var app = builder.Build();\n"
+            "app.MapControllers();\n"
+            "app.MapControllerRoute(\"default\",\n"
+            "    \"{controller}/{action=Index}/{id?}\");\n"
+            "app.MapGet(\"/\", () => Results.Text(\n"
+            "    \"app no ar — endpoints: /{controller}/{acao} \"\n"
+            "    \"(ex.: /Culinaria/GetCulinariaAmazonica)\",\n"
+            "    \"text/plain; charset=utf-8\"));\n"
+            f"app.Run(\"http://127.0.0.1:{porta or 5000}\");\n")
+        return ["dotnet", "run", "--project", "."], extras, ""
+    # biblioteca de tipos sem entry (console): compila como VERIFICAÇÃO + aviso
     extras["Program.cs"] = (
         "// gerado pela sandbox: nenhum arquivo tem Main/top-level —\n"
         "// aponte o ▶ para o arquivo de entrada quando ele existir\n"
@@ -581,9 +606,14 @@ def testar(arquivos: list[dict], principal: str, timeout: int = 300,
             # por framework matava o app anterior de outra geração)
             porta_app = _porta_do_codigo(textos_todos, site_fw)
             if site_fw == "aspnet":
-                _, extras, mover = _preparar_cs(escrever, principal, aspnet=True)
+                _, extras, mover = _preparar_cs(escrever, principal,
+                                                aspnet=True, porta=porta_app)
                 if mover:
                     escrever[mover] = escrever.pop(principal)
+                if "Program.cs" in extras:
+                    log(f"🚀 só controllers/tipos na conversa — bootstrap "
+                        f"ASP.NET gerado (Program.cs) subindo na porta "
+                        f"{porta_app}", "sandbox")
                 escrever.update(extras)
                 cmd = _cmd_site(principal, site_fw, [],
                                 runner="dotnet run --project .", porta=porta_app)
