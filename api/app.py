@@ -5601,7 +5601,11 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
             try:
                 from core.linguagens import EH_DEV as _EH_DEV
                 docs_atuais = [d for d, _, _ in (achados or [])]
-                ausentes = rag.versoes_ausentes(body.question, docs_atuais)
+                # sem docs recuperados, TODA versão citada é "ausente" (a
+                # base pode ter o material mesmo com a densa vazia — era o
+                # caso e o guard `not docs` calava o resgate)
+                ausentes = (rag.versoes_ausentes(body.question, docs_atuais)
+                            or sorted(rag._pares_versao(body.question)))
                 if ausentes:
                     termos_crus = [m.group(0) for m in
                                    rag._RE_TECH_VERSAO.finditer(body.question or "")]
