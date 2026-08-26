@@ -1058,6 +1058,18 @@ da API**.
   abre na documentação interativa; sem /docs segue a página amigável.
   Spec regra 9 ganhou "todo app web NASCE com rota / (home) que
   LINKE os endpoints" (a raiz do problema: app sem home).
+- **🏠 FLASK SEM HOME: HOME INJETADA (26/08, noite 5)**: o fallback
+  /docs era FastAPI-ONLY — app Flask só com /api/... (o
+  api_culinaria.py do dono) subia mas o link público abria na 🧭
+  morta. `_injetar_home_flask` (chamada no ramo flask do site-test):
+  se não existe `@app.route("/")`, injota ANTES do `if __main__`/
+  `app.run(` uma home DINÂMICA que lista as rotas via `url_map`
+  (exclui /static) — app com home própria é intacto. Prova em
+  produção: raiz do link 200 com "app no ar" + "/api/culinaria".
+  ⚠️ ARMADILHA de edit: ancorar `oldString` na LINHA DE `def` de uma
+  função substitui a assinatura e ÓRFÃA o corpo (aconteceu com
+  `_cmd_site` — sempre conferir com rg/compile depois de inserir
+  função nova).
 - **🧹 CS5001 COM CSPROJ + FASTAPI MUDO (26/08, noite 3)**: (1) conversa
   com `app.csproj` + classes SEM entry voltava `return` cedo no
   `_preparar_cs` — CS5001 na cara (bootstrap/placeholder só rodavam SEM
