@@ -227,6 +227,42 @@ def _preparar_cs(escrever: dict, principal: str, aspnet: bool = False,
        o preview público funciona); console → Program.cs que compila e
        AVISA (o ▶ deve apontar para o arquivo de entrada)."""
     csprojs = [n for n in escrever if n.lower().endswith(".csproj")]
+    # ENTRY CHECK primeiro (vale para csproj da conversa E scaffold): sem
+    # Main/top-level em NENHUM .cs, o build morre em CS5001 — o caso 5
+    # (bootstrap ASP.NET / placeholder console) tem que rodar nos DOIS
+    # caminhos (bug real: csproj da conversa retornava cedo e 3 arquivos
+    # de classe davam CS5001 na cara do dono).
+    tem_main = any(re.search(r"static\s+(?:async\s+)?(?:Task|void|int)\s+Main\s*\(",
+                             str(c)) for c in escrever.values())
+    # ⚠️ só .CS entram na checagem de top-level: o XML do csproj "parece"
+    # top-level p/ a heurística (sem declaração de tipo e com linhas úteis)
+    tem_entry = tem_main or any(
+        _e_toplevel(str(c)) for n, c in escrever.items()
+        if n.lower().endswith(".cs"))
+    if not tem_entry:
+        if aspnet:
+            extras = {"Program.cs": (
+                "// Program.cs gerado pela sandbox: a conversa trouxe somente\n"
+                "// controllers/tipos - este bootstrap registra e sobe o site.\n"
+                "var builder = WebApplication.CreateBuilder(args);\n"
+                "builder.Services.AddControllersWithViews();\n"
+                "var app = builder.Build();\n"
+                "app.MapControllers();\n"
+                "app.MapControllerRoute(\"default\", \"{controller}/{action=Index}/{id?}\");\n"
+                "app.MapGet(\"/\", () => \"app no ar - endpoints: /{controller}/{acao}\");\n"
+                f"app.Run(\"http://127.0.0.1:{porta or 5000}\");\n")}
+            projeto = csprojs[0] if csprojs else None
+            return (["dotnet", "run", "--project", projeto or "."],
+                    extras, "")
+        # console sem entry: compila como VERIFICAÇÃO + aviso
+        extras = {"Program.cs": (
+            "// gerado pela sandbox: nenhum arquivo tem Main/top-level —\n"
+            "// aponte o ▶ para o arquivo de entrada quando ele existir\n"
+            f"System.Console.WriteLine(\"projeto compilou \\u2713 ({len(escrever)} \"\n"
+            "    + \"arquivo(s)); sem ponto de entrada — o teste valida a \"\n"
+            "    + \"compilação; use o \\u25B6 no arquivo com Main ou top-level\");")}
+        return (["dotnet", "run", "--project",
+                 csprojs[0] if csprojs else "."], extras, "")
     if csprojs:
         # csproj da conversa tem prioridade — MAS completamos o que falta
         # para RODAR: sem ImplicitUsings, `WebApplication`/`Console` não
@@ -246,39 +282,13 @@ def _preparar_cs(escrever: dict, principal: str, aspnet: bool = False,
             escrever[csprojs[0]] = csproj
         return ["dotnet", "run", "--project", csprojs[0]], {}, ""
     extras = {"app.csproj": _CSPROJ_WEB if aspnet else _CSPROJ}
-    tem_main = any(re.search(r"static\s+(?:async\s+)?(?:Task|void|int)\s+Main\s*\(",
-                             str(c)) for c in escrever.values())
-    if tem_main or any(_e_toplevel(str(c)) for c in escrever.values()):
+    if tem_main:
         return ["dotnet", "run", "--project", "."], extras, ""
-    if _e_toplevel(str(escrever.get(principal) or "")):
-        mover = "" if principal == "Program.cs" else "Program.cs"
-        return ["dotnet", "run", "--project", "."], extras, mover
-    # 🚀 BOOTSTRAP ASP.NET (bug real: a conversa traz SÓ CONTROLLERS/modelos
-    # — sem Program.cs o teste "compilava" com placeholder e o site NUNCA
-    # subia). Gera o hosting mínimo: registra os controllers, mapeia rotas
-    # de atributo ([Route]/[ApiController]) E convencional (/{controller}/
-    # {acao} para quem só tem [HttpGet] sem [Route]) e sobe na PORTA lida
-    # do código (a mesma que o _cmd_site espera no curl).
-    if aspnet:
-        extras["Program.cs"] = (
-            "// Program.cs gerado pela sandbox: a conversa trouxe somente\n"
-            "// controllers/tipos - este bootstrap registra e sobe o site.\n"
-            "var builder = WebApplication.CreateBuilder(args);\n"
-            "builder.Services.AddControllersWithViews();\n"
-            "var app = builder.Build();\n"
-            "app.MapControllers();\n"
-            "app.MapControllerRoute(\"default\", \"{controller}/{action=Index}/{id?}\");\n"
-            "app.MapGet(\"/\", () => \"app no ar - endpoints: /{controller}/{acao}\");\n"
-            f"app.Run(\"http://127.0.0.1:{porta or 5000}\");\n")
-        return ["dotnet", "run", "--project", "."], extras, ""
-    # biblioteca de tipos sem entry (console): compila como VERIFICAÇÃO + aviso
-    extras["Program.cs"] = (
-        "// gerado pela sandbox: nenhum arquivo tem Main/top-level —\n"
-        "// aponte o ▶ para o arquivo de entrada quando ele existir\n"
-        f"System.Console.WriteLine(\"projeto compilou \\u2713 ({len(escrever)} \"\n"
-        "    + \"arquivo(s)); sem ponto de entrada — o teste valida a \"\n"
-        "    + \"compilação; use o \\u25B6 no arquivo com Main ou top-level\");")
-    return ["dotnet", "run", "--project", "."], extras, ""
+    # principal top-level → move para Program.cs (única exigência do SDK
+    # quando há OUTRO arquivo com statements; sozinho funciona em qualquer
+    # nome — coberto pelo tem_entry acima)
+    mover = "" if principal == "Program.cs" else "Program.cs"
+    return ["dotnet", "run", "--project", "."], extras, mover
 
 
 class _Preview(Exception):
@@ -615,7 +625,31 @@ def testar(arquivos: list[dict], principal: str, timeout: int = 300,
                                 runner="dotnet run --project .", porta=porta_app)
                 extras, mover = {}, ""
             else:
-                cmd = _cmd_site(principal, site_fw, deps, porta=porta_app)
+                # ⚡ FASTAPI/UVICORN: `python3 app.py` NÃO sobe servidor
+                # nenhum (o arquivo só declara `app = FastAPI()` e rotas —
+                # sem uvicorn.run o processo morre na hora e a porta nunca
+                # responde). Se o código JÁ se auto-sobe (`uvicorn.run(` ou
+                # bloco `__main__` com run), roda direto; senão o runner é
+                # `python3 -m uvicorn {stem}:app` (o módulo existe porque o
+                # _deps instala fastapi → uvicorn junto).
+                runner = ""
+                if site_fw in ("fastapi", "uvicorn"):
+                    auto_sobe = ("uvicorn.run(" in textos_py
+                                 or "__main__" in textos_py)
+                    if not auto_sobe:
+                        stem = principal[:-3].replace("/", ".") if \
+                            principal.endswith(".py") else "app"
+                        runner = (f"python3 -m uvicorn {stem}:app "
+                                  f"--host 127.0.0.1 --port {porta_app}")
+                        log(f"⚡ fastapi sem servidor no código — subindo "
+                            f"com uvicorn ({stem}:app) na porta {porta_app}",
+                            "sandbox")
+                        # `pip install fastapi` NEM SEMPRE traz o uvicorn —
+                        # garante o servidor nas deps do teste
+                        if "uvicorn" not in deps:
+                            deps = list(deps) + ["uvicorn"]
+                cmd = _cmd_site(principal, site_fw, deps, runner=runner,
+                                porta=porta_app)
                 extras, mover = {}, ""
         elif principal.lower().endswith(".cs"):
             # C# com ENTRY POINT de verdade (Program.cs/Main/top-level em
