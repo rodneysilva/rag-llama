@@ -959,6 +959,23 @@ da API**.
   reabastecia `achados` e o rodapé lia `top_score` (só nascia no
   `if achados`) — a resposta MORRIA inteira ("cannot access local
   variable"); nasce 0.0 junto da busca e recalcula com os extras.
+- **🔧 RAG LENTO + "ENVIANDO…" ETERNO (26/08, tarde)**: diagnóstico por
+  timestamps do job (logs/jobs/*.jsonl): com 14 coleções a busca Qdrant
+  é RÁPIDA (~3 s/rodada) — os vilões eram (a) **rerank DUPLICADO** (F2
+  top-15 + resgate do gate fraco nos 8 = ~15 s CADA na CPU de 2 vCPU —
+  mesma consulta, ~mesmos textos) e (b) LLM de geração (~25 s, GPU
+  local via túnel). FIXES: **cache de pares no `rerank.notas_de`**
+  (`_NOTAS` (modelo, consulta, hash texto)→nota, FIFO 1024 — a 2ª
+  chamada sai a custo ZERO, provado 9,2 s→0,000 s) + **rerank do chat
+  em top-8** (era 15; ~2 s/par na VPS). Busca total: 33 s→~20 s.
+  **"enviando…" eterno + bolha DUPLICADA** (página aberta atravessou um
+  deploy; POST em conexão morta pende para sempre; retry duplicava):
+  `hx-request timeout 20000` no form + **guard `_enviando`** com
+  `htmx:beforeRequest` preventDefault (2º POST no ar NEM SAI) +
+  falha/timeout → bolha sai, texto VOLTA à caixa, toast explica.
+  Nota: uvicorn SÓ loga request ao RESPONDER — POST pendurado não
+  aparece no access log (não chegou ≠ não respondeu). torch da VPS
+  já usa os 2 vCPUs (`torch.get_num_threads()==nproc`).
 - **🌐 Provedores EXTERNOS de LLM (24/08, 16h)**: `core/provedores.py` —
   qualquer endpoint OpenAI-compatible (glm/deepseek/openai/anthropic…
   e o PRÓPRIO llama-server remoto) vira grupo 🌐 no seletor do chat.
