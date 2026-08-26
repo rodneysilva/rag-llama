@@ -227,6 +227,23 @@ def _preparar_cs(escrever: dict, principal: str, aspnet: bool = False,
        o preview público funciona); console → Program.cs que compila e
        AVISA (o ▶ deve apontar para o arquivo de entrada)."""
     csprojs = [n for n in escrever if n.lower().endswith(".csproj")]
+    if csprojs:
+        # csproj da conversa: completa o que falta para RODAR ANTES de
+        # qualquer caminho (bootstrap também precisa) — sem ImplicitUsings,
+        # `WebApplication`/`Console` não resolvem sem using explícito (bug
+        # real: CS0103 com todas as references corretas)
+        csproj = str(escrever[csprojs[0]])
+        if "ImplicitUsings" not in csproj:
+            csproj = csproj.replace(
+                "<PropertyGroup>", "<PropertyGroup>"
+                "\n    <ImplicitUsings>enable</ImplicitUsings>", 1)
+            if "ImplicitUsings" not in csproj:  # sem PropertyGroup: cria
+                csproj = csproj.replace(
+                    "</Project>",
+                    "  <PropertyGroup>\n"
+                    "    <ImplicitUsings>enable</ImplicitUsings>\n"
+                    "  </PropertyGroup>\n</Project>")
+            escrever[csprojs[0]] = csproj
     # ENTRY CHECK primeiro (vale para csproj da conversa E scaffold): sem
     # Main/top-level em NENHUM .cs, o build morre em CS5001 — o caso 5
     # (bootstrap ASP.NET / placeholder console) tem que rodar nos DOIS
@@ -264,22 +281,6 @@ def _preparar_cs(escrever: dict, principal: str, aspnet: bool = False,
         return (["dotnet", "run", "--project",
                  csprojs[0] if csprojs else "."], extras, "")
     if csprojs:
-        # csproj da conversa tem prioridade — MAS completamos o que falta
-        # para RODAR: sem ImplicitUsings, `WebApplication`/`Console` não
-        # resolvem sem using explícito (bug real: CS0103 com todas as
-        # references corretas — o modelo gera Program.cs sem usings)
-        csproj = str(escrever[csprojs[0]])
-        if "ImplicitUsings" not in csproj:
-            csproj = csproj.replace(
-                "<PropertyGroup>", "<PropertyGroup>"
-                "\n    <ImplicitUsings>enable</ImplicitUsings>", 1)
-            if "ImplicitUsings" not in csproj:  # sem PropertyGroup: cria
-                csproj = csproj.replace(
-                    "</Project>",
-                    "  <PropertyGroup>\n"
-                    "    <ImplicitUsings>enable</ImplicitUsings>\n"
-                    "  </PropertyGroup>\n</Project>")
-            escrever[csprojs[0]] = csproj
         return ["dotnet", "run", "--project", csprojs[0]], {}, ""
     extras = {"app.csproj": _CSPROJ_WEB if aspnet else _CSPROJ}
     if tem_main:
