@@ -976,6 +976,19 @@ da API**.
   Nota: uvicorn SÓ loga request ao RESPONDER — POST pendurado não
   aparece no access log (não chegou ≠ não respondeu). torch da VPS
   já usa os 2 vCPUs (`torch.get_num_threads()==nproc`).
+- **🚨 GUARD CANCELAVA O PRÓPRIO POST (26/08, tarde 2)**: o `_enviando`
+  do guard anti-duplicado subia no listener de `submit` — ANTES do
+  `htmx:beforeRequest` — que via a flag setada e **preventDefault() no
+  PRIMEIRO pedido**: nenhum POST saía mais (chat mudo, "enviando…"
+  eterno, jobsbar VAZIO = nenhum job existia — o vazio do jobsbar é o
+  estado normal "sem jobs"). REGRA: flag de in-flight só sobe DENTRO do
+  `beforeRequest`, DEPOIS do check (o submit NATIVO não sabe se o htmx
+  vai emitir). Duplicado bloqueado no beforeRequest → remove a BOLHA
+  otimista que o submit ansioso já criou e devolve o texto à caixa.
+  Validação de JS do template: extrair `<script>` + `node --check`
+  (`Temp\kilo\checa_js.py`) — sintaxe OK não pega ERRO DE LÓGICA de
+  ordem de eventos; para guard de envio, pensar na SEQUÊNCIA submit →
+  beforeRequest → afterRequest.
 - **🌐 Provedores EXTERNOS de LLM (24/08, 16h)**: `core/provedores.py` —
   qualquer endpoint OpenAI-compatible (glm/deepseek/openai/anthropic…
   e o PRÓPRIO llama-server remoto) vira grupo 🌐 no seletor do chat.
