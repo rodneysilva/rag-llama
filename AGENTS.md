@@ -1012,6 +1012,22 @@ da API**.
   POST → card → resposta). jobsbar em branco é ESTADO NORMAL: só
   lista jobs de pesquisa/preview/ingest/seed/manutencao — job de CHAT
   vive na conversa (#pensando), nunca no jobsbar.
+- **🙈 MODELO SÓ QUANDO A LLM FOI CONSULTADA (26/08, tarde 4)**: pedido
+  do dono ("não exibir o qwen quando é somente o rag, nem no log").
+  (1) linha "🧠 modelo X já está no ar — sem recarga" REMOVIDA do log
+  (ruído em todo modo; trocas/recargas seguem logadas). (2) o runner do
+  job de chat zera `res["model"]` quando `tokens.chamadas == 0`
+  (cache/resposta direta — sem consulta) OU o modo PEDIDO no composer
+  foi `rag` (capturado como `_modo_pedido` ANTES do _processar_query —
+  o roteador muta corpo.mode para "hibrido" na escalada de criação) →
+  header da mensagem fica só "assistente". Hibrido/livre/auto com LLM
+  seguem exibindo (provado: 1 chamada → qwen visível). (3) DEDUPE no
+  `JobRegistry.log`: linha idêntica consecutiva no mesmo segundo é eco
+  (a linha 🪙 de tokens aparecia 2× no raciocínio — chamadas contavam
+  1 mas a linha duplicava). GitHub Actions pode NÃO disparar run no
+  push (fila) — `gh workflow run ci-cd --ref main` dispara manual
+  (workflow_dispatch existe); conferir o commit na VPS
+  (`git log -1` em ~/apps/rag-llama) vale mais que o status do run.
 - **🌐 Provedores EXTERNOS de LLM (24/08, 16h)**: `core/provedores.py` —
   qualquer endpoint OpenAI-compatible (glm/deepseek/openai/anthropic…
   e o PRÓPRIO llama-server remoto) vira grupo 🌐 no seletor do chat.
