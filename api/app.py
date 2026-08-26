@@ -5584,64 +5584,59 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
                                             "relevantes", "busca")
                             except Exception:
                                 pass
-            # 🎯 RESGATE POR VERSÃO CITADA (caso real do dono: 978 pontos
-            # de ".NET 10" na coleção dotnet e NENHUM vinha — a pergunta
-            # multi-assunto "culinária amazônica + .NET 10" dilui o vetor
-            # denso e os 4 slots iam para o outro assunto; a guarda então
-            # avisava "versão ausente" CORRETAMENTE para os fragmentos,
-            # mas ERRADO no todo). Versão citada que não está nos
-            # recuperados → scroll FULL-TEXT pelo termo cru da pergunta
-            # nas coleções do escopo e COMPLEMENTA o contexto (a base tem
-            # o material específico; é questão de achá-lo).
-            if body.mode in ("rag", "hibrido") and escopo:
-                try:
-                    docs_atuais = [d for d, _, _ in (achados or [])]
-                    ausentes = rag.versoes_ausentes(body.question, docs_atuais)
-                    if ausentes:
-                        from qdrant_client.models import (
-                            FieldCondition as _FC, Filter as _F, MatchText as _MT)
-                        termos_crus = [m.group(0) for m in
-                                       rag._RE_TECH_VERSAO.finditer(body.question or "")]
-                        ja = {id(d) for d in docs_atuais}
-                        extras = []
-                        for termo in termos_crus[:3]:
-                            for col in escopo:
-                                try:
-                                    pts, _ = client.scroll(
-                                        collection_name=col, limit=3,
-                                        with_payload=True,
-                                        scroll_filter=_F(must=[_FC(
-                                            key="page_content",
-                                            match=_MT(text=termo))]))
-                                    from langchain_core.documents import Document as _D
-                                    for p in pts:
-                                        pl = p.payload or {}
-                                        texto = str(pl.get("page_content") or "")
-                                        if not texto:
-                                            continue
-                                        d = _D(page_content=texto,
-                                               metadata=dict(pl.get("metadata") or {}))
-                                        if id(d) in ja or any(
-                                                d.page_content == x.page_content
-                                                for x in docs_atuais + extras):
-                                            continue
-                                        extras.append((d, config.SCORE_MIN, col))
-                                except Exception:
-                                    pass
-                        if extras:
-                            achados = list(achados or []) + extras[:4]
-                            log(f"🎯 resgate por versão: +{min(len(extras), 4)} "
-                                "fragmento(s) do material específico de "
-                                f"{', '.join(termos_crus[:2])} (full-text "
-                                "direto — a busca densa multi-assunto não os "
-                                "trouxe)", "busca")
-                except Exception as e:
-                    log(f"⚠️ resgate por versão falhou: {str(e)[:60]}", "busca")
         except HTTPException:
             raise  # 503 já traz a CAUSA — não re-empacota como "Qdrant indisponível"
         except Exception as e:
             print(f"❌ Erro na consulta: {e}")
             raise HTTPException(status_code=503, detail=f"Qdrant indisponível: {e}")
+        # 🎯 RESGATE POR VERSÃO CITADA (fora do try da busca — roda com os
+        # ACHADOS FINAIS; caso real do dono: 978 pontos de ".NET 10" na
+        # coleção dotnet e NENHUM vinha — a pergunta multi-assunto
+        # "gastronomia + .NET 10" dilui o vetor denso e os slots iam para
+        # o outro assunto). Versão citada ausente dos recuperados → scroll
+        # FULL-TEXT pelo termo cru nas coleções do escopo e COMPLEMENTA.
+        if body.mode in ("rag", "hibrido") and escopo:
+            try:
+                docs_atuais = [d for d, _, _ in (achados or [])]
+                ausentes = rag.versoes_ausentes(body.question, docs_atuais)
+                if ausentes:
+                    from qdrant_client.models import (
+                        FieldCondition as _FC, Filter as _F, MatchText as _MT)
+                    from langchain_core.documents import Document as _D
+                    termos_crus = [m.group(0) for m in
+                                   rag._RE_TECH_VERSAO.finditer(body.question or "")]
+                    extras = []
+                    vistos = {d.page_content for d in docs_atuais}
+                    for termo in termos_crus[:3]:
+                        for col in escopo:
+                            try:
+                                pts, _ = client.scroll(
+                                    collection_name=col, limit=3,
+                                    with_payload=True,
+                                    scroll_filter=_F(must=[_FC(
+                                        key="page_content",
+                                        match=_MT(text=termo))]))
+                                for p in pts:
+                                    pl = p.payload or {}
+                                    texto = str(pl.get("page_content") or "")
+                                    if not texto or texto in vistos:
+                                        continue
+                                    vistos.add(texto)
+                                    extras.append((
+                                        _D(page_content=texto,
+                                           metadata=dict(pl.get("metadata") or {})),
+                                        config.SCORE_MIN, col))
+                            except Exception:
+                                pass
+                    if extras:
+                        achados = list(achados or []) + extras[:4]
+                        log(f"🎯 resgate por versão: +{min(len(extras), 4)} "
+                            "fragmento(s) do material específico de "
+                            f"{', '.join(termos_crus[:2])} (full-text direto — "
+                            "a busca densa multi-assunto não os trouxe)",
+                            "busca")
+            except Exception as e:
+                log(f"⚠️ resgate por versão falhou: {str(e)[:60]}", "busca")
         found = [
             {
                 "score": round(float(score), 4),
