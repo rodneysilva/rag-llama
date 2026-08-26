@@ -468,6 +468,37 @@ def _porta_do_codigo(textos: str, fw: str) -> int:
     return 8000 if fw in ("fastapi", "uvicorn") else 5000
 
 
+def _injetar_home_flask(escrever: dict, principal: str, textos: str,
+                        log) -> None:
+    """App Flask SEM rota "/" abre no 404 morto do preview público (o
+    fallback /docs é FastAPI-only). Injeta uma home DINÂMICA que lista as
+    rotas registradas (url_map) — registrada ANTES do `if __name__`/
+    `app.run(` para valer quando o servidor sobe."""
+    if re.search(r"@\w+\.route\(\s*['\"]\s*/\s*['\"]", textos or ""):
+        return   # o app já nasceu com home
+    for nome in (principal, *list(escrever)):
+        c = str(escrever.get(nome) or "")
+        m = re.search(r"^(\w+)\s*=\s*Flask\(", c, re.MULTILINE)
+        if not m:
+            continue
+        var = m.group(1)
+        bloco = (
+            "\n# home gerada pela sandbox: o app nao nasceu com rota \"/\"\n"
+            f"@{var}.route(\"/\")\n"
+            "def _sandbox_home():\n"
+            f"    rotas = \"\\\\n\".join(sorted(r.rule for r in {var}.url_map.iter_rules()\n"
+            f"                                if r.rule != \"/\" and not r.rule.startswith(\"/static\")))\n"
+            "    return \"<h2>app no ar</h2><p>rotas:</p><pre>\" + rotas + \"</pre>\"\n"
+            "\n")
+        pos = (re.search(r"^if __name__\s*==", c, re.MULTILINE)
+               or re.search(rf"^{var}\.run\(", c, re.MULTILINE))
+        escrever[nome] = (c[:pos.start()] + bloco + c[pos.start():]) if pos \
+            else c + bloco
+        log("🏠 flask sem rota / — home gerada listando as rotas do app",
+            "sandbox")
+        return
+
+
 def _cmd_site(principal: str, fw: str, deps: list[str],
               runner: str = "", porta: int = 0) -> list[str]:
     """Sobe o servidor, espera a porta, captura a home e o log — e DEIXA O
@@ -652,6 +683,10 @@ def testar(arquivos: list[dict], principal: str, timeout: int = 300,
                         # garante o servidor nas deps do teste
                         if "uvicorn" not in deps:
                             deps = list(deps) + ["uvicorn"]
+                elif site_fw == "flask":
+                    # 🏠 flask sem rota / abre no 404 morto do preview —
+                    # injeta home dinâmica (listando as rotas via url_map)
+                    _injetar_home_flask(escrever, principal, textos_py, log)
                 cmd = _cmd_site(principal, site_fw, deps, runner=runner,
                                 porta=porta_app)
                 extras, mover = {}, ""
