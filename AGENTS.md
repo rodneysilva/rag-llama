@@ -931,6 +931,16 @@ da API**.
   README: framing "sua LLM local com RAG" + tabela local×externo
   (custo/latência/uso). Permissões do Kilo: `permission` allow-all no
   `~/.config/kilo/kilo.json` (vale para code/architect/plan).
+- **🤗 HF "MOSTRAR TUDO" + SUA CONTA (26/08)**: `hf.meus()` —
+  `whoami-v2` + `datasets?author=me` (limit 100, INCLUSIVE PRIVADOS) com
+  o HF_TOKEN; a rota `/api/hf/datasets` ganha `usuario`/`meus` e limite
+  clamp 200; Biblioteca mostra "👤 seus datasets (@conta)" no TOPO antes
+  da vitrine, que começa em 50 com botão "mostrar mais…" (+50 por clique).
+  Sem token: vitrine pública segue e o aviso ensina a colar (Sistema →
+  HF_TOKEN aplica NA HORA — quem decide é o .env do ambiente). Token
+  inválido degrada em silêncio (log ⚠️, seção some — nunca quebra a
+  vitrine). E2E `Temp\kilo\e2e_hf_tudo.py` (WAF da borda BLOQUEIA
+  User-Agent "Python-urllib" → 403 sem body; UA custom passa).
 - **🌐 Provedores EXTERNOS de LLM (24/08, 16h)**: `core/provedores.py` —
   qualquer endpoint OpenAI-compatible (glm/deepseek/openai/anthropic…
   e o PRÓPRIO llama-server remoto) vira grupo 🌐 no seletor do chat.
