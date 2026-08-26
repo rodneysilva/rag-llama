@@ -53,6 +53,10 @@
 
     <section class="cartao" id="composer">
       <form id="form-chat" hx-post="/hx/chat" hx-target="#pensando" hx-swap="beforeend"
+            {# ⏱️ TIMEOUT do envio: conexão morta (deploy/túnel) não pendura o
+               "enviando…" para sempre — 20 s sem resposta = falha visível,
+               texto devolvido à caixa (antes: bolha eterna e reenvio duplicado) #}
+            hx-request='{"timeout": 20000}'
              hx-headers='{"X-Otimista": "1"}'
             {# ANTES era innerHTML: cada envio APAGAVA a troca anterior que
                vivia em #pensando — o histórico sumia do chat #} hx-encoding="multipart/form-data">
@@ -296,14 +300,24 @@ ajustarAlturaTA();
 // limpa a caixa NO ATO do envio (pedido do dono: zero delay) — se o envio
 // FALHAR, o texto VOLTA para reeditar/reenviar
 let _ultimoEnvio = "";
+// 🚿 GUARD de envio duplicado: enquanto o POST está no ar, um 2º submit
+// (Enter ansioso / clique duplo / ↑+Enter no "enviando…" parado) é IGNORADO
+// — era a causa das DUAS bolhas iguais penduradas
+let _enviando = false;
+// 🚿 choke point DEFINITIVO: enquanto um POST está no ar, o htmx NEM ENVIA
+// (bloqueia Enter ansioso, clique duplo no ➤ e o ↑+Enter no travado)
+FORM.addEventListener("htmx:beforeRequest", (e) => {
+  if (e.target === FORM && _enviando) e.preventDefault();
+});
 FORM.addEventListener("htmx:afterRequest", (e) => {
-  if (e.target === FORM && e.detail.successful) {
+  if (e.target !== FORM) return;
+  _enviando = false;
+  if (e.detail.successful) {
     tirarDoContexto();   // a referência foi consumida pelo envio
     _ultimoEnvio = "";
-  }
-  if (e.target === FORM && !e.detail.successful) {
-    // 🫧 envio FALHOU (rede): a bolha otimista sai, o texto VOLTA à caixa
-    // para o usuário tentar de novo sem fantasma na conversa
+  } else {
+    // 🫧 envio FALHOU/EXPIROU (timeout 20 s de conexão morta): a bolha
+    // otimista sai, o texto VOLTA à caixa, aviso claro — nunca bolha eterna
     document.querySelectorAll("#pensando .otimista, #pensando .otimismo")
       .forEach(n => n.remove());
     if (_ultimoEnvio && !TA.value.trim()) {
@@ -311,6 +325,7 @@ FORM.addEventListener("htmx:afterRequest", (e) => {
       ajustarAlturaTA();
       TA.focus();
     }
+    if (window.toast) window.toast("o envio não respondeu — texto devolvido à caixa; tente de novo");
     _ultimoEnvio = "";
   }
 });
@@ -323,6 +338,8 @@ FORM.addEventListener("htmx:afterRequest", (e) => {
 FORM.addEventListener("submit", () => {
   const v = TA.value.trim();
   if (!v) return;   // required cuida, mas garantimos
+  if (_enviando) return;   // POST já no ar: sem bolha duplicada
+  _enviando = true;
   // ⚡ a caixa limpa NO ATO (antes do POST sair — fim do "texto aparece na
   // tela e ainda fica na textarea"); o afterRequest devolve se falhar
   _ultimoEnvio = v;

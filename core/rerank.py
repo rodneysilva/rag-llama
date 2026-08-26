@@ -21,6 +21,15 @@ O modelo fica residente em CPU (não disputa a VRAM dos llama-servers);
 _modelos: dict[str, tuple] = {}   # id do modelo -> (tokenizer, model)
 _aviso_indisponivel = False       # loga a degradação 1x só
 
+# 🧮 CACHE DE PARES (bug real de performance): o fluxo do chat calcula as
+# notas DOIS VEZES sobre os mesmos fragmentos (rerank F2 nos top-15 e o
+# resgate do gate fraco nos 8 primeiros — mesma consulta, ~mesmos textos)
+# e cada passada custa ~15 s na CPU da VPS. Par (modelo, consulta, texto)
+# é determinístico → a 2ª chamada vira hit de cache e o rerank do resgate
+# sai a custo ZERO.
+_NOTAS: dict[tuple, float] = {}
+_NOTAS_MAX = 1024
+
 # Limiar de SINAL do rerank: topo abaixo disto = notas sem confiança
 # (calibrado empiricamente: relevante claro ~0.10+; ruído < 0.03).
 SINAL_MIN = 0.03
@@ -66,16 +75,30 @@ def notas_de(consulta: str, textos: list[str], log=print,
         return None
     modelo = modelo or getattr(config, "RERANK_MODEL", "BAAI/bge-reranker-base")
     try:
-        if modelo not in _modelos:
-            _carregar(modelo, log)
-        import torch
-        tok, mod = _modelos[modelo]
-        pares = [(consulta, str(t)[:4000]) for t in textos]
-        with torch.no_grad():
-            entradas = tok(pares, padding=True, truncation=True,
-                           max_length=512, return_tensors="pt")
-            return [float(x) for x in
-                    torch.sigmoid(mod(**entradas).logits.view(-1)).tolist()]
+        # cache primeiro: só o que NUNCA foi pontuado vai ao modelo
+        chaves, faltam_idx = [], []
+        for i, t in enumerate(textos):
+            ch = (modelo, consulta, hash(str(t)[:4000]))
+            chaves.append(ch)
+            if ch not in _NOTAS:
+                faltam_idx.append(i)
+        if faltam_idx:
+            if modelo not in _modelos:
+                _carregar(modelo, log)
+            import torch
+            tok, mod = _modelos[modelo]
+            pares = [(consulta, str(textos[i])[:4000]) for i in faltam_idx]
+            with torch.no_grad():
+                entradas = tok(pares, padding=True, truncation=True,
+                               max_length=512, return_tensors="pt")
+                novas = torch.sigmoid(
+                    mod(**entradas).logits.view(-1)).tolist()
+            for i, n in zip(faltam_idx, novas):
+                _NOTAS[chaves[i]] = float(n)
+            # poda FIFO: o cache não cresce para sempre
+            while len(_NOTAS) > _NOTAS_MAX:
+                _NOTAS.pop(next(iter(_NOTAS)))
+        return [_NOTAS[ch] for ch in chaves]
     except Exception as e:
         log(f"⚠️ rerank falhou ({str(e)[:120]}) — seguindo sem rerank", "busca")
         return None
