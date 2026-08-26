@@ -304,10 +304,27 @@ let _ultimoEnvio = "";
 // (Enter ansioso / clique duplo / ↑+Enter no "enviando…" parado) é IGNORADO
 // — era a causa das DUAS bolhas iguais penduradas
 let _enviando = false;
-// 🚿 choke point DEFINITIVO: enquanto um POST está no ar, o htmx NEM ENVIA
-// (bloqueia Enter ansioso, clique duplo no ➤ e o ↑+Enter no travado)
+// 🚿 choke point DEFINITIVO: enquanto um POST está no ar, o htmx NEM ENVIA.
+// ⚠️ A flag só sobe AQUI (quando o request VAI SAIR de verdade) — se
+// subisse no listener de submit, este beforeRequest cancelaria o PRÓPRIO
+// pedido (flag true antes do request nascer = nenhum POST jamais saía —
+// bug real: chat inteiro mudo com "enviando…" eterno).
 FORM.addEventListener("htmx:beforeRequest", (e) => {
-  if (e.target === FORM && _enviando) e.preventDefault();
+  if (e.target !== FORM) return;
+  if (_enviando) {
+    e.preventDefault();
+    // 🧹 o submit ansioso JÁ criou bolha otimista e limpou a caixa —
+    // desfaz na hora (sem fantasma, sem texto perdido)
+    const ult = document.querySelector("#pensando .otimista:last-of-type, #pensando .otimismo:last-of-type");
+    if (ult) ult.remove();
+    if (_ultimoEnvio && !TA.value.trim()) {
+      TA.value = _ultimoEnvio;
+      ajustarAlturaTA();
+    }
+    _ultimoEnvio = "";
+    return;
+  }
+  _enviando = true;   // agora o request vai sair: bloqueia duplicados
 });
 FORM.addEventListener("htmx:afterRequest", (e) => {
   if (e.target !== FORM) return;
@@ -338,10 +355,9 @@ FORM.addEventListener("htmx:afterRequest", (e) => {
 FORM.addEventListener("submit", () => {
   const v = TA.value.trim();
   if (!v) return;   // required cuida, mas garantimos
-  if (_enviando) return;   // POST já no ar: sem bolha duplicada
-  _enviando = true;
   // ⚡ a caixa limpa NO ATO (antes do POST sair — fim do "texto aparece na
-  // tela e ainda fica na textarea"); o afterRequest devolve se falhar
+  // tela e ainda fica na textarea"); o afterRequest devolve se falhar.
+  // (o flag _enviando NÃO sobe aqui — sobe no beforeRequest do htmx)
   _ultimoEnvio = v;
   TA.value = "";
   ajustarAlturaTA();
