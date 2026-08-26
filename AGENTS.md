@@ -1027,7 +1027,24 @@ da API**.
   1 mas a linha duplicava). GitHub Actions pode NÃO disparar run no
   push (fila) — `gh workflow run ci-cd --ref main` dispara manual
   (workflow_dispatch existe); conferir o commit na VPS
-  (`git log -1` em ~/apps/rag-llama) vale mais que o status do run.
+  (  `git log -1` em ~/apps/rag-llama) vale mais que o status do run.
+- **🧹 SANDBOX: `#` estilo Python em .cs (26/08, noite)**: a LLM às vezes
+  emite `# src/X.cs` (comentário de nome no marcador errado) na 1ª linha
+  de blocos csharp → CS1024 "Preprocessor directive expected" matava o
+  build INTEIRO. `_sanear_cs()` no `sandbox.testar` converte 1ª linha
+  `# texto` de .cs em `// texto` ANTES de gravar (`#region`/`#if` NÃO
+  são tocados — exigem espaço após o `#`; .py idem). Spec
+  arquivo_codigo.md regra 1 reforça o marcador por linguagem. Provado
+  em produção: o caso exato do dono agora compila e sobe
+  ("Now listening on: http://127.0.0.1:5000"). **CI/CD ganha
+  `concurrency` (group ci-cd-${{ github.ref }}, cancel-in-progress)**:
+  incidente do GitHub deixou um run "queued" ZUMBI por 35+ min (o push
+  seguinte nem disparou; dispatch em corrida deu startup_failure) —
+  runs superseded agora se cancelam sozinhos e o deploy da ponta é o
+  que vale. Zumbi "queued" não pode ser cancelado (API diz "completed")
+  nem deletado (403) — expira sozinho e é inofensivo (`git pull
+  --ff-only` na VPS). Status do sandbox: rota certa é
+  `/api/sandbox/status/{job}` (NÃO /testar/status).
 - **🌐 Provedores EXTERNOS de LLM (24/08, 16h)**: `core/provedores.py` —
   qualquer endpoint OpenAI-compatible (glm/deepseek/openai/anthropic…
   e o PRÓPRIO llama-server remoto) vira grupo 🌐 no seletor do chat.
