@@ -261,18 +261,14 @@ def _preparar_cs(escrever: dict, principal: str, aspnet: bool = False,
     # do código (a mesma que o _cmd_site espera no curl).
     if aspnet:
         extras["Program.cs"] = (
-            "// Program.cs gerado pela sandbox: a conversa trouxe só\n"
-            "// controllers/tipos — este bootstrap registra e sobe o site.\n"
+            "// Program.cs gerado pela sandbox: a conversa trouxe somente\n"
+            "// controllers/tipos - este bootstrap registra e sobe o site.\n"
             "var builder = WebApplication.CreateBuilder(args);\n"
             "builder.Services.AddControllersWithViews();\n"
             "var app = builder.Build();\n"
             "app.MapControllers();\n"
-            "app.MapControllerRoute(\"default\",\n"
-            "    \"{controller}/{action=Index}/{id?}\");\n"
-            "app.MapGet(\"/\", () => Results.Text(\n"
-            "    \"app no ar — endpoints: /{controller}/{acao} \"\n"
-            "    \"(ex.: /Culinaria/GetCulinariaAmazonica)\",\n"
-            "    \"text/plain; charset=utf-8\"));\n"
+            "app.MapControllerRoute(\"default\", \"{controller}/{action=Index}/{id?}\");\n"
+            "app.MapGet(\"/\", () => \"app no ar - endpoints: /{controller}/{acao}\");\n"
             f"app.Run(\"http://127.0.0.1:{porta or 5000}\");\n")
         return ["dotnet", "run", "--project", "."], extras, ""
     # biblioteca de tipos sem entry (console): compila como VERIFICAÇÃO + aviso
