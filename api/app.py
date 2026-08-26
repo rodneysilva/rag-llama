@@ -124,6 +124,17 @@ def _despachar(fabricar, kind: str, payload: dict,
     fabricar = fabricar_com_historico
     _FABRICAS[kind] = fabricar
     rodar = fabricar(payload)
+    if not callable(rodar):
+        # 🚨 fábrica FORA DO CONTRATO (executa no corpo em vez de devolver
+        # rodar): o corpo JÁ RODOU nesta thread — publicar no worker
+        # executaria TUDO DE NOVO (bug real: teste de sandbox rodava 2x e
+        # o POST travava o build inteiro na request). Não publica; avisa
+        # alto para a fábrica ser corrigida.
+        print(f"🚨 fábrica de '{kind}' executou no corpo (devolve "
+              f"{type(rodar).__name__} em vez de runner) — corrigir para "
+              "def fabricar(p): …; return rodar. Job NÃO publicado "
+              "(evitaria execução dupla)")
+        return
     if not fila.publicar(kind, jid, payload):
         # fallback thread: É esta thread que executa — marca picked
         if reg is not None:
@@ -1252,17 +1263,20 @@ def sandbox_testar(body: SandboxIn, request: Request):
 
     def _fabricar(payload: dict):
         jid = payload["job"]
-        _sbx.log(jid, f"⚙️ teste de {payload['principal']} "
-                      f"(+{max(0, len(payload.get('arquivos', [])) - 1)} arquivo(s) "
-                      "de contexto)")
-        try:
-            r = sandbox.testar(payload.get("arquivos", []),
-                               payload["principal"],
-                               payload.get("timeout", 300),
-                               log=lambda m, g="": _sbx.log(jid, m))
-            _sbx.concluir(jid, result=r)
-        except Exception as e:
-            _sbx.concluir(jid, error=str(e)[:400])
+
+        def rodar():
+            _sbx.log(jid, f"⚙️ teste de {payload['principal']} "
+                          f"(+{max(0, len(payload.get('arquivos', [])) - 1)} arquivo(s) "
+                          "de contexto)")
+            try:
+                r = sandbox.testar(payload.get("arquivos", []),
+                                   payload["principal"],
+                                   payload.get("timeout", 300),
+                                   log=lambda m, g="": _sbx.log(jid, m))
+                _sbx.concluir(jid, result=r)
+            except Exception as e:
+                _sbx.concluir(jid, error=str(e)[:400])
+        return rodar
 
     job = _sbx.novo_id()
     _despachar(_fabricar, "sandbox",
@@ -2680,6 +2694,11 @@ PASTA_LOGS_JOBS = Path("logs/jobs")
 
 
 class JobRegistry:
+    # sufixo ÚNICO por processo: o _seq reinicia a cada boot e o sbx_4 de
+    # hoje colidia com o sbx_4 de ontem (jsonl em append misturava
+    # execuções de dias diferentes no mesmo arquivo — visto em produção)
+    _BOOT = os.urandom(2).hex()
+
     def __init__(self, prefixo: str, rotulo: str):
         self.prefixo, self.rotulo = prefixo, rotulo
         self.jobs: dict = {}
@@ -2688,7 +2707,7 @@ class JobRegistry:
         TODOS_JOBS.append(self)
 
     def novo_id(self) -> str:
-        return f"{self.prefixo}_{next(self._seq)}"
+        return f"{self.prefixo}_{next(self._seq)}-{self._BOOT}"
 
     def iniciar(self, jid: str) -> None:
         """Cria/recria a entrada de status (placeholder pré-pickup) e poda
