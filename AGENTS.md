@@ -1199,6 +1199,26 @@ da API**.
   (`{{ x | tojson }}` quebra o teste de sintaxe — usar data-attribute +
   JSON.parse). E2E `Temp\kilo\e2e_gen.py`: t2i flux1-schnell REAL
   (308 s na estação, PNG 1,4 MB) servido pela produção (pull-back 200).
+- **🔧 4 FIXES pós-chat-só-texto (27/08, manhã 8)**: (1) **i2t sem
+  NENHUM modelo** — o multimodal LOCAL (qwen2.5-vl) morava no optgrp
+  🎨 geração que saiu do composer; grupo **"👁 visão local"** (categoria
+  visao do modelos.listar, visao:true) volta ao seletor do chat — i2t
+  sempre tem pelo menos o local mesmo sem provedor cloud. (2) **modo
+  "não funcionava"**: com i2t o select ficava DISABLED (parecia
+  quebrado) — agora SAI DA VISTA com hint "análise direta — o modo não
+  se aplica"; em texto segue normal (hibrido validado). (3) **GLM no
+  Multimídia**: SUPORTADO — com a chave ZAI cadastrada os 👁 da API
+  entram sozinhos no grupo 🌐 (cat=visao) e no i2t do chat; modelos 🔑
+  conhecidos sem chave agora mostram atalho **"cadastrar a chave →"**
+  (`/sistema?prov=zai`) que PRÉ-PREENCHE o form (a pessoa só cola a
+  apikey — diretriz do dono). (4) **Sistema**: chips de provedores
+  REMOVIDOS do Motor (repetição com o cartão ☁️; diretriz: "seleção só
+  no chat/multimídia, em sistema eu só incluo a apikey" — a
+  inteligência de "para que serve cada modelo" é a categorização
+  automática que já roda); inputs do form com width:100% (estavam
+  finos). ⚠️ diagnóstico visual SEM screenshot (modelo do ambiente não
+  lê imagem): DOM por Playwright (bounding boxes, options contadas,
+  dataset lido) resolve. E2E `Temp\kilo\e2e_fixes.py`.
 - **📝 CHAT SÓ-TEXTO (27/08, manhã 7)**: pedido do dono ("geração de
   imagem e vídeo fica só em Multimídia, o retorno da tela do chat é
   texto"). Composer perdeu os TIPOS de geração (imagem/video/gif/i2v/
