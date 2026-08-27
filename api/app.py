@@ -3926,7 +3926,10 @@ def midia_pagina(request: Request):
                             f"no Sistema ({c['site']})"})
     except Exception:
         pass
-    ctx["grupos_visao"] = [g for g in grupos if g["modelos"]]
+    ctx["grupos_visao"] = [g for g in grupos
+                           if g["modelos"] or "cadastrados" in g["rotulo"]]
+    # grupo de CADASTRADOS sempre visível (placeholder explica quando vazio —
+    # não deixa a categoria "sumir" para quem só tem provedor de texto)
     return TEMPLATES.TemplateResponse(request, "midia.html", ctx)
 
 

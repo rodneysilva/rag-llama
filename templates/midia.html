@@ -27,6 +27,9 @@
           <optgroup label="{{ g.rotulo }}">
             {% for m in g.modelos %}
             <option value="{{ m.id }}" title="{{ m.info }}">{{ m.nome }}</option>
+            {% else %}
+            <option value="" disabled title="cadastre um provedor com modelos 👁 (Z.AI, OpenAI, Claude, Gemini…)">
+              — nenhum multimodal cadastrado —</option>
             {% endfor %}
           </optgroup>
           {% endfor %}
