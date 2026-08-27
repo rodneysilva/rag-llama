@@ -1239,6 +1239,23 @@ da API**.
   (value "qwen2.5-vl-7b", não vazio) caía no caminho direto no
   container — `EM_CONTAINER and ":" not in modelo` → AGENTE. E2E
   `Temp\kilo\e2e_layout.py` (Playwright dark: `emulate_media`).
+- **🚨 MOJIBAKE 2 + ZAI SEM 👁 + estado no Sistema (27/08, manhã 10)**:
+  (1) **mojibake VOLTOU**: `Get-Content | Set-Content` do PS 5.1 leu o
+  UTF-8 SEM BOM como cp1252 e regravou corrompido (63 casos) — REGRa
+  FINAL: NUNCA editar template pelo PowerShell; edits de arquivo em
+  PYTHON. (2) **ZAI sem multimodais**: o endpoint do CODING PLAN
+  (`api.z.ai/api/coding/paas/v4`) lista SÓ conversa no /models (10 glm,
+  zero 👁) — `modelos()` ganhou FALLBACK DA CASA: sem nenhum cat=visao
+  na listagem, os TÍPICOS do CONHECIDOS entram apensados (glm-4.5v,
+  glm-v5-turbo, glm-4.6v; info avisa "não veio na listagem"). PROVADO
+  COM A CHAVE DO DONO: `zai:glm-4.5v` analisou o PNG vermelho →
+  "vermelho" (GPU local intocada). (3) **"não manteve o
+  preenchimento"**: cartão ☁️ agora mostra chips dos CADASTRADOS
+  (✅ nome · N modelo(s) · N 👁) — o estado da chave gravada é visível.
+  (4) **KPI chat sempre qwen-coder**: correto — é o servidor de TEXTO
+  da conversa; visão é OUTRO servidor (:8082) sob demanda — KPIs
+  renomeados ("💬 chat (conversa)", "🖼️ visão (multimodal) · escolha
+  um 👁 que ele sobe"). E2E `Temp\kilo\e2e_zai.py` + `e2e_zai_real.py`.
 - **📝 CHAT SÓ-TEXTO (27/08, manhã 7)**: pedido do dono ("geração de
   imagem e vídeo fica só em Multimídia, o retorno da tela do chat é
   texto"). Composer perdeu os TIPOS de geração (imagem/video/gif/i2v/
