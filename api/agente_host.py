@@ -46,8 +46,12 @@ class PortaIn(BaseModel):
 
 
 class VisaoIn(BaseModel):
-    arquivo: str
+    arquivo: str = ""
     pergunta: str | None = None
+    # 📦 imagem EMBUTIDA (base64): o upload vive no volume da VPS — a GPU é
+    # AQUI na estação; sem o b64 o caminho da VPS não existe no host
+    b64: str = ""
+    nome: str = ""
 
 
 class TarefaIn(BaseModel):
@@ -247,11 +251,27 @@ def _caminho_host(arquivo: str) -> str:
 @app.post("/visao")
 def visao(body: VisaoIn):
     """Descreve uma imagem com o Qwen2.5-VL (:8082) NO HOST — a API-container
-    proxya para cá (o anexo de imagem do chat volta a funcionar)."""
+    proxya para cá (o anexo de imagem do chat volta a funcionar).
+    `b64`+`nome`: a imagem veio EMBUTIDA (upload da VPS — o caminho deles
+    não existe aqui); grava em saidas/entrada/ do host e analisa."""
     from core import midia
+    import base64 as _b64
+    caminho = body.arquivo
     try:
-        return {"descricao": midia.legendar_imagem(_caminho_host(body.arquivo),
+        if body.b64:
+            destino = Path(__file__).resolve().parent.parent / "saidas" / "entrada"
+            destino.mkdir(parents=True, exist_ok=True)
+            alvo = destino / (Path(body.nome or "upload.png").name
+                              if Path(body.nome or "").suffix
+                              else "upload.png")
+            alvo.write_bytes(_b64.b64decode(body.b64))
+            caminho = str(alvo)
+        if not caminho:
+            raise RuntimeError("informe 'arquivo' ou 'b64'+'nome'")
+        return {"descricao": midia.legendar_imagem(_caminho_host(caminho),
                                                     body.pergunta)}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=503, detail=str(e)[:300])
 

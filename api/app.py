@@ -3837,12 +3837,14 @@ def midia_analisar(body: MidiaAnalisarIn, request: Request):
             try:
                 modelo = payload["modelo"]
                 if not modelo and config.EM_CONTAINER:
-                    # LOCAL em CONTAINER: a GPU está na ESTAÇÃO — a análise
-                    # (e a subida do :8082) roda NO AGENTE do host, não aqui
-                    # (bug real: _subir_vl direto procurava D:\models dentro
-                    # do container Linux e morria "modelo de visão ausente")
+                    # LOCAL em CONTAINER: a GPU está na ESTAÇÃO — a imagem
+                    # (b64, o upload vive no volume DA VPS) viaja ao AGENTE
+                    # do host, que sobe o :8082 e analisa lá
+                    import base64 as _b64
+                    with open(payload["arquivo"], "rb") as f:
+                        img_b64 = _b64.b64encode(f.read()).decode()
                     r = modelos._chamar_agente(
-                        "/visao", {"arquivo": payload["arquivo"],
+                        "/visao", {"b64": img_b64, "nome": payload["nome"],
                                    "pergunta": payload["pergunta"]},
                         timeout=420)
                     analise = r.get("descricao", "")
@@ -4451,12 +4453,18 @@ def visao(body: VisaoIn):
     Em CONTAINER, a análise roda NO HOST via agente (:8010)."""
     if config.EM_CONTAINER:
         try:
+            import base64 as _b64
+            with open(body.arquivo, "rb") as f:
+                img_b64 = _b64.b64encode(f.read()).decode()
             r = modelos._chamar_agente("/visao",
-                                       {"arquivo": body.arquivo,
+                                       {"b64": img_b64,
+                                        "nome": Path(body.arquivo).name,
                                         "pergunta": body.pergunta},
                                        timeout=420)
             return {"descricao": r.get("descricao", "")}
         except RuntimeError as e:
+            raise HTTPException(status_code=503, detail=str(e))
+        except OSError as e:
             raise HTTPException(status_code=503, detail=str(e))
     try:
         return {"descricao": midia.legendar_imagem(body.arquivo, body.pergunta)}
