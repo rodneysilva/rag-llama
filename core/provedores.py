@@ -47,8 +47,67 @@ _SUGESTOES = {
     "anthropic": ["claude-sonnet-4-5", "claude-opus-4-1", "claude-haiku-4-5"],
     "openai": ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "o4-mini"],
     "glm": ["glm-4.6", "glm-4.5v", "glm-4-flash"],
+    "zai": ["glm-4.6", "glm-4.5-air", "glm-4.5v"],
     "deepseek": ["deepseek-chat", "deepseek-reasoner"],
 }
+
+# ☁️ PROVEDORES PRINCIPAIS (catálogo p/ o cadastro em 1 clique — falta SÓ a
+# chave; "zai coding plan" é o plano de API da Z.AI, mesmo endpoint GLM)
+CONHECIDOS = {
+    "zai": {"nome": "Z.AI Coding Plan (GLM)",
+            "base_url": "https://api.z.ai/api/paas/v4",
+            "site": "z.ai", "dica": "glm-4.6 · glm-4.5 · glm-4.5v (plano coding)"},
+    "openai": {"nome": "ChatGPT / OpenAI",
+               "base_url": "https://api.openai.com/v1",
+               "site": "platform.openai.com", "dica": "gpt-5 · gpt-5-mini · o3"},
+    "anthropic": {"nome": "Claude / Anthropic",
+                  "base_url": "https://api.anthropic.com/v1",
+                  "site": "console.anthropic.com",
+                  "dica": "claude-sonnet-4-5 · claude-opus-4-1"},
+    "deepseek": {"nome": "DeepSeek",
+                 "base_url": "https://api.deepseek.com/v1",
+                 "site": "platform.deepseek.com", "dica": "deepseek-chat · reasoner"},
+    "openrouter": {"nome": "OpenRouter (vários)",
+                   "base_url": "https://openrouter.ai/api/v1",
+                   "site": "openrouter.ai",
+                   "dica": "1 chave, modelos de TODAS as casas (com preço)"},
+    "gemini": {"nome": "Google Gemini",
+               "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+               "site": "aistudio.google.com", "dica": "gemini-2.5-pro · flash"},
+    "grok": {"nome": "xAI Grok",
+             "base_url": "https://api.x.ai/v1",
+             "site": "console.x.ai", "dica": "grok-4 · grok-code-fast"},
+    "groq": {"nome": "Groq (rápidos)",
+             "base_url": "https://api.groq.com/openai/v1",
+             "site": "console.groq.com", "dica": "llama/openai na GPU deles"},
+    "mistral": {"nome": "Mistral",
+                "base_url": "https://api.mistral.ai/v1",
+                "site": "console.mistral.ai", "dica": "mistral-large · codestral"},
+}
+
+# 📊 CONTEXTO (janela, em tokens) por PADRÃO de nome — quando a API não
+# entrega (OpenAI/Anthropic/Z.AI listam só id), a heurística local cobre;
+# desconhecido → None (NUNCA inventar número)
+_RE_CTX = [
+    (r"gpt-4\.1", 1000_000), (r"gpt-5", 400_000), (r"o3|o4-", 200_000),
+    (r"gpt-4o|chatgpt-4o", 128_000),
+    (r"claude-(?:sonnet|opus|haiku)-[34]", 200_000),
+    (r"glm-4\.[56]", 200_000), (r"glm-4-flash", 128_000), (r"glm-4v", 128_000),
+    (r"deepseek", 128_000),
+    (r"gemini-2\.5", 1000_000), (r"gemini-2\.0", 1000_000),
+    (r"grok-4", 256_000), (r"grok-3", 131_000), (r"grok-code", 256_000),
+    (r"qwen3", 256_000), (r"qwen2\.5", 32_768), (r"qwen2", 32_768),
+    (r"llama-3", 128_000), (r"mistral-large|codestral", 128_000),
+    (r"kimi-k2", 128_000),
+]
+
+
+def _ctx_do_nome(nome: str) -> int | None:
+    n = (nome or "").lower()
+    for pad, ctx in _RE_CTX:
+        if re.search(pad, n):
+            return ctx
+    return None
 _CACHE: dict[str, tuple[float, list]] = {}
 _LOCK = threading.Lock()
 _TTL = 300  # 5 min
@@ -83,9 +142,11 @@ def e_multimodal(nome: str) -> bool:
     return bool(_RE_VISAO.search(n))
 
 
-def _modelos_do_endpoint(base: str, chave: str) -> list[str] | None:
-    """GET {base}/models — lista REAL. Aceita OpenAI ({data:[{id}]}) E
-    llama-server ({models:[{name}]}) — qualquer OpenAI-compatible serve."""
+def _modelos_do_endpoint(base: str, chave: str):
+    """GET {base}/models — lista REAL + METADADOS quando a API entrega
+    (OpenRouter: context_length/description/pricing; aceita OpenAI
+    {data:[{id}]} E llama-server {models:[{name}]}) — qualquer
+    OpenAI-compatible serve. Devolve (nomes, meta) ou (None, {})."""
     try:
         cabe = {"Authorization": f"Bearer {chave}"} if chave else {}
         # ⚠️ UA PRÓPRIO: o WAF da borda (Cloudflare) BLOQUEIA os
@@ -95,28 +156,60 @@ def _modelos_do_endpoint(base: str, chave: str) -> list[str] | None:
         cabe["User-Agent"] = "ragaroy/1.0"
         r = httpx.get(f"{base.rstrip('/')}/models", headers=cabe, timeout=12)
         if r.status_code != 200:
-            return None
+            return None, {}
         corpo = r.json()
         dados = corpo.get("data") or corpo.get("models") or []
-        nomes = sorted({str(m.get("id") or m.get("name") or "")
-                        .removesuffix("-GGUF").strip()
-                        for m in dados} - {""})
-        return nomes or None
+        nomes, meta = set(), {}
+        for m in dados:
+            nome = str(m.get("id") or m.get("name") or "") \
+                .removesuffix("-GGUF").strip()
+            if not nome:
+                continue
+            nomes.add(nome)
+            info = {}
+            if m.get("context_length"):
+                info["ctx"] = int(m["context_length"])
+            desc = str(m.get("description") or "").strip()
+            if desc:
+                info["info"] = desc.split(". ")[0][:140]
+            preco = (m.get("pricing") or {}).get("prompt")
+            try:
+                if preco is not None and float(preco) > 0:
+                    info["info"] = (info.get("info", "") + f" · US$ "
+                                    f"{float(preco) * 1_000_000:.2f}/M in").strip(" ·")
+            except (TypeError, ValueError):
+                pass
+            mods = (m.get("architecture") or {}).get("input_modalities") or []
+            if mods and "image" in [str(x).lower() for x in mods]:
+                info["visao_api"] = True
+            if info:
+                meta[nome] = info
+        return sorted(nomes) or None, meta
     except Exception:
-        return None
+        return None, {}
 
 
 def modelos(pid: str, force: bool = False) -> list[dict]:
-    """[{nome, visao}] do provedor — /models → manual → sugestões."""
+    """[{nome, visao, ctx, info}] do provedor — /models → manual →
+    sugestões. `ctx` = janela de contexto (metadado da API quando existe
+    — OpenRouter — senão heurística local por nome); `info` = descrição
+    curta/preço quando a API entrega."""
     with _LOCK:
         cacheado = _CACHE.get(pid)
         if (not force and cacheado and time.time() - cacheado[0] < _TTL):
             return cacheado[1]
     base, chave = _cfg(pid, "BASE_URL"), _cfg(pid, "API_KEY")
-    nomes = (_modelos_do_endpoint(base, chave)
+    nomes, meta = _modelos_do_endpoint(base, chave)
+    nomes = (nomes
              or [m.strip() for m in _cfg(pid, "MODELOS").split(",") if m.strip()]
              or _SUGESTOES.get(pid, []))
-    lista = [{"nome": n, "visao": e_multimodal(n)} for n in nomes]
+    lista = []
+    for n in nomes:
+        m = meta.get(n) or {}
+        lista.append({"nome": n,
+                      "visao": bool(m.get("visao_api")) or e_multimodal(n),
+                      "ctx": m.get("ctx") or _ctx_do_nome(n),
+                      "info": m.get("info", "")})
     with _LOCK:
         _CACHE[pid] = (time.time(), lista)
     return lista

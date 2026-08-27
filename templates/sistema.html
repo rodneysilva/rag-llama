@@ -94,11 +94,22 @@
         const r = await fetch("/api/provedores");
         const provs = (await r.json()).provedores || [];
         const p = provs.find(x => x.id === sel.value);
+        const fmt = n => n >= 1000 ? Math.round(n / 1000) + "k" : n;
         box.innerHTML = (p?.modelos || []).map(m =>
-          "<span class='chip-prompt'" + (m.visao ? " title='multimodal'" : "") + ">"
-          + (m.visao ? "👁 " : "") + m.nome + "</span>").join("")
+          "<span class='chip-prompt'" + (m.visao || m.info ? " title='" + ((m.info || "") + (m.ctx ? " · ctx " + fmt(m.ctx) : "")) + "'" : "") + ">"
+          + (m.visao ? "👁 " : "") + m.nome
+          + (m.ctx ? " <span class='mini'>· " + fmt(m.ctx) + "</span>" : "")
+          + "</span>").join("")
           || "<span class='mini'>nenhum modelo listado — confira a chave/URL</span>";
       } catch { box.innerHTML = "<span class='mini'>indisponível agora</span>"; }
+    }
+    // ☁️ cadastro em 1 CLIQUE: card do provedor conhecido preenche o form
+    function usarProv(id, nome, url) {
+      const f = document.getElementById("form-prov");
+      f.pid.value = id; f.pnome.value = nome; f.purl.value = url;
+      f.pkey.focus();
+      document.getElementById("prov-res").textContent =
+        "preenchido — cole a chave da API e clique em cadastrar";
     }
     // ☁️ CADASTRO de provedor cloud — grava no .env na hora e os modelos
     // da própria API entram no seletor do chat (grupo 🌐)
@@ -129,26 +140,32 @@
 
 <section class="cartao">
   <h2>☁️ Cadastrar provedor cloud</h2>
-  <p class="mini" style="margin-top:-.4rem;">qualquer API OpenAI-compatible
-    (Z.AI/GLM, DeepSeek, OpenAI, Anthropic, OpenRouter, Groq…) — a chave vai
-    para o .env (mascarada) e os modelos são lidos DA PRÓPRIA API
-    (GET /models); o grupo 🌐 aparece no seletor do chat na hora.</p>
-  <form onsubmit="cadastrarProv(this); return false;"
+  <p class="mini" style="margin-top:-.4rem;">qualquer API OpenAI-compatible —
+    os <b>principais</b> abaixo em 1 clique (falta só a chave); os modelos e
+    as informações deles (janela de contexto, descrição/preço quando a API
+    entrega) são lidos AUTOMATICAMENTE da própria API. A chave vai para o
+    .env (mascarada) e o grupo 🌐 entra no seletor do chat na hora.</p>
+  <div style="display:flex; gap:.4rem; flex-wrap:wrap; margin:.4rem 0 .8rem;">
+    {% for c in prov_conhecidos %}
+    <button type="button" class="chip-prompt" style="cursor:pointer;"
+            title="{{ c.dica }} · {{ c.site }}"
+            onclick="usarProv('{{ c.id }}', '{{ c.nome }}', '{{ c.base_url }}')">
+      ☁️ {{ c.nome }}</button>
+    {% endfor %}
+  </div>
+  <form id="form-prov" onsubmit="cadastrarProv(this); return false;"
         style="display:grid; gap:.5rem; grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));">
     <div><label>id (slug)</label>
       <input name="pid" required placeholder="zai" maxlength="12" style="text-transform:uppercase;"></div>
     <div><label>nome (rótulo)</label>
-      <input name="pnome" placeholder="Z.AI"></div>
+      <input name="pnome" placeholder="Z.AI Coding Plan"></div>
     <div style="grid-column:1/-1;"><label>base URL da API</label>
       <input name="purl" required list="prov-presets" placeholder="https://api.z.ai/api/paas/v4">
       <datalist id="prov-presets">
-        <option value="https://api.z.ai/api/paas/v4">Z.AI — GLM (internacional)</option>
+        {% for c in prov_conhecidos %}
+        <option value="{{ c.base_url }}">{{ c.nome }}</option>
+        {% endfor %}
         <option value="https://open.bigmodel.cn/api/paas/v4">Zhipu bigmodel — GLM (China)</option>
-        <option value="https://api.deepseek.com/v1">DeepSeek</option>
-        <option value="https://api.openai.com/v1">OpenAI</option>
-        <option value="https://api.anthropic.com/v1">Anthropic</option>
-        <option value="https://openrouter.ai/api/v1">OpenRouter</option>
-        <option value="https://api.groq.com/openai/v1">Groq</option>
       </datalist></div>
     <div><label>chave da API 🔒</label>
       <input name="pkey" type="password" autocomplete="off" placeholder="sk-…"></div>

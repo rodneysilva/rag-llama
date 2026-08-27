@@ -850,7 +850,9 @@ def pagina_chat(request: Request):
                 "externo": _p["id"],
                 "modelos": [{"nome": f"{_p['id']}:{m['nome']}",
                              "rotulo": m["nome"], "gb": None, "ativo": False,
-                             "visao": m["visao"]} for m in _p["modelos"]]})
+                             "visao": m["visao"], "ctx": m.get("ctx"),
+                             "info": m.get("info", "")}
+                            for m in _p["modelos"]]})
     except Exception:
         pass
     # modelos de GERAÇÃO (combobox inteligente: aparecem SÓ quando a mídia
@@ -1926,8 +1928,11 @@ def pagina_sistema(request: Request):
         ctx["provedores_externos"] = [
             {"id": p["id"], "nome": p["nome"]}
             for p in _prov.listar() if p["externo"]]
+        ctx["prov_conhecidos"] = [{"id": k, **v} for k, v in
+                                  _prov.CONHECIDOS.items()]
     except Exception:
         ctx["provedores_externos"] = []
+        ctx["prov_conhecidos"] = []
     # ── painel do MOTOR (modelos ativos + VRAM) ──────────────────────
     # em container: a verdade está no agente do host (quem tem a GPU).
     # AGENTE FORA? O status NÃO mente "desligado": a LLM continua
@@ -5020,10 +5025,22 @@ def _query_log(job: str, msg: str, grupo: str = "geral"):
 def api_provedores(force: bool = False):
     """Catálogo de LLMs: local (llama-server) + provedores EXTERNOS
     configurados no .env (glm/deepseek/openai/anthropic/…) com a lista REAL
-    de modelos (GET /models do provedor; manual PROV_MODELOS como reserva)
-    e a marcação 👁 multimodal (i2t com visão externa). Chaves NUNCA saem."""
+    de modelos (GET /models do provedor; manual PROV_MODELOS como reserva),
+    a marcação 👁 multimodal (i2t com visão externa) E os METADADOS
+    automáticos (ctx = janela de contexto, info = descrição/preço quando a
+    API entrega). Chaves NUNCA saem."""
     from core import provedores
     return {"provedores": provedores.listar(force=force)}
+
+
+@app.get("/api/provedores/conhecidos")
+def api_provedores_conhecidos():
+    """☁️ Provedores PRINCIPAIS (Z.AI Coding Plan, ChatGPT, Claude, DeepSeek,
+    OpenRouter, Gemini, Grok, Groq, Mistral) para o cadastro em 1 clique —
+    o form do Sistema preenche id/nome/URL; falta só a chave."""
+    from core import provedores
+    return {"conhecidos": [{"id": k, **v} for k, v in
+                           provedores.CONHECIDOS.items()]}
 
 
 class ProvedorIn(BaseModel):

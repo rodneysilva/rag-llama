@@ -113,7 +113,7 @@
             {% if g.modelos %}
             <optgroup label="{{ g.rotulo }}" class="grp-chat" {% if g.externo %}data-prov="{{ g.externo }}"{% endif %}>
               {% for m in g.modelos %}
-              <option value="{{ m.nome }}" {{ 'selected' if m.ativo }}{% if m.visao %} data-tipo="multimodal"{% endif %}>{{ '👁 ' if m.visao else '' }}{{ m.rotulo or m.nome }}{% if m.gb %} · {{ m.gb }}GB{% endif %}</option>
+              <option value="{{ m.nome }}" {{ 'selected' if m.ativo }}{% if m.visao %} data-tipo="multimodal"{% endif %}{% if m.ctx or m.info %} title="{{ (m.info or '') ~ (' · ctx ' ~ (m.ctx // 1000) ~ 'k' if m.ctx else '') }}"{% endif %}>{{ '👁 ' if m.visao else '' }}{{ m.rotulo or m.nome }}{% if m.gb %} · {{ m.gb }}GB{% elif m.ctx %} · {{ m.ctx // 1000 }}k{% endif %}</option>
               {% endfor %}
             </optgroup>
             {% endif %}
