@@ -4154,12 +4154,32 @@ def midia_cancel(job: str, request: Request):
     return {"cancelado": _midia.cancelar(job, "interrompido — novo envio")}
 
 
+@app.get("/hx/midia/item/{job}")
+def hx_midia_item(job: str, request: Request, s: str = ""):
+    """Partial do item CONCLUÍDO (o JS troca o card em andamento por ele —
+    sem reload: o fluxo pergunta → resposta fica visível na hora)."""
+    from core import midia_sessoes
+    owner = _usuario(request)
+    sessao = midia_sessoes.abrir(s, owner) if s else None
+    if sessao is None:
+        return HTMLResponse("<div class='rodape'>⚠️ sessão não encontrada</div>")
+    it = next((x for x in sessao.get("itens", []) if x.get("id") == job), None)
+    if it is None:
+        return HTMLResponse("<div class='rodape'>⚠️ item não encontrado</div>")
+    return TEMPLATES.TemplateResponse(request, "_midia_item.html",
+                                      {"request": request, "it": it})
+
+
 @app.post("/hx/midia/nova")
 def midia_nova(request: Request):
+    """Nova sessão multimídia — HX-Redirect (com hx-swap=none o <script>
+    inline NÃO roda; o header é o jeito htmx de navegar)."""
     from core import midia_sessoes
     owner = _usuario(request)
     d = midia_sessoes.criar(owner)
-    return HTMLResponse(f"<script>location.href='/midia?s={d['id']}'</script>")
+    r = HTMLResponse("", status_code=200)
+    r.headers["HX-Redirect"] = f"/midia?s={d['id']}"
+    return r
 
 
 @app.post("/api/limpeza")

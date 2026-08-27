@@ -791,3 +791,28 @@ figure.cod code { background: none; padding: 0; border: 0;
   border:1px solid var(--borda); color:var(--suave); text-decoration:none;
   background:transparent; cursor:pointer; }
 .acao:hover { border-color:var(--acento); color:var(--fg); background:var(--acento-suave); }
+
+/* --- MULTIM
+
+/* ═══ MULTIMÍDIA (conversa): fullscreen acompanhando o topbar ═══ */
+.midia-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 13.5rem minmax(0, 1fr);
+  align-items: stretch;
+}
+@media (max-width: 55rem) {
+  .midia-grid { grid-template-columns: 1fr; }
+}
+.midia-coluna {
+  display: flex; flex-direction: column; min-height: 0;
+  height: calc(100dvh - 10.5rem);   /* topbar + h1 + respiro */
+}
+.midia-coluna > #m-conversa {
+  flex: 1 1 auto; min-height: 0; overflow: auto;
+}
+@media (max-width: 55rem) {
+  .midia-coluna { height: auto; }
+  .midia-coluna > #m-conversa { max-height: 56vh; }
+  #m-sessoes { max-height: 12rem !important; }
+}

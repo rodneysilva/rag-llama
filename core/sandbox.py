@@ -482,13 +482,23 @@ def _injetar_home_flask(escrever: dict, principal: str, textos: str,
         if not m:
             continue
         var = m.group(1)
+        # home com rotas CLICÁVEIS (pedido do dono: "só mostra a rota, não
+        # a aplicação") — cada rota vira link; métodos != GET aparecem ao
+        # lado (POST não abre no browser, mas fica visível)
         bloco = (
             "\n# home gerada pela sandbox: o app nao nasceu com rota \"/\"\n"
             f"@{var}.route(\"/\")\n"
             "def _sandbox_home():\n"
-            f"    rotas = \"\\\\n\".join(sorted(r.rule for r in {var}.url_map.iter_rules()\n"
-            f"                                if r.rule != \"/\" and not r.rule.startswith(\"/static\")))\n"
-            "    return \"<h2>app no ar</h2><p>rotas:</p><pre>\" + rotas + \"</pre>\"\n"
+            f"    itens = []\n"
+            f"    for r in {var}.url_map.iter_rules():\n"
+            f"        if r.rule == \"/\" or r.rule.startswith(\"/static\"):\n"
+            f"            continue\n"
+            f"        metodos = sorted(m for m in r.methods if m in (\"GET\", \"POST\", \"PUT\", \"DELETE\"))\n"
+            f"        marca = (\" <i style='opacity:.55;font-size:.8em;'>[\" \n"
+            f"                  + \"/\".join(metodos) + \"]</i>\") if metodos != [\"GET\"] else \"\"\n"
+            f"        itens.append(f\"<li><a href='{{r.rule}}'>{{r.rule}}</a>{{marca}}</li>\")\n"
+            f"    return (\"<h2>app no ar</h2><p>rotas (clique para abrir):</p><ul>\"\n"
+            f"            + \"\".join(sorted(itens)) + \"</ul>\")\n"
             "\n")
         pos = (re.search(r"^if __name__\s*==", c, re.MULTILINE)
                or re.search(rf"^{var}\.run\(", c, re.MULTILINE))

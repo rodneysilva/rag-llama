@@ -13,7 +13,7 @@
   <b>vídeo/gif</b> (Wan local). O histórico fica na sessão; mudou de página?
   voltou? o envio em curso retoma sozinho.</p>
 
-<div style="display:grid; grid-template-columns:15rem 1fr; gap:1rem; align-items:start;">
+<div class="midia-grid">
   {# ── sidebar de sessões ── #}
   <section class="cartao" style="padding:.6rem;">
     <button class="primario" style="width:100%;" hx-post="/hx/midia/nova" hx-swap="none">&#10133; nova sessão</button>
@@ -28,8 +28,8 @@
     </div>
   </section>
 
-  {# ── conversa ── #}
-  <section class="cartao">
+  {# ── conversa (fullscreen: acompanha o topbar, composer no fim) ── #}
+  <section class="cartao midia-coluna">
     <div id="m-conversa" style="max-height:30rem; overflow:auto; display:flex; flex-direction:column; gap:.9rem;">
       {% if not m_sessao.itens %}
       <p class="mini" style="opacity:.7;">comece anexando uma imagem e perguntando, ou escolha um gerador e descreva a cena…</p>
@@ -39,8 +39,7 @@
       {% endfor %}
     </div>
 
-    {# job em curso (retomado do servidor ao voltar pra página) #}
-    <div id="m-andamento" style="margin-top:.8rem;"></div>
+    {# job em curso vive DENTRO da conversa (depois da bolha do usuário) #}
 
     {# ── composer ÚNICO ── #}
     <form id="m-form" onsubmit="return mEnviar(event)" style="margin-top:.9rem;
@@ -50,6 +49,45 @@
         <button type="button" class="acao-btn" onclick="document.getElementById('m-arquivo').click()"
                 title="anexo: imagem para ANALISAR (modelo 👁) ou ponto de partida da MELHORIA (Flux i2i)">📎 anexar imagem</button>
         <span class="chip-ref" id="m-chip" hidden title="clique para remover"></span>
+      </div>
+      {# GUIA DE CRIAÇÃO (pedido do dono): dicas de cinema que ANEXAM ao
+         campo — visível quando o modelo é GERADOR (imagem/vídeo/gif) #}
+      <div id="m-guia" hidden style="border:1px dashed var(--borda); border-radius:.6rem; padding:.5rem .6rem;">
+        <p class="mini" id="m-guia-dica" style="margin:0 0 .3rem;"></p>
+        <div class="mini" style="display:flex; gap:.3rem; flex-wrap:wrap;">
+          <b>🎨 estilo</b>
+          <button type="button" class="acao-btn" onclick="mChip(this)">realismo cinematográfico</button>
+          <button type="button" class="acao-btn" onclick="mChip(this)">anime</button>
+          <button type="button" class="acao-btn" onclick="mChip(this)">3D render</button>
+          <button type="button" class="acao-btn" onclick="mChip(this)">aquarela</button>
+          <button type="button" class="acao-btn" onclick="mChip(this)">cyberpunk</button>
+          <button type="button" class="acao-btn" onclick="mChip(this)">minimalista</button>
+          <button type="button" class="acao-btn" onclick="mChip(this)">pixel art</button>
+        </div>
+        <div class="mini" style="display:flex; gap:.3rem; flex-wrap:wrap; margin-top:.25rem;">
+          <b>🌍 cenário</b>
+          <button type="button" class="acao-btn" onclick="mChip(this)">floresta tropical com neblina</button>
+          <button type="button" class="acao-btn" onclick="mChip(this)">cidade à noite com neon</button>
+          <button type="button" class="acao-btn" onclick="mChip(this)">praia ao amanhecer</button>
+          <button type="button" class="acao-btn" onclick="mChip(this)">deserto dourado</button>
+          <button type="button" class="acao-btn" onclick="mChip(this)">estúdio fundo limpo</button>
+          <button type="button" class="acao-btn" onclick="mChip(this)">interior aconchegante</button>
+        </div>
+        <div class="mini" style="display:flex; gap:.3rem; flex-wrap:wrap; margin-top:.25rem;">
+          <b>💡 luz & câmera</b>
+          <button type="button" class="acao-btn" onclick="mChip(this)">luz dourada de fim de tarde</button>
+          <button type="button" class="acao-btn" onclick="mChip(this)">contraluz dramático</button>
+          <button type="button" class="acao-btn" onclick="mChip(this)">luz suave difusa</button>
+          <button type="button" class="acao-btn" onclick="mChip(this)">primeiro plano raso</button>
+          <button type="button" class="acao-btn" onclick="mChip(this)">plano aberto épico</button>
+        </div>
+        <div id="m-guia-mov" class="mini" hidden style="display:flex; gap:.3rem; flex-wrap:wrap; margin-top:.25rem;">
+          <b>🎥 movimento</b>
+          <button type="button" class="acao-btn" onclick="mChip(this)">câmera lenta</button>
+          <button type="button" class="acao-btn" onclick="mChip(this)">panorâmica suave</button>
+          <button type="button" class="acao-btn" onclick="mChip(this)">zoom in gradual</button>
+          <button type="button" class="acao-btn" onclick="mChip(this)">movimento sutil do vento</button>
+        </div>
       </div>
       <textarea id="m-prompt" rows="2" placeholder="pergunta sobre a imagem anexada, ou prompt da cena a gerar…"></textarea>
       <div style="display:flex; gap:.5rem; flex-wrap:wrap; align-items:center;">
@@ -68,6 +106,8 @@
           <option value="5">⏱ 5s</option><option value="8">⏱ 8s</option>
         </select>
         <label class="mini" title="loop de 17 frames a 12 fps"><input type="checkbox" id="m-gif"> 🎞 gif</label>
+        <button type="button" id="btn-mprompt" title="a LLM transforma o rascunho em storytelling denso de cinema (preserva o que você escreveu)"
+                onclick="mMelhorarPrompt(this)">✨ gerar prompt</button>
         <button class="primario" type="submit" id="m-btn">➤ enviar</button>
       </div>
     </form>
@@ -85,18 +125,74 @@
 
   const selM = document.getElementById("m-modelo");
   const infoM = document.getElementById("m-modelo-info");
+  const guia = document.getElementById("m-guia");
+  const guiaDica = document.getElementById("m-guia-dica");
+  const guiaMov = document.getElementById("m-guia-mov");
+
+  function mGrupo() {
+    const o = selM.selectedOptions[0];
+    return (o && o.parentElement && o.parentElement.label) || "";
+  }
   function mInfo() {
     const o = selM.selectedOptions[0];
-    const t = (o && o.parentElement && o.parentElement.label) || "";
+    const g = mGrupo();
     infoM.textContent = (o && o.title) || "";
     document.getElementById("m-dur").style.display =
-      t.includes("vídeo") ? "" : "none";
+      g.includes("vídeo") ? "" : "none";
     document.getElementById("m-gif").parentElement.style.display =
-      t.includes("vídeo") ? "" : "none";
+      g.includes("vídeo") ? "" : "none";
+    // GUIA DE CRIAÇÃO: só para GERADORES (imagem/vídeo) — dicas de cinema
+    const gerador = g.includes("gerar imagem") || g.includes("vídeo");
+    guia.hidden = !gerador;
+    guiaMov.hidden = !g.includes("vídeo");
+    guiaMov.style.display = g.includes("vídeo") ? "flex" : "none";
+    if (gerador) {
+      guiaDica.textContent = g.includes("vídeo")
+        ? "Wan: UMA cena única, movimento suave, sem texto na imagem — clique nas dicas para compor:"
+        : "Flux: cena única com storytelling visual, sem texto na imagem — clique nas dicas para compor:";
+    }
   }
   selM.addEventListener("change", mInfo); mInfo();
 
-  let _ref = null;
+  function mChip(b) {
+    const ta = document.getElementById("m-prompt");
+    const add = b.textContent.trim();
+    ta.value = ta.value.trim() ? ta.value.replace(/\s*$/, ", ") + add : add;
+    ta.focus();
+  }
+
+  /* ✨ GERAR PROMPT: a LLM transforma o rascunho em storytelling denso —
+     reusa o /hx/prompt-melhorar do chat (spec prompt_melhoria.md; o tipo
+     do modelo vai como dica) e substitui o campo */
+  async function mMelhorarPrompt(btn) {
+    const ta = document.getElementById("m-prompt");
+    const ideia = ta.value.trim();
+    if (!ideia) { alert("escreva a ideia da cena primeiro — a ✨ a transforma em prompt de cinema"); return; }
+    const g = mGrupo();
+    const tipo = document.getElementById("m-gif").checked ? "gif"
+      : g.includes("vídeo") ? "video"
+      : g.includes("gerar imagem") ? (_ref ? "i2v" : "imagem") : "";
+    const rot = btn.textContent; btn.textContent = "…"; btn.disabled = true;
+    try {
+      const corpo = new URLSearchParams({ideia, tipo,
+        referencia: _ref ? _ref.split(/[\\\/]/).pop() : ""});
+      const r = await fetch("/hx/prompt-melhorar", {
+        method: "POST",
+        headers: {"Content-Type": "application/x-www-form-urlencoded"},
+        body: corpo.toString()});
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const txt = (await r.text()).trim();
+      if (txt) { ta.value = txt; ta.focus(); }
+      btn.textContent = "✓";
+    } catch (e) {
+      alert("não consegui melhorar o prompt: " + e.message);
+      btn.textContent = rot; btn.disabled = false; return;
+    }
+    btn.disabled = false;
+    setTimeout(() => (btn.textContent = rot), 1400);
+  }
+
+  let _ref = null, _refNOME = "";
   async function mSubir(inp) {
     const f = inp.files[0]; inp.value = ""; if (!f) return;
     const chip = document.getElementById("m-chip");
@@ -106,12 +202,12 @@
       const r = await fetch("/api/upload", {method: "POST", body: fd});
       const d = await r.json();
       if (!r.ok) throw new Error(d.detail || r.status);
-      _ref = d.arquivo;
-      chip.textContent = "📎 " + d.nome + " ✓"; chip.title = "clique para remover";
-    } catch (e) { chip.textContent = "⚠️ " + e.message; _ref = null; }
+      _ref = d.arquivo; _refNOME = d.nome || f.name;
+      chip.textContent = "📎 " + _refNOME + " ✓"; chip.title = "clique para remover";
+    } catch (e) { chip.textContent = "⚠️ " + e.message; _ref = null; _refNOME = ""; }
   }
   document.getElementById("m-chip").addEventListener("click", () => {
-    _ref = null; const c = document.getElementById("m-chip");
+    _ref = null; _refNOME = ""; const c = document.getElementById("m-chip");
     c.hidden = true; c.textContent = "";
   });
 
@@ -119,7 +215,39 @@
     const jid = localStorage.getItem(_jobKey());
     if (jid) fetch("/api/midia/cancel/" + jid, {method: "POST"});
     localStorage.removeItem(_jobKey());
-    document.getElementById("m-andamento").innerHTML = "";
+    const velho = document.querySelector("#m-conversa .m-andamento");
+    if (velho) velho.remove();
+  }
+
+  function mScrollFim() {
+    const c = document.getElementById("m-conversa");
+    c.scrollTop = c.scrollHeight;
+  }
+
+  /* BOLHA DO USUÁRIO primeiro (fim do relato: "o texto está indo depois
+     da resposta") — o prompt + anexo entram na conversa ANTES do
+     processamento; ao concluir, o card vira o item formatado no lugar */
+  function mBolhaUsuario(prompt) {
+    const c = document.getElementById("m-conversa");
+    const vazio = c.querySelector(".mini[style*='opacity']");
+    if (vazio) vazio.remove();
+    const div = document.createElement("div");
+    div.className = "msg";
+    div.style.cssText = "border:1px solid var(--borda);border-radius:.8rem;padding:.7rem;";
+    const thumb = _refNOME
+      ? '<a href="/api/midia/entrada/' + encodeURIComponent(_refNOME) + '" target="_blank">'
+        + '<img src="/api/midia/entrada/' + encodeURIComponent(_refNOME)
+        + '" alt="entrada" style="max-width:7rem;border-radius:.5rem;vertical-align:middle;margin-left:.4rem;"></a>'
+      : "";
+    div.innerHTML = '<div class="cab-msg" style="display:flex;justify-content:space-between;gap:.5rem;align-items:baseline;">'
+      + '<span class="quem">👤 você</span></div>'
+      + '<div class="resposta" style="margin:.35rem 0;">'
+      + String(prompt).replace(/</g, "&lt;") + thumb + "</div>";
+    const card = document.createElement("div");
+    card.className = "m-andamento";
+    c.append(div, card);
+    mScrollFim();
+    return card;
   }
 
   async function mEnviar(ev) {
@@ -127,6 +255,8 @@
     const prompt = document.getElementById("m-prompt").value.trim();
     if (!prompt) return false;
     mCancelarAnterior();
+    const card = mBolhaUsuario(prompt);
+    document.getElementById("m-prompt").value = "";   // limpa NO ATO
     const btn = document.getElementById("m-btn");
     btn.disabled = true; btn.textContent = "enviando…";
     try {
@@ -140,37 +270,55 @@
       const d = await r.json();
       if (!r.ok) throw new Error(d.detail || ("HTTP " + r.status));
       localStorage.setItem(_jobKey(), d.job);
-      mPoll(d.job, d.tipo);
+      mPoll(d.job, d.tipo, card);
     } catch (e) {
-      document.getElementById("m-andamento").innerHTML =
-        "<div class='log'><span class='mini'>⚠️ " + String(e.message).replace(/</g,"&lt;") + "</span></div>";
+      card.innerHTML = "<div class='rodape'>⚠️ " + String(e.message).replace(/</g,"&lt;") + "</div>";
     }
     btn.disabled = false; btn.textContent = "➤ enviar";
     return false;
   }
 
   let _timer = null;
-  function mPoll(jid, tipo) {
-    const area = document.getElementById("m-andamento");
+  function mPoll(jid, tipo, card) {
     clearInterval(_timer);
+    let alvo = card;
     _timer = setInterval(async () => {
       try {
         const j = await (await fetch("/api/midia/status/" + jid)).json();
+        if (!alvo || !alvo.isConnected) {
+          // página recarregou no meio: acha/recria o card no fim da conversa
+          alvo = document.querySelector("#m-conversa .m-andamento");
+          if (!alvo) {
+            const c = document.getElementById("m-conversa");
+            alvo = document.createElement("div");
+            alvo.className = "m-andamento";
+            c.appendChild(alvo);
+          }
+        }
         const linhas = (j.lines || []).map(l =>
           "<div><span class='hora'>" + (l.ts || "") + "</span>" +
           String(l.msg || "").replace(/</g,"&lt;") + "</div>").join("");
-        area.innerHTML =
-          "<div class='pensando-cab'><span class='ponto'></span> processando (" + (tipo || "mídia") + ")…</div>" +
-          "<details class='raciocinio-vivo'><summary>raciocínio · " +
-          (j.lines || []).length + " linha(s) — clique para abrir</summary>" +
-          "<div class='log'>" + linhas + "</div></details>";
+        alvo.innerHTML =
+          "<div class='pensando-cab'><span class='ponto'></span> processando (" + (tipo || "mídia") + ")…</div>"
+          + "<details class='raciocinio-vivo'><summary>raciocínio · "
+          + (j.lines || []).length + " linha(s) — clique para abrir</summary>"
+          + "<div class='log'>" + linhas + "</div></details>";
+        mScrollFim();
         if (!j.running) {
           clearInterval(_timer); localStorage.removeItem(_jobKey());
           if (j.error) {
-            area.innerHTML += "<div class='rodape'>⚠️ " + String(j.error).replace(/</g,"&lt;") + "</div>";
-            setTimeout(() => location.reload(), 2600);
+            alvo.innerHTML += "<div class='rodape'>⚠️ " + String(j.error).replace(/</g,"&lt;") + "</div>";
           } else {
-            location.reload();   // item concluído entra pelo histórico (markdown/mídia prontos)
+            // item CONCLUÍDO entra no LUGAR do card, já formatado (sem reload)
+            const r = await fetch("/hx/midia/item/" + jid + "?s=" + SESSAO);
+            if (r.ok) {
+              const div = document.createElement("div");
+              div.innerHTML = (await r.text()).trim();
+              alvo.replaceWith(div.firstElementChild);
+              mScrollFim();
+              return;
+            }
+            location.reload();   // fallback: histórico serve o item
           }
         }
       } catch (e) { /* engasgo de rede: próximo tick tenta de novo */ }
@@ -182,7 +330,14 @@
     let ja = null;
     try { ja = JSON.parse(DADOS.job || "null"); } catch (e) {}
     const jid = (ja && ja.job) || localStorage.getItem(_jobKey());
-    if (jid) { localStorage.setItem(_jobKey(), jid); mPoll(jid, ja && ja.tipo); }
+    if (jid) {
+      localStorage.setItem(_jobKey(), jid);
+      const c = document.getElementById("m-conversa");
+      const card = document.createElement("div");
+      card.className = "m-andamento";
+      c.appendChild(card);
+      mPoll(jid, ja && ja.tipo, card);
+    }
   })();
 </script>
 {% endblock %}
