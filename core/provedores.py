@@ -35,7 +35,7 @@ import httpx
 _RE_VISAO = re.compile(
     r"gpt-4o|gpt-4\.1|gpt-4-turbo|gpt-5|gpt-5\.|o3|o4-|chatgpt|"
     r"claude-3|claude-4|claude-opus|claude-sonnet|claude-haiku|"
-    r"glm-4v|glm-4\.5v|glm-4\.6v|glm-5v|"
+    r"glm-4v|glm-4\.5v|glm-4\.6v|glm-5v|glm-v\d|"
     r"qwen[\w.-]*vl|qvq|llava|pixtral|internvl|moondream|"
     r"gemini|grok-4|doubao[\w.-]*vision|vision|vl-|vl\b|-vl", re.I)
 # falsos positivos conhecidos (texto puro com nome parecido)
@@ -108,6 +108,56 @@ def _ctx_do_nome(nome: str) -> int | None:
         if re.search(pad, n):
             return ctx
     return None
+
+
+# 🏷️ CATEGORIA + "PARA QUE SERVE" cada modelo (pedido do dono) — a
+# heurística cobre as famílias conhecidas; descrição rica quando a API
+# entrega (info). EXCLUSÕES primeiro: gerador de imagem/áudio/embedding
+# NÃO servem o chat de texto (aparecem no Sistema com o uso explicado).
+_CATS_EXCLUIR = [
+    ("imagem", r"image|cogview|dall[-_]?e|flux|sora|seedream|ideogram|"
+               r"stable[-_]?diffusion|sd3|imagen",
+     "🎨 GERA imagens a partir de texto (editoria visual) — não é chat"),
+    ("audio", r"tts|whisper|voice|audio|speech|realtime",
+     "🔊 voz/transcrição de áudio — não é chat"),
+    ("embed", r"embed|rerank|bge-|gte-|e5-",
+     "🧲 embedding (busca semântica) — não é chat"),
+]
+_CATS_CHAT = [
+    ("programacao", r"coder|code-|coding|codestral|devstral|starcoder",
+     "💻 otimizado para PROGRAMAÇÃO (gera/explica código)"),
+    ("raciocinio", r"reasoner|reasoning|thinking|-r1\b|o1\b|o3-mini|qwq",
+     "🧠 raciocínio profundo — pensa em cadeia antes de responder"),
+]
+
+# emoji/rotulo por categoria (ordem da UI)
+CAT_ROTULOS = {
+    "visao": "👁 visão (multimodal)",
+    "programacao": "💻 programação",
+    "raciocinio": "🧠 raciocínio",
+    "conversa": "💬 conversa",
+    "imagem": "🎨 gera imagem",
+    "audio": "🔊 áudio",
+    "embed": "🧲 embedding",
+}
+
+
+def categoria_do_modelo(nome: str) -> tuple[str, str]:
+    """(categoria, para-que-serve) — visão usa a heurística multimodal já
+    existente (respeita falsos positivos como deepseek-chat)."""
+    n = (nome or "").lower()
+    for cat, pad, uso in _CATS_EXCLUIR:
+        if re.search(pad, n):
+            return cat, uso
+    if e_multimodal(nome):
+        return "visao", ("👁 MULTIMODAL: entende IMAGENS (análise, descrição, "
+                         "leitura de tela/foto) além de texto")
+    for cat, pad, uso in _CATS_CHAT:
+        if re.search(pad, n):
+            if cat == "raciocinio" and re.search(r"o1\b|o3-mini", n):
+                pass  # o1/o3-mini: raciocínio SEM imagem (texto puro)
+            return cat, uso
+    return "conversa", "💬 chat geral: pergunta, escreve, resume, traduz"
 _CACHE: dict[str, tuple[float, list]] = {}
 _LOCK = threading.Lock()
 _TTL = 300  # 5 min
@@ -206,10 +256,12 @@ def modelos(pid: str, force: bool = False) -> list[dict]:
     lista = []
     for n in nomes:
         m = meta.get(n) or {}
+        cat, uso = categoria_do_modelo(n)
         lista.append({"nome": n,
-                      "visao": bool(m.get("visao_api")) or e_multimodal(n),
+                      "visao": bool(m.get("visao_api")) or cat == "visao",
                       "ctx": m.get("ctx") or _ctx_do_nome(n),
-                      "info": m.get("info", "")})
+                      "info": m.get("info", "") or uso,
+                      "cat": cat, "uso": uso})
     with _LOCK:
         _CACHE[pid] = (time.time(), lista)
     return lista

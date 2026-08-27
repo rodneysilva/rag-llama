@@ -845,14 +845,27 @@ def pagina_chat(request: Request):
         for _p in _prov.listar():
             if not _p["externo"] or not _p["modelos"]:
                 continue
-            ctx["modelos_chat_grupos"].append({
-                "rotulo": f"🌐 {_p['nome']}",
-                "externo": _p["id"],
-                "modelos": [{"nome": f"{_p['id']}:{m['nome']}",
-                             "rotulo": m["nome"], "gb": None, "ativo": False,
-                             "visao": m["visao"], "ctx": m.get("ctx"),
-                             "info": m.get("info", "")}
-                            for m in _p["modelos"]]})
+            # 🏷️ por CATEGORIA (pedido do dono): conversa/programação/
+            # raciocínio/visão — cada uma com seu optgroup; modelo de
+            # GERAÇÃO de imagem/áudio/embedding NÃO serve o chat (fica no
+            # Sistema com o uso explicado)
+            _ordem = {"visao": 0, "programacao": 1, "raciocinio": 2,
+                      "conversa": 3}
+            _por_cat = {}
+            for m in _p["modelos"]:
+                if m.get("cat") in ("imagem", "audio", "embed"):
+                    continue
+                _por_cat.setdefault(m.get("cat", "conversa"), []).append(m)
+            for _cat in sorted(_por_cat, key=lambda c: _ordem.get(c, 9)):
+                ctx["modelos_chat_grupos"].append({
+                    "rotulo": f"🌐 {_p['nome']} · "
+                              f"{_prov.CAT_ROTULOS.get(_cat, _cat)}",
+                    "externo": _p["id"],
+                    "modelos": [{"nome": f"{_p['id']}:{m['nome']}",
+                                 "rotulo": m["nome"], "gb": None,
+                                 "ativo": False, "visao": m["visao"],
+                                 "ctx": m.get("ctx"), "info": m.get("info", "")}
+                                for m in _por_cat[_cat]]})
     except Exception:
         pass
     # modelos de GERAÇÃO (combobox inteligente: aparecem SÓ quando a mídia

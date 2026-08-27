@@ -88,18 +88,36 @@
         info.textContent = "a URL/modelo locais estão nos campos LLM_BASE_URL / LLM_MODEL do form abaixo";
         box.innerHTML = ""; return;
       }
-      info.textContent = "modelos reais da API (👁 = multimodal, serve análise de imagem):";
+      info.textContent = "modelos reais da API — por CATEGORIA (👁 = entende imagens; passe o mouse para o que serve):";
       box.innerHTML = "<span class='mini'>carregando…</span>";
       try {
         const r = await fetch("/api/provedores");
         const provs = (await r.json()).provedores || [];
         const p = provs.find(x => x.id === sel.value);
         const fmt = n => n >= 1000 ? Math.round(n / 1000) + "k" : n;
-        box.innerHTML = (p?.modelos || []).map(m =>
-          "<span class='chip-prompt'" + (m.visao || m.info ? " title='" + ((m.info || "") + (m.ctx ? " · ctx " + fmt(m.ctx) : "")) + "'" : "") + ">"
-          + (m.visao ? "👁 " : "") + m.nome
-          + (m.ctx ? " <span class='mini'>· " + fmt(m.ctx) + "</span>" : "")
-          + "</span>").join("")
+        const CAT_EMOJI = {visao: "👁", programacao: "💻", raciocinio: "🧠",
+                           conversa: "💬", imagem: "🎨", audio: "🔊", embed: "🧲"};
+        const ORD = ["visao", "programacao", "raciocinio", "conversa",
+                     "imagem", "audio", "embed"];
+        const porCat = {};
+        (p?.modelos || []).forEach(m => {
+          const c = m.cat || "conversa";
+          (porCat[c] = porCat[c] || []).push(m);
+        });
+        let html = "";
+        ORD.filter(c => porCat[c]).forEach(c => {
+          html += "<p class='mini' style='margin:.5rem 0 .2rem;'><b>"
+                + CAT_EMOJI[c] + " " + c.replace("programacao", "programação")
+                                         .replace("raciocinio", "raciocínio")
+                + "</b> <span style='opacity:.65;'>— " + (porCat[c][0].uso || "") + "</span></p>";
+          html += porCat[c].map(m =>
+            "<span class='chip-prompt' title='" + ((m.info || m.uso || "")
+              + (m.ctx ? " · ctx " + fmt(m.ctx) : "")) + "'>"
+            + CAT_EMOJI[c] + " " + m.nome
+            + (m.ctx ? " <span class='mini'>· " + fmt(m.ctx) + "</span>" : "")
+            + "</span>").join("");
+        });
+        box.innerHTML = html
           || "<span class='mini'>nenhum modelo listado — confira a chave/URL</span>";
       } catch { box.innerHTML = "<span class='mini'>indisponível agora</span>"; }
     }
