@@ -269,8 +269,15 @@ def visao(body: VisaoIn):
             caminho = str(alvo)
         if not caminho:
             raise RuntimeError("informe 'arquivo' ou 'b64'+'nome'")
-        return {"descricao": midia.legendar_imagem(_caminho_host(caminho),
-                                                    body.pergunta)}
+        desc = midia.legendar_imagem(_caminho_host(caminho), body.pergunta)
+        # usage REAL do llama-server :8082 — a API-container REGRAVA o evento
+        # de telemetria na VPS (o multimodal aparece no Dashboard de produção;
+        # o evento local da estação não atravessa o túnel)
+        try:
+            return {"descricao": desc,
+                    "usage": getattr(midia, "_ultimo_usage_vl", None)}
+        except Exception:
+            return {"descricao": desc}
     except HTTPException:
         raise
     except Exception as e:

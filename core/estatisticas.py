@@ -17,18 +17,22 @@ _CACHE: dict = {"mtime": 0, "tamanho": 0, "dados": {}}
 
 
 _RE_QUANT = None
+_RE_PROV = None
 
 
 def nome_curto(nome: str) -> str:
-    """Nome de modelo CANÔNICO para agregar: minúsculo e SEM o sufixo de
-    quantização (Wan2.1-T2V-1.3B-Q8_0 e wan2.1-t2v-1.3b são O MESMO modelo —
-    sem isto o dashboard criava um card por sufixo)."""
-    global _RE_QUANT
+    """Nome de modelo CANÔNICO para agregar: minúsculo, SEM o prefixo do
+    provedor ([estacao]/[zai] — o MESMO qwen2.5-coder-7b aparecia em DOIS
+    cards: pedido do dono "existem 2 qwencoder, unificar") e SEM o sufixo
+    de quantização (Wan2.1-T2V-1.3B-Q8_0 ≡ wan2.1-t2v-1.3b)."""
+    global _RE_QUANT, _RE_PROV
     import re as _re
     if _RE_QUANT is None:
         _RE_QUANT = _re.compile(r"[-_. ](q\d+[_ ]?\w*|bf16|fp16|f16)$",
                                 _re.IGNORECASE)
-    n = _RE_QUANT.sub("", str(nome or "").strip()).strip("-_ .")
+        _RE_PROV = _re.compile(r"^\[[^\]]+\]\s*")
+    n = _RE_PROV.sub("", str(nome or "").strip())
+    n = _RE_QUANT.sub("", n).strip("-_ .")
     return n.lower()
 
 

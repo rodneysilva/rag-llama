@@ -567,6 +567,7 @@ def legendar_imagem(arquivo: str, pergunta: str | None = None,
         pergunta = pergunta or ("Descreva esta imagem em português de forma "
                                 "detalhada: cena, objetos, pessoas, ação, "
                                 "estilo, cores.")
+        t0_ext = time.time()
         r = httpx.post(f"{prov_ext['base_url']}/chat/completions",
                        headers={"Authorization":
                                 f"Bearer {prov_ext['api_key']}",
@@ -597,7 +598,8 @@ def legendar_imagem(arquivo: str, pergunta: str | None = None,
                                f"{prov_ext['model']} (multimodal)",
                         entrada=int(u.get("prompt_tokens") or 0),
                         saida=int(u.get("completion_tokens") or 0),
-                        duracao_s=None, modelo=prov_ext["model"],
+                        duracao_s=round(time.time() - t0_ext, 1),
+                        modelo=prov_ext["model"],
                         servico="multimodal")
         except Exception:
             pass
@@ -613,6 +615,7 @@ def legendar_imagem(arquivo: str, pergunta: str | None = None,
         pergunta = pergunta or ("Descreva esta imagem em português de forma "
                                 "detalhada: cena, objetos, pessoas, ação, estilo, cores.")
         # host RESOLVIDO (container → host.docker.internal; host → 127.0.0.1)
+        t0_loc = time.time()
         r = httpx.post(f"http://{modelos._host_de(modelos.VL_PORTA)}:{modelos.VL_PORTA}/v1/chat/completions",
                        json={"messages": [{"role": "user", "content": [
                            {"type": "image_url", "image_url": {"url": f"data:image/{ext};base64,{b64}"}},
@@ -625,10 +628,14 @@ def legendar_imagem(arquivo: str, pergunta: str | None = None,
         try:
             from . import telemetria as _tel
             u = (r.json().get("usage") or {})
+            globals()["_ultimo_usage_vl"] = {
+                "entrada": int(u.get("prompt_tokens") or 0),
+                "saida": int(u.get("completion_tokens") or 0)}
             _tel.evento("llm", "🖼️ qwen2.5-vl (multimodal)",
                         entrada=int(u.get("prompt_tokens") or 0),
                         saida=int(u.get("completion_tokens") or 0),
-                        duracao_s=None, modelo="qwen2.5-vl-7b",
+                        duracao_s=round(time.time() - t0_loc, 1),
+                        modelo="qwen2.5-vl-7b",
                         servico="multimodal")
         except Exception:
             pass

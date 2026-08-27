@@ -968,19 +968,34 @@ def hx_chat(request: Request, question: str = Form(""), mode: str = Form("hibrid
                     if not alvo.exists():
                         alvo = Path(payload["referencia"])
                     modelo = payload["modelo"]
-                    # LOCAL (sem ":") em CONTAINER → AGENTE do host (a GPU e
-                      # o GGUF vivem na estação; direto aqui procura D:\models
-                      # no Linux e morre). EXTERNO "prov:nome" roda NA API.
+                    # LOCAL (sem ":") em CONTAINER -> AGENTE do host (a GPU
+                    # e o GGUF vivem na estacao; direto aqui procura
+                    # D:\models no Linux e morre). EXTERNO prov:nome NA API.
                     if config.EM_CONTAINER and ":" not in modelo:
                         import base64 as _b64
                         with open(alvo, "rb") as f:
                             img_b64 = _b64.b64encode(f.read()).decode()
+                        t_vl = time.time()
                         r = modelos._chamar_agente(
                             "/visao", {"b64": img_b64,
                                        "nome": Path(alvo).name,
                                        "pergunta": payload["pergunta"]},
                             timeout=420)
                         analise = r.get("descricao", "")
+                        # REGRAVA o multimodal na telemetria DA VPS (o
+                        # evento da estacao nao atravessa o tunel — sem
+                        # isto o Dashboard nunca via o qwen-vl local)
+                        try:
+                            u = r.get("usage") or {}
+                            telemetria.evento(
+                                "llm", "qwen2.5-vl (multimodal)",
+                                entrada=int(u.get("entrada") or 0),
+                                saida=int(u.get("saida") or 0),
+                                duracao_s=round(time.time() - t_vl, 1),
+                                modelo="qwen2.5-vl-7b",
+                                servico="multimodal")
+                        except Exception:
+                            pass
                     else:
                         analise = _midia.legendar_imagem(
                             str(alvo), payload["pergunta"] or None,
@@ -1845,7 +1860,6 @@ def pagina_dashboard(request: Request):
         "tokens_total": total.get("entrada", 0) + total.get("saida", 0),
         "chamadas": total.get("chamadas", 0), "por_servico": por,
     }
-    ctx["execucoes"] = historico.ultimos(None, 40)
     # ── INFRA detalhada: coleções do Qdrant com pontos/dimensão ──
     ctx["colecoes_detalhe"] = sorted(
         ((nome, v) for nome, v in (scan or {}).items()),
@@ -1875,29 +1889,14 @@ def pagina_dashboard(request: Request):
     modelos_llm = []
     for nome, u in sorted(uso_modelo.items(),
                           key=lambda kv: -kv[1]["chamadas"]):
+        # SÓ O QUE RODOU (pedido do dono: "incluir só o que foi utilizado,
+        # os que não tiverem tokens ou uso, não exibir")
+        if not u.get("chamadas"):
+            continue
         modelos_llm.append({
             "nome": nome, **u,
             "gb": gb_por_alias.get(modelos.normalizar(nome)),
             "ativo": modelos.normalizar(nome) == modelos.normalizar(servindo),
-        })
-    # 🧩 UNIÃO (pedido do dono: "cadê os outros modelos?"): TODO modelo
-    # conhecido aparece — com uso quando a telemetria registrou, "sem uso"
-    # quando ainda não. Agregação por nome_curto (sem sufixo de quant).
-    from core.estatisticas import nome_curto as _nc
-    _zero = {"chamadas": 0, "entrada": 0, "saida": 0, "segundos": 0.0,
-             "tok_s": None, "ultima": ""}
-    _ja = {_nc(m["nome"]) for m in modelos_llm}   # telemetria + união (sem dup)
-    for alias in list(modelos.REGISTRO) + ["wan2.1-t2v-1.3b", "wan2.2-ti2v-5b",
-                                           "flux1-schnell", "flux1-dev"]:
-        cat = modelos.REGISTRO.get(alias, ("", "midia"))[1]
-        if cat not in ("chat", "video", "imagem") or _nc(alias) in _ja:
-            continue
-        _ja.add(_nc(alias))
-        modelos_llm.append({
-            "nome": alias, **_zero,
-            "gb": gb_por_alias.get(modelos.normalizar(alias)),
-            "ativo": modelos.normalizar(alias) == modelos.normalizar(servindo),
-            "sem_uso": True,
         })
     ctx["modelos_llm"] = modelos_llm
     ctx["vram_mi"] = vram
@@ -4039,14 +4038,29 @@ def midia_enviar(body: MidiaEnviarIn, request: Request):
                     # real do dono — igual ao que já corrigi no i2t do chat)
                     if config.EM_CONTAINER and ":" not in modelo:
                         import base64 as _b64
-                        with open(payload["referencia"], "rb") as f:
+                        with open(alvo, "rb") as f:
                             img_b64 = _b64.b64encode(f.read()).decode()
+                        t_vl = time.time()
                         r = modelos._chamar_agente(
                             "/visao", {"b64": img_b64,
                                        "nome": payload["nome_ref"],
                                        "pergunta": payload["prompt"]},
                             timeout=420)
                         texto = r.get("descricao", "")
+                        # REGRAVA o evento MULTIMODAL na VPS (a telemetria da
+                        # estação não atravessa o túnel — sem isto o Dashboard
+                        # de produção nunca via o qwen-vl: "bug antigo")
+                        try:
+                            u = r.get("usage") or {}
+                            telemetria.evento(
+                                "llm", "🖼️ qwen2.5-vl (multimodal)",
+                                entrada=int(u.get("entrada") or 0),
+                                saida=int(u.get("saida") or 0),
+                                duracao_s=round(time.time() - t_vl, 1),
+                                modelo="qwen2.5-vl-7b",
+                                servico="multimodal")
+                        except Exception:
+                            pass
                     else:
                         texto = _m.legendar_imagem(
                             payload["referencia"], payload["prompt"] or None,

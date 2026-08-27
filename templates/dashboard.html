@@ -36,18 +36,17 @@
 
 <section class="cartao">
   <h2>Modelos de linguagem</h2>
-  <p class="descricao">uso medido de CADA modelo (telemetria real das chamadas):
-     throughput = tokens de saída/s somados no tempo — não média de médias.</p>
+  <p class="descricao">uso medido de CADA modelo que RODOU — chat,
+     multimodal 👁 e geração (telemetria real das chamadas; modelo sem
+     uso não aparece).</p>
   <div class="grade-modelos">
     {% for m in modelos_llm %}
     <div class="modelo-card{{ ' ativo' if m.ativo }}">
       <div class="mc-topo">
-        <b>{{ m.nome }}</b>
+        <b>{{ m.nome }}</b>{% if m.multimodal %} <span title="multimodal (imagem→texto)">👁</span>{% endif %}
         {% if m.ativo %}<span class="selo ativo-agora">● servindo</span>{% endif %}
-        {% if m.sem_uso %}<span class="selo">sem uso ainda</span>{% endif %}
         {% if m.gb %}<span class="selo">{{ m.gb }} GB</span>{% endif %}
       </div>
-      {% if m.chamadas %}
       <div class="mc-toks">
         <span class="mc-destaque">{{ m.tok_s if m.tok_s is not none else "—" }}<small> tok/s</small></span>
       </div>
@@ -62,118 +61,13 @@
         <span>{{ "%.0f" | format(m.segundos) }}s de LLM</span>
         {% if m.ultima %}<span>últ. {{ m.ultima }}</span>{% endif %}
       </div>
-      {% else %}
-      <div class="mc-linha mini" style="margin-top:.2rem;">— nenhuma chamada registrada
-        (a telemetria por nome começou em 23/08; use o modelo e ele aparece aqui).</div>
-      {% endif %}
     </div>
-    {% else %}<p class="mut">nenhuma chamada registrada ainda (a telemetria começa com o primeiro uso).</p>{% endfor %}
+    {% else %}<p class="mut">nenhuma chamada registrada ainda — use um modelo e ele aparece aqui.</p>{% endfor %}
   </div>
 </section>
 
-<section class="cartao">
-  <h2>📜 Logs (tail ao vivo)</h2>
-  <p class="descricao">final do log de cada serviço — o mesmo que o servidor está escrevendo agora.</p>
-  <div class="hist-filtros" id="logs-fontes">
-    <button type="button" class="aba ativa" data-f="llm">chamadas LLM</button>
-    <button type="button" class="aba" data-f="geracao">gerações</button>
-    <button type="button" class="aba" data-f="eventos">todos os eventos</button>
-    <button type="button" class="aba" data-f="jobs">últimos jobs</button>
-  </div>
-  <div id="logs-corpo" class="log" style="max-height:14rem;" hx-get="/hx/logs/llm"
-       hx-trigger="load, every 5s" hx-swap="innerHTML"><span class="mini">carregando…</span></div>
-  <script>
-    // trocar o serviço monitorado = trocar a URL do polling (uma fonte por vez)
-    document.getElementById("logs-fontes").addEventListener("click", (ev) => {
-      const b = ev.target.closest(".aba"); if (!b) return;
-      document.querySelectorAll("#logs-fontes .aba").forEach(x => x.classList.toggle("ativa", x === b));
-      const alvo = document.getElementById("logs-corpo");
-      alvo.setAttribute("hx-get", "/hx/logs/" + b.dataset.f);
-      htmx.trigger(alvo, "hx-get");
-    });
-  </script>
-</section>
 
-<section class="cartao">
-  <h2>Tokens por serviço</h2>
-  <table class="tabela-dados">
-    <thead><tr><th>serviço</th><th class="num">🔻 entrada</th><th class="num">🔺 saída</th><th class="num">chamadas</th></tr></thead>
-    <tbody>
-      {% for nome, u in kpis.por_servico.items() %}
-      <tr><td>{{ nome }}</td><td class="num">{{ u.entrada }}</td><td class="num">{{ u.saida }}</td><td class="num">{{ u.chamadas }}</td></tr>
-      {% else %}<tr><td colspan="4" class="mut">nenhum uso ainda.</td></tr>{% endfor %}
-    </tbody>
-  </table>
-</section>
 
-<section class="cartao">
-  <h2>Histórico de solicitações</h2>
-  <p class="descricao">categorizado por tipo — clique no filtro; a linha abre o log completo gravado (logs/jobs).</p>
-
-  {# FILTROS por categoria (client-side, sem peso: só esconde linhas) #}
-  <div class="hist-filtros" id="hist-filtros">
-    <button type="button" class="aba ativa" data-f="todos">todos</button>
-    {% set tipos = execucoes | map(attribute='tipo') | unique | list %}
-    {% for t in tipos %}
-    <button type="button" class="aba" data-f="{{ t }}">{{ t }}</button>
-    {% endfor %}
-  </div>
-
-  {% set ultimo_dia = [none] %}
-  {% for e in execucoes %}
-    {% set dia = (e.ts or "?")[:10] %}
-    {% if dia != ultimo_dia[0] %}
-      {% if ultimo_dia[0] is not none %}</tbody></table>{% endif %}
-      <div class="dia-hist">📅 {{ dia }}</div>
-      <table class="tabela-dados tabela-hist">
-      <tbody>
-      {% if ultimo_dia.append(dia) %}{% endif %}
-    {% endif %}
-    <tr class="linha-hist" data-tipo="{{ e.tipo or 'outro' }}" {% if e.job %}onclick="const d = this.nextElementSibling?.querySelector('details'); if (d) d.open = !d.open;" title="clique para abrir/fechar o log"{% endif %}>
-      <td class="mini" style="white-space:nowrap;">{{ e.ts[11:19] if e.ts and e.ts|length > 19 else e.ts }}</td>
-      <td><span class="selo tipo-{{ (e.tipo or 'outro') }}">{{ e.tipo }}</span></td>
-      <td class="mini">{{ (e.titulo or "")[:70] }}</td>
-      <td style="text-align:center;">
-        {% if e.ok %}<span style="color:var(--ok)">✓</span>
-        {% else %}<span style="color:var(--erro)">✕</span>{% endif %}
-      </td>
-      <td class="num mini" style="white-space:nowrap;">
-        {{ e.duracao_s or 0 }}s
-        <span class="barra-dur" style="width: {{ [((e.duracao_s or 0) / ((execucoes[0].duracao_s or 1)) * 56) | round | int, 56] | min }}px;"></span>
-      </td>
-    </tr>
-    {% if e.job %}
-    <tr data-tipo="{{ e.tipo or 'outro' }}"><td colspan="5" style="padding:0 0 .5rem .6rem;">
-      <details>
-        <summary>ver log completo</summary>
-        {# carrega UMA vez ao abrir (toggle) — o alvo é o próprio details,
-           sempre resolvível (o antigo hx-target="next detail .log" nunca
-           achava o elemento: "ficava carregando" para sempre) #}
-        <div class="log" hx-get="/hx/histlog/{{ e.job }}"
-             hx-trigger="toggle once from:closest details" hx-swap="innerHTML">
-          <span class="mini">abra para carregar…</span>
-        </div>
-      </details>
-    </td></tr>
-    {% endif %}
-  {% else %}
-  <table><tbody><tr><td class="mut">nada executado ainda.</td></tr>
-  {% endfor %}
-  </tbody></table>
-  <script>
-    // filtro por categoria: uma classe no container + CSS esconde o resto
-    const hf = document.getElementById("hist-filtros");
-    hf.addEventListener("click", (ev) => {
-      const b = ev.target.closest(".aba");
-      if (!b) return;
-      hf.querySelectorAll(".aba").forEach(x => x.classList.toggle("ativa", x === b));
-      const f = b.dataset.f;
-      document.querySelectorAll(".tabela-hist tr[data-tipo]").forEach(tr => {
-        tr.style.display = (f === "todos" || tr.dataset.tipo === f) ? "" : "none";
-      });
-    });
-  </script>
-</section>
 
 <style>
   /* ═══ Dashboard: grid de cards por modelo + tabelas legíveis (técnicas
