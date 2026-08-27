@@ -961,7 +961,19 @@ def hx_chat(request: Request, question: str = Form(""), mode: str = Form("hibrid
                     collections=colecoes or [], history=_hist or None,
                     sessao=sid, job=True,
                     anexo_imagem=(referencia.strip() or None))
-    if midia in ("imagem", "video", "gif", "i2t", "i2v", "i2g"):
+    # 🎨🚫 GERAÇÃO SAIU DO CHAT (pedido do dono 27/08: "geração de imagem e
+    # vídeo fica só no Multimídia, o retorno da tela do chat é texto") — o
+    # composer não oferece mais; páginas ANTIGAS abertas que ainda mandem
+    # caem neste aviso (a análise i2t segue: retorno é TEXTO)
+    if midia in ("imagem", "video", "gif", "i2v", "i2g"):
+        return TEMPLATES.TemplateResponse(
+            request, "_job.html",
+            {"request": request, "kind": "erro", "job": "erro",
+             "rotulo": f"gerar {midia}", "linhas": [], "running": False,
+             "erro": "geração de imagem/vídeo agora mora no módulo 👁 "
+                     "Multimídia — abra no menu (ou /midia): análise E "
+                     "geração (🖼 Flux · 🎬 Wan · 🎞 gif) com log ao vivo"})
+    if midia in ("i2t",):
         return _iniciar_midia(request, question, midia, colecoes,
                               referencia=referencia.strip(), modelo=_model_raw,
                               duracao=duracao.strip())

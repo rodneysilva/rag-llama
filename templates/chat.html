@@ -74,40 +74,23 @@
         {# mídia anexada ao contexto (📎 no painel) — IMPLÍCITO: tudo que
            está na conversa é contexto; só o hidden field existe #}
         <input type="hidden" name="referencia" id="referencia" value="">
-        {# ══ CONTROLES — ORDEM DO FLUXO (pedido do dono): 1º o TIPO de
-           resposta → o MODELO filtra pelo tipo → por último o MODO (só
-           vale para texto; geração de mídia ignora) ══ #}
+        {# ══ CONTROLES — chat é TEXTO (pedido do dono 27/08: "geração de
+           imagem/vídeo fica só no Multimídia"): o tipo só distingue
+           conversa de ANÁLISE de imagem (i2t — retorno também é texto) ══ #}
         <div class="controles-linha">
-          {# 1º: TIPO DE RESPOSTA — texto ou geração de mídia #}
           <select name="midia" id="sel-midia" title="tipo de resposta" onchange="midiaMudou()">
             <option value="">📝 texto</option>
-            <option value="imagem">🖼 imagem</option>
-            <option value="video">🎬 vídeo</option>
-            <option value="gif">🎞 gif</option>
             <option value="i2t">imagem → texto</option>
-            <option value="i2v">imagem → vídeo</option>
-            <option value="i2g">imagem → gif</option>
           </select>
-          {# ⏱️ DURAÇÃO do vídeo (pedido do dono — "sempre gera apenas 2s"):
-             frames = s×16+1 (spec core/specs/midia_duracao.md); visível só
-             em vídeo/i2v — gif segue loop fixo de ~1,5 s #}
-          <select name="duracao" id="sel-duracao" title="duração do vídeo" hidden>
-            <option value="2">⏱ 2s</option>
-            <option value="3">⏱ 3s</option>
-            <option value="5" selected>⏱ 5s</option>
-            <option value="8">⏱ 8s</option>
-          </select>
-          {# 📎 SUBIR IMAGEM (pedido do dono): visível SÓ nos tipos que
-             PRECISAM de uma imagem de entrada (i2* — análise ou 1º quadro);
-             sobe em /api/upload e vira a `referencia` do envio #}
+          {# 📎 SUBIR IMAGEM: análise i2t com um modelo 👁 (a GERAÇÃO de
+             imagem/vídeo/gif vive no módulo 👁 Multimídia) #}
           <input type="file" id="anexo-arquivo" accept="image/*" hidden onchange="anexoSubido(this)">
           <button type="button" id="btn-anexo" class="acao-btn" hidden
                   onclick="document.getElementById('anexo-arquivo').click()"
-                  title="subir uma imagem do seu computador para usar nesta saída (análise/primeiro quadro)">📎 subir imagem</button>
+                  title="subir uma imagem do seu computador para o multimodal analisar">📎 subir imagem</button>
           <span class="chip-ref" id="chip-ref" hidden title="clique para remover a imagem anexada"></span>
-          {# 2º: MODELO — categorias de conversa em optgroups; ao escolher
-             o tipo acima, SÓ os modelos daquele tipo ficam habilitados
-             (imagem → Flux; vídeo/gif → Wan2.2). Volta ao chat em texto. #}
+          {# 2º: MODELO — conversa (local + 🌐 provedores por categoria); no
+             i2t só os 👁 multimodais (a geração vive no módulo Multimídia) #}
           <select name="model" id="sel-modelo" title="modelo (filtra pelo tipo de resposta)" onchange="modeloMudou(this)">
             {% for g in modelos_chat_grupos %}
             {% if g.modelos %}
@@ -118,15 +101,6 @@
             </optgroup>
             {% endif %}
             {% endfor %}
-            <optgroup label="🎨 geração" id="grp-geracao" hidden>
-              {% for m in modelos_geracao.get('imagem', []) %}
-              <option value="{{ m.nome }}" data-tipo="imagem">🖼 {{ m.nome }}{% if m.gb %} · {{ m.gb }}GB{% endif %}</option>
-              {% endfor %}
-              {% for m in modelos_geracao.get('video', []) %}
-              <option value="{{ m.nome }}" data-tipo="video">🎬 {{ m.nome }}</option>
-              {% endfor %}
-              <option value="qwen2.5-vl-7b" data-tipo="multimodal">🖼️ qwen2.5-vl (multimodal)</option>
-            </optgroup>
           </select>
           {# 3º: MODO — como usar a base (ignorado na geração de mídia) #}
           <select name="mode" id="sel-modo" title="modo de resposta (como a base entra)">
@@ -179,7 +153,9 @@
         </details>
       </form>
       <p class="mini" style="margin:.4rem 0 0;">
-        mídia gera na GPU local (2–15 min). ⏎ envia · ⇧⏎ nova linha · ↑ recupera a última pergunta.
+        o chat responde em TEXTO — geração de imagem/vídeo/gif e análise
+        avulsa moram no módulo <a href="/midia">👁 Multimídia</a>.
+        ⏎ envia · ⇧⏎ nova linha · ↑ recupera a última pergunta.
       </p>
     </section>
   </div>
@@ -750,44 +726,26 @@ function midiaMudou() {
   const tipo = SEL_MIDIA.value;
   const modo = document.getElementById("sel-modo");
   const btnAnexo = document.getElementById("btn-anexo");
-  // MODO só vale para TEXTO (geração de mídia ignora a base) — o 3º
-  // combobox desabilita visualmente quando o tipo pede mídia
+  // MODO só vale para TEXTO — no i2t a base não entra (é análise direta)
   if (modo) {
     modo.disabled = !!tipo;
     modo.title = tipo
-      ? "o modo não se aplica à geração de mídia"
+      ? "o modo não se aplica à análise de imagem"
       : "modo de resposta (como a base entra)";
   }
-  // 📎 botão de subir imagem: SÓ nos tipos com imagem de ENTRADA (i2*)
+  // 📎 botão de subir imagem: SÓ na análise (i2t)
   if (btnAnexo) {
-    btnAnexo.hidden = !tipo.startsWith("i2");
-    btnAnexo.title = tipo === "i2t"
-      ? "subir a imagem para o multimodal analisar"
-      : "subir a imagem que vira o primeiro quadro do vídeo/gif";
-  }
-  // ⏱️ seletor de DURAÇÃO: vídeo/i2v em SEGUNDOS (16 fps); gif/i2g em
-  // FRAMES (loop a 12 fps — spec midia_duracao). Repovoado por tipo.
-  const selDur = document.getElementById("sel-duracao");
-  if (selDur) {
-    if (tipo === "video" || tipo === "i2v") {
-      selDur.innerHTML = '<option value="2">⏱ 2s</option><option value="3">⏱ 3s</option>'
-        + '<option value="5" selected>⏱ 5s</option><option value="8">⏱ 8s</option>';
-      selDur.title = "duração → frames (16 fps): 2s=33 · 3s=49 · 5s=81 · 8s=129 — tempo de geração cresce ~linear";
-    } else if (tipo === "gif" || tipo === "i2g") {
-      selDur.innerHTML = '<option value="17" selected>⏱ ~1,5s (17f)</option>'
-        + '<option value="33">⏱ ~3s (33f)</option><option value="49">⏱ ~4s (49f)</option>';
-      selDur.title = "duração do loop em FRAMES (12 fps): mais frames = ação mais longa, loop perfeito continua valendo";
-    }
-    selDur.hidden = !(tipo === "video" || tipo === "i2v" || tipo === "gif" || tipo === "i2g");
+    btnAnexo.hidden = tipo !== "i2t";
+    btnAnexo.title = "subir a imagem para o multimodal analisar";
   }
   agendarModeloAtivo();   // i2t ↔ texto troca o modelo exibido no badge
-  // 🕵️ AMBIENTE LIMPO na geração de mídia (pedido do dono): coleções/MCP
-  // não se aplicam — saem da vista; o GUIA do tipo entra no lugar deles
+  // 🕵️ AMBIENTE LIMPO na análise: coleções/MCP não se aplicam — saem da
+  // vista; o GUIA do tipo entra no lugar deles
   const boxColecoes = document.getElementById("colecoes-box");
   const boxMcp = document.getElementById("mcp-box");
   if (boxColecoes) boxColecoes.hidden = !!tipo;
   if (boxMcp) boxMcp.hidden = !!tipo;
-  _atualizarGuia(tipo.startsWith("i2") ? tipo : (tipo || ""));
+  _atualizarGuia(tipo || "");
   if (!tipo) {                                   // texto: SÓ conversa
     _popularModelos(_MODELOS_TODOS.filter(o => o.chat),
                     "modelo de conversa (lido do servidor no badge 🧠)");
@@ -797,11 +755,8 @@ function midiaMudou() {
   }
   const atual = _MODELOS_TODOS.find(o => o.valor === SEL_MODEL.value);
   if (atual?.chat) _modeloChat = atual.valor;    // guarda a escolha de conversa
-  const quer = {imagem: "imagem", video: "video", gif: "video",
-                i2v: "video", i2g: "video", i2t: "multimodal"}[tipo] || "imagem";
-  const opcoes = _MODELOS_TODOS.filter(o => o.tipo === quer);
-  _popularModelos(opcoes,
-                  "modelo para " + (tipo === "i2t" ? "analisar a imagem" : "gerar " + tipo));
+  _popularModelos(_MODELOS_TODOS.filter(o => o.tipo === "multimodal"),
+                  "modelo 👁 para analisar a imagem");
 }
 
 /* 📎 SUBIR IMAGEM: /api/upload salva em saidas/entrada e devolve o
@@ -862,14 +817,7 @@ async function melhorarPrompt(btn) {
   const ideia = ta.value.trim();
   if (!ideia) { alert("escreva algo primeiro — a ✨ propõe a melhor forma de pedir"); return; }
   let dicaTipo = SEL_MIDIA.value || "";   // vazio: melhoria GENÉRICA
-  // ⏱️ a dica carrega a DURAÇÃO (vídeo: segundos; gif: "17f") para a spec
-  // escalar a ação do prompt (2s=1 beat … 8s=2–3 beats; gif por frames)
-  const selDur = document.getElementById("sel-duracao");
-  if (dicaTipo && selDur && !selDur.hidden) {
-    const v = selDur.value;
-    dicaTipo += (dicaTipo === "gif" || dicaTipo === "i2g")
-      ? " " + v + " frames" : " " + v + "s";
-  }
+  // (dur saiu com a geração — o chat é texto; a dica só distingue i2t)
   const o = btn.textContent; btn.textContent = "…"; btn.disabled = true;
   try {
     const r = await fetch("/hx/prompt-melhorar", {
