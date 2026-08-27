@@ -1081,6 +1081,23 @@ da API**.
   removido (utf-8-sig falha quando há 2 — loop no \ufeff). LIÇÃO:
   depois de qualquer WRITE grande em .html/.md, varrer mojibake antes
   do commit. Validado em produção: `/sistema` sem mojibake.
+- **☁️ CADASTRO DE PROVEDORES CLOUD (27/08, manhã)**: pedido do dono
+  ("onde seleciono a zai para glm… preciso ter um cadastro de provedores
+  cloud"). `POST /api/provedores/cadastrar` (admin, JSON {id, base_url,
+  nome?, api_key?, modelos?}) grava `PROV_<ID>_BASE_URL/_API_KEY/_NOME/
+  (_MODELOS)` via set_env_inplace + reload e devolve o catálogo JÁ com
+  os modelos reais (GET {base}/models). UI: cartão "☁️ Cadastrar
+  provedor cloud" no Sistema com PRESETS no datalist (Z.AI
+  api.z.ai/api/paas/v4 · Zhipu open.bigmodel.cn/api/paas/v4 · DeepSeek
+  · OpenAI · Anthropic · OpenRouter · Groq) — salva e recarrega; o
+  grupo 🌐 entra no seletor do chat sozinho (auto-descoberta PROV_*).
+  ⚠️ BUGS da rodada: (a) retorno comparava pid MAIÚSCULO no catálogo
+  (ids() LOWERIZA — "meu" nunca achava, lista vazia); (b) **WAF da
+  borda bloqueia UA de Python** (python-httpx/OpenAI/Python → 403 sem
+  body) — `_modelos_do_endpoint` e o `LLMContada` (default_headers) usam
+  UA próprio `ragaroy/1.0`; (c) o chat :8090 da estação CAÍRA de novo
+  (túnel 502 — "nenhum modelo listado" na UI era ISSO): restart do
+  agente host reergue. E2E: `Temp\kilo\e2e_prov.py`.
 - **🧹 CS5001 COM CSPROJ + FASTAPI MUDO (26/08, noite 3)**: (1) conversa
   com `app.csproj` + classes SEM entry voltava `return` cedo no
   `_preparar_cs` — CS5001 na cara (bootstrap/placeholder só rodavam SEM
