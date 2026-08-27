@@ -5,7 +5,7 @@
 > Fase D ✅ (10/10) · Fase F: direção aprovada (shadcn+lucide), aplicada à tela da Revisão.**
 > **Loop de validação: pós-push em https://ai.disroy.org** (nunca localhost).
 > Infra de produção corrigida no processo: `.env` da VPS agora aponta
-> LLM/EMBED para os túneis zero-trust + QDRANT_URL/RABBIT_URL internos do
+> LLM/EMBED para os túneis zero-trust + QDRANT_URL interno do
 > stack (feito via SSH, backup `.env.bak.*` na VPS); health checks do core
 > (`embedding_no_ar`/`servido`) honram URLs https completas.
 

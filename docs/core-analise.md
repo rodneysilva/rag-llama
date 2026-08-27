@@ -29,7 +29,7 @@ Legenda de saúde: 🟢 sólido · 🟡 funciona com ressalvas · 🔴 problema 
 | `unificar_arquiteturas.py` | consolida conceitos de arquitetura | 🟡 vetor≠conteúdo |
 | `reembed.py` | reparo de vetores zerados pós-crash | 🟢 (O(n²) tolerável) |
 | `agent.py` | ReAct artesanal + portão de aprovação | 🟡 |
-| `cache.py` | cache semântico Redis 0.97 | 🔴 bug de reconexão |
+| ~~`cache.py`~~ | REMOVIDO 27/08 (bússola no lugar) | — |
 | `contadores.py` | tokens por serviço (Redis + fallback) | 🟡 dois métodos vivos |
 | `fila.py` | jobs RabbitMQ (DLX/DLQ, replay) | 🟡 poison message |
 | `sessions.py` / `sessoes.py` | sessões do chat / do estúdio | 🟡 / 🟢 |

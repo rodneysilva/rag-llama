@@ -66,7 +66,7 @@ assunto está fora do alcance das suas coleções ou das ferramentas MCP.
 - Toda execução passa por **portão de aprovação** e a resposta final é verificada contra o que as ferramentas realmente retornaram.
 
 **📊 Observar tudo**
-- Dashboard com uso por modelo (tokens, tok/s, chamadas), infra (Qdrant, Redis, fila RabbitMQ com DLQ) e logs ao vivo.
+- Dashboard com uso por modelo (tokens, tok/s, chamadas), infra (Qdrant) e logs ao vivo.
 - Telemetria persistente e histórico de execuções com log completo de cada job.
 
 | Chat (resposta + painel de arquivos com ▶ testar) | Biblioteca |
@@ -117,8 +117,8 @@ Mínimo para experimentar: **conversa + embedding**. O resto sobe por demanda.
 
 Tudo funciona apontando `LLM_BASE_URL`/`EMBED_BASE_URL` para qualquer
 endpoint OpenAI-compatible (inclusive remoto via túnel). Sem Docker no
-host, a API roda com `uvicorn` e os serviços caem para modos degradados
-(fila em thread, cache em memória).
+host, a API roda com `uvicorn` — os jobs seguem no executor async
+embutido e a contagem de tokens em arquivo (nenhuma dependência extra).
 
 </details>
 
@@ -156,20 +156,20 @@ PROV_ANTHROPIC_API_KEY=sk-ant-...
 ## Arquitetura
 
 <a href="https://github.com/rodneysilva/rag-llama/raw/main/docs/arquitetura.svg">
-  <img src="docs/arquitetura.svg" width="880" alt="Arquitetura do RagAroy em camadas: usuário → webui HTMX → API FastAPI + agente MCP + provedores → Qdrant/Redis/RabbitMQ/Sandbox, com estação GPU opcional à direita"/>
+  <img src="docs/arquitetura.svg" width="880" alt="Arquitetura do RagAroy em camadas: usuário → webui HTMX → API FastAPI + executor async de jobs + provedores → Qdrant/Sandbox, com estação GPU opcional à direita"/>
 </a>
 
 ```
 ┌─ estação com GPU (opcional) ─────────────┐   ┌─ servidor (docker compose) ─────────┐
 │ llama-server  chat :8090 · embed :8081   │⇄⇄│ api :8000  FastAPI + webui (HTMX)   │
-│ llama-server  visão :8082 (on-demand)    │tú│ qdrant    vetores + full-text       │
-│ agente :8010   troca de modelo · GPU     │nel│ redis     cache/contadores         │
-│ sd-cli  Flux · Wan2.1/2.2 · whisper      │   │ rabbitmq  fila de jobs + DLQ       │
-└───────────────────────────────────────────┘   │ sandbox   execução isolada + sites │
-                                                 └─────────────────────────────────────┘
+│ llama-server  visão :8082 (on-demand)    │tú│ · executor async de jobs (in-proc)  │
+│ agente :8010   troca de modelo · GPU     │nel│ qdrant    vetores + full-text       │
+│ sd-cli  Flux · Wan2.1/2.2 · whisper      │   │ sandbox   execução isolada + sites │
+└───────────────────────────────────────────┘   └─────────────────────────────────────┘
 ```
 
-- **Toda tarefa longa é um job na fila** — a UI nunca bloqueia e os jobs sobrevivem a restarts.
+- **Toda tarefa longa é um job no executor async** (in-process, fila serial,
+  retry com backoff para erros transientes) — a UI nunca bloqueia, sem broker externo.
 - **A GPU é a estação do usuário** — o servidor (docker compose) não hospeda
   modelos de linguagem: chat/embedding/visão/difusão rodam na SUA máquina
   (llama.cpp/sd-cli) e o servidor os alcança por túnel; sem GPU local, os
@@ -179,7 +179,7 @@ PROV_ANTHROPIC_API_KEY=sk-ant-...
 
 ## Projetos open source que o sustentam
 
-[llama.cpp](https://github.com/ggml-org/llama.cpp) · [LangChain](https://github.com/langchain-ai/langchain) · [Qdrant](https://qdrant.tech) · [FastAPI](https://fastapi.tiangolo.com) · [RabbitMQ](https://rabbitmq.com) · [Redis](https://redis.io) · [HTMX](https://htmx.org) + [Tailwind](https://tailwindcss.com) · [FLUX.1](https://github.com/black-forest-labs/flux) · [Wan2.1](https://github.com/Wan-Video/Wan2.1) · [Qwen2.5](https://github.com/QwenLM/Qwen2.5) · [bge-m3](https://huggingface.co/BAAI) · [Trafilatura](https://github.com/adbar/trafilatura) · [faster-whisper](https://github.com/SYSTRAN/faster-whisper) · [Piper](https://github.com/rhasspy/piper) — licenças e lista completa em [`CONTRIBUTING.md`](CONTRIBUTING.md).
+[llama.cpp](https://github.com/ggml-org/llama.cpp) · [LangChain](https://github.com/langchain-ai/langchain) · [Qdrant](https://qdrant.tech) · [FastAPI](https://fastapi.tiangolo.com) · [HTMX](https://htmx.org) + [Tailwind](https://tailwindcss.com) · [FLUX.1](https://github.com/black-forest-labs/flux) · [Wan2.1](https://github.com/Wan-Video/Wan2.1) · [Qwen2.5](https://github.com/QwenLM/Qwen2.5) · [bge-m3](https://huggingface.co/BAAI) · [Trafilatura](https://github.com/adbar/trafilatura) · [faster-whisper](https://github.com/SYSTRAN/faster-whisper) · [Piper](https://github.com/rhasspy/piper) — licenças e lista completa em [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Segurança e contribuição
 

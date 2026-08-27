@@ -97,7 +97,6 @@ agente da estação.
 | Serviço | Onde | Porta | Notas |
 |---|---|---|---|
 | Qdrant | container `mnemosyne-qdrant` | :6333 API / :6334 dashboard | obrigatório |
-| Redis | container `rag-redis` | :6379 | **opcional** — cache/ETA degradam silenciosamente sem ele (no-op) |
 | llama-server chat | `<pasta-do-usuario>\llama.cpp\bin` | :8090 | 4 slots: `-c 24576 -np 4 -fa on -ctk/-ctv q8_0` |
 | llama-server embedding (bge-m3) | idem | :8081 | **SEMPRE ligado** — nada pode derrubá-lo |
 | llama-server visão (Qwen2.5-VL) | idem | :8082 | sob demanda (i2t/v2t) |
@@ -175,7 +174,7 @@ teste_sessoes_mcp, servidor_mcp_teste…).
 | Módulo | Papel |
 |---|---|
 | `core/config` | `.env` + `reload()` em runtime (a webui edita e aplica sem restart); binários locais (LLAMA_BIN/SD_CLI/WHISPER_CLI) ajustáveis no .env |
-| `core/contadores` | 📊 uso de tokens do llama-server (:8090): wrapper em `rag.llm()` conta CADA chamada (usage do servidor) por serviço via thread-local (chat/ingestão/seed/limpeza/estúdio/manutenção/sistema); acumula em Redis compartilhado (INCR — API e scripts CLI somam no mesmo total), fallback `saidas/uso_llm.json`; `/api/contagem` e `tokens` nas respostas do `/api/query` |
+| `core/contadores` | 📊 uso de tokens do llama-server (:8090): wrapper em `rag.llm()` conta CADA chamada (usage do servidor) por serviço via thread-local; acumula em `logs/uso_llm.jsonl` (append atômico — API e scripts CLI somam no MESMO total, sem broker); `totais()` agrega com cache 3 s; `/api/contagem` e `tokens` nas respostas |
 | `core/auth` | login simples: scrypt+salt em `users.json` (FORA do git), tokens HMAC stateless; bootstrap do admin via AUTH_ADMIN_* do .env; owner isola sessões por conta |
 | `core/rag` | embedding/Qdrant/LLM/chain; modos rag/livre/híbrido; `search` multi-coleção com `SCORE_MIN`, máx 2 chunks/arquivo e teto 4×TOP_K; `reformula` a pergunta usando o histórico |
 | `core/ingest` | wizard de 7 etapas; `rapido=True` pula LLM (modo lote p/ bases grandes); texto LIMPO (`core/limpeza`), split por seções markdown, chunks com cabeçalho contextual `[documento · seção]` e metadata `arquivo/titulo/secao/url/i/n`; descarta ruído e duplicados |
@@ -185,6 +184,7 @@ teste_sessoes_mcp, servidor_mcp_teste…).
 | `core/analyze` | LLM analisa todas as coleções → catálogo |
 | `core/enrich` | destrincha coleção em várias por tema (reaproveita vetores) |
 | `core/sessions` | sessões do CHAT (JSON em `sessions/`) |
+| `core/executor` | ⚙️ executor de JOBS async in-process (substituiu o RabbitMQ 27/08): fila `asyncio.Queue` serial (VRAM é o gargalo), fábricas rodam em `to_thread` (event loop livre), retry+backoff SÓ p/ erros transientes (rede/timeout), falha de negócio registrada no job; `_despachar` mantém a interface das fábricas; restart = jobs somem com erro claro no polling |
 | `core/seed` | seed PROFUNDO seguindo a spec global `pesquisa_web.md`: 1ª onda Serper (atual), aprofundamento DuckDuckGo (internas), LLM decide se vale aprofundar; definição da RAG antes de importar → curadoria com scores (≥6) → download + internos (≥7, máx 3/fonte) + repos oficiais (clone esparso em `datasets/seed/*_repo/`, fora do git) → ingestão em lote → catálogo; job com log (`POST /api/seed`) |
 | `core/varredura` | varredura LLM: julga cada chunk contra o ASSUNTO da coleção e apaga só lixo claro; spec conservadora por design; CLI e `POST /api/varredura` |
 | `core/unificar_arquiteturas` | consolida os melhores chunks por CONCEITO universal (SOLID/DDD/clean arch…) das coleções `arquitetura_*` na `arquitetura_unificada` — coleção de SISTEMA: oculta da webui, entra AUTOMÁTICA como base em qualquer busca que toque coleções `arquitetura_*` (regra no `/api/query` e no modo Auto) |
@@ -208,7 +208,6 @@ teste_sessoes_mcp, servidor_mcp_teste…).
 | `core/modalidades` | modalidades declarativas: chat, dev, t2i, t2v, i2v, i2t, v2t, a2t, a2v (**v2a pendente**) |
 | `core/tarefas` | jobs em background com lock de VRAM/sessão; ETA aprendido no Redis |
 | `core/sessoes` | sessões do ESTÚDIO — **não confundir com `core/sessions`!** |
-| `core/cache` | cache semântico Redis (cosseno ≥ `CACHE_LIMIAR` 0.97); só modos rag/livre |
 | `core/auto` | modo Auto: roteador decide base/web/livre; **web-first** (DuckDuckGo primeiro, Serper de respaldo) com **aprofundamento de até 5 níveis** (crítica a cada nível + refinamento LLM da query); crítica CRAG na base também cai no web aprofundado; aceita `log` (job do chat mostra cada nível) |
 | `core/prompts_corpus` | 34 prompts exemplares → coleção `prompts_midia` (só via CLI) |
 
@@ -270,14 +269,20 @@ da API**.
 - **Sessões**: id validado por regex (`_RE_SID`, anti path-traversal) e
   DELETE/PATCH conferem owner (chat e estúdio). Tarefa do estúdio sem sessão
   cai na "Principal" DO DONO (`sessoes.principal`) — mídia nunca fica invisível.
-- **Jobs RE-EXECUTÁVEIS**: a mensagem do Rabbit carrega kind+payload e cada
-  kind registra uma FÁBRICA (`_despachar(fabricar, kind, payload, registry,
-  lock)`) — API reiniciada reconstrói o executor (antes: mensagem descartada
-  em silêncio). A entrada de status é criada ANTES do return (status nunca
-  dá 404 entre publish e pickup). `_podar_concluidos(dic)` mantém os 10
-  últimos concluídos — chame SEGURANDO o lock (Lock não é reentrante;
-  re-adquirir = deadlock, já aconteceu). Estúdio (GPU) segue em thread
-  própria — não é replayable.
+- **Jobs no EXECUTOR ASYNC (substituiu o RabbitMQ — decisão do dono
+  27/08)**: `core/executor.py` — fila `asyncio.Queue` SERIAL (1 job por
+  vez: VRAM é o gargalo), fábrica roda em `asyncio.to_thread` (event loop
+  da API livre), RETRY com backoff 2s/4s SÓ para erros transientes
+  (ConnectionError/timeout/EOF — erro de negócio falha direto, controle
+  de erro é Python comum). A entrada de status é criada ANTES do return
+  (status nunca dá 404 entre despacho e pickup). `_podar_concluidos(dic)`
+  mantém os 10 últimos concluídos — chame SEGURANDO o lock (Lock não é
+  reentrante; re-adquirir = deadlock, já aconteceu). Restart da API: jobs
+  em curso/pendentes somem e o polling mostra ERRO CLARO "dispare
+  novamente" (decisão do dono; o replay do Rabbit era fraco na prática —
+  fábrica é closure runtime e mensagem sem fábrica era descartada).
+  `to_thread` usa POOL que REUSA threads: thread-local (rag.set_override,
+  contadores.set_servico) exige `finally` (lição que segue valendo).
 - **Manutenção é JOB**: /api/manutencao {acao: analisar|agrupar|dividir}
   com log ao vivo (as rotas antigas /api/analyze|agrupar|enrich delegam nela).
 - **Auth em cookie httpOnly** (`ragaroy_token`) além do Bearer: mídia
@@ -295,29 +300,13 @@ da API**.
   O `useTarefa` do frontend também desiste com erro após 5 falhas seguidas
   de polling. Jobs de fila (ingestão/seed/…) são re-executados do zero pela
   fábrica; jobs em thread-fallback (sem Rabbit) se perdem — o popup marca.
-- **Cache semântico** é keyed por coleções (SORTED no store E no lookup —
-  sem ordenar nos dois lados o escopo multi-coleção, o padrão "todas",
-  nunca batia) E MODELO (resposta de outro modelo não vaza; entradas
-  legadas sem o campo contam como compatíveis); resposta vazia nunca entra;
-  só consultas SEM histórico (follow-up nunca vem do cache).
+- **Cache semântico REMOVIDO** (27/08, decisão do dono): a 🧭 bússola
+  (Qdrant, coleção `sessoes_chat`, escopo por owner) cobre perguntas
+  repetidas cross-sessão; respostas-diretas por score seguem de praxe.
 - **`/api/ingest/upload`**: `colecao`/`rapido` são `Form()` — sem a
   anotação o FastAPI lia da QUERY e o slug digitado na webui era
   silenciosamente ignorado (a coleção caía no nome do arquivo). Escrita
   em `asyncio.to_thread` (I/O fora do event loop).
-- `fila.publicar` RETENTA 1x com conexão nova: o canal cached do
-  publicador esfria (heartbeat perdido em período ocioso) e a 1ª
-  publicação após a pausa morria com EOF → job caía para thread à toa.
-- **Worker do Rabbit usa `heartbeat=0`**: o job roda INTEIRO dentro do
-  callback do consume (minutos de LLM/difusão) e o BlockingConnection não
-  processa heartbeats enquanto executa — com heartbeat ligado o broker
-  cortava a conexão ("missed heartbeats"), reconectava e REENTREGAVA a
-  mensagem: o job executava 2x. Além disso o `_no_worker` é IDEMPOTENTE
-  com `picked`: a entrada de status nasce `picked=False` (placeholder do
-  _despachar); o worker marca `picked=True` só ao EXECUTAR — reentrega
-  com picked (em curso ou concluído) é ignorada. NUNCA confunda
-  "running=True" com "está executando" (o placeholder pré-publicado também
-  é running=True — checar `picked`, senão o worker se auto-ignora e o
-  job fica running para sempre SEM executar — já aconteceu).
 - **Pensamentos do chat**: as linhas do "pensando…" ficam ANEXADAS à
   mensagem (`pensamentos` no ChatMsg) após a execução — o painel RETRAI
   para um resumo clicável (etapas · linhas · duração) acima da resposta,
@@ -649,7 +638,7 @@ da API**.
   log COMPLETO (`GET /api/historico/log/{job}` lê `logs/jobs/{job}.jsonl`,
   job sanitizado por regex). **Jobs sobrevivem ao recarregar**: os running
   persistem em `ragaroy.jobs` (localStorage) e o polling do JobsPopup
-  retoma no boot — o job NUNCA parou no servidor (RabbitMQ/thread), o que
+  retoma no boot — o job NUNCA parou no servidor (executor), o que
   se perdia era só o estado na tela. **Pesquisa sem silêncio**:
   `_candidatos` loga cada motor com tempo gasto (minutos mudos pareciam
   travamento — serper são 6 consultas × até 20 s sequenciais). **Guard de
@@ -699,13 +688,13 @@ da API**.
   persistem entre recreates). Diagnóstico de path no container:
   `ls -l /proc/1/cwd` + `docker inspect --format {{.Config.WorkingDir}}`.
 - **⏹ Parar tudo** (`POST /api/parar_tudo`, admin; botão no header e no
-  Sistema): mata jobs (registros → "cancelado"), PURGA fila+DLQ do Rabbit
-  (evento `sistema.parar_tudo`), e desmonta TODOS os motores NO HOST — em
+  Sistema): mata jobs (registros → "cancelado") e desmonta TODOS os
+  motores NO HOST — em
   container PROXYA ao agente (`/parar_tudo`; sem proxy matava nada e
   mentia "derrubado") incluindo ZOMBIES (taskkill por NOME pega
   llama-servers órfãos sem porta que seguram VRAM). Próximo uso recarrega.
 - **🤗 HuggingFace como fonte** (`core/hf.py`, `POST /api/ingest/hf` job
-  na fila): busca datasets no Hub e ingere os CARDS (README.md) pela
+  no executor): busca datasets no Hub e ingere os CARDS (README.md) pela
   MESMA esteira de higienização. O `search` do Hub casa o ID (termo
   único): frase → 0; fallback frase → 1º termo → termo mais longo.
   `HF_TOKEN` opcional no .env. Card "🤗 HuggingFace" na Biblioteca.
@@ -777,11 +766,6 @@ da API**.
   gerações rodam na estação (agente), então EM CONTAINER a API regrava o
   evento de geração na VPS (senão o dashboard de produção nunca vê
   wan/flux). Filtro de tipo: "cache" é alias só de "redis".
-- **RabbitMQ rico**: `fila.detalhe()` usa a Management API (:15672, auth
-  RABBIT_USER/PASS, host derivado do amqp) — por fila: mensagens/prontas/
-  não-ack/consumidores/publicadas/entregues/pub-s + **PEEK da DLQ**
-  (`ack_requeue_true` = só olha) com job/kind/erro + agregados da
-  telemetria; partial `_fila.html` (dashboard).
 - **Guia de mídia com chips de prompt**: ao escolher um tipo de mídia o
   guia abre sozinho com dicas CLICÁVEIS que inserem no prompt — 🎨 estilo
   (realismo/cinematográfico/anime/desenho animado/quadrinhos/3D/aquarela/
@@ -1365,7 +1349,7 @@ da API**.
   visíveis no painel de fontes) e desativa resposta-direta. Seleção de
   MCPs PERSISTE no localStorage (`ragaroy.mcps`). `_mcps_reais` filtra o
   pseudo-MCP da conexão de servidores (e da trivialidade de saudação).
-- **Apagar conversa = JOB na fila (23/08)**: `_conv` (kind
+- **Apagar conversa = JOB em 2º plano (23/08)**: `_conv` (kind
   `conversa_apagar`) faz mídias+cache+sessão em 2º plano; o DELETE
   responde NA HORA com o item em "⏳ apagando…" (`_APAGANDO` por owner) e
   a lista auto-pola (`every 2s`) até o item sumir — clicáveis em
@@ -1451,3 +1435,25 @@ da API**.
 
 O registro completo das rodadas de trabalho (contexto das conversas com o
 operador) vive em AGENTS-historico.md — arquivo PRIVADO, fora do git.
+
+- **⚙️ ARQUITETURA SEM BROKER — Redis/RabbitMQ REMOVIDOS (27/08, tarde)**:
+  pedido do dono ("acredito que redis/rabbitmq estejam comprometendo —
+  vamos usar apis async, quero o controle de erros; para esses tipos de
+  chamadas não tem necessidade do rabbitmq"). Análise de arquiteto
+  (inventário: 41 arquivos/~380 ocorrências) + decisões do dono:
+  cache REMOVIDO (bússola cobre) · contadores em ARQUIVO
+  (`logs/uso_llm.jsonl`, append atômico — total unificado API+CLI) ·
+  executor **asyncio + retry/backoff** (fila serial; transientes só) ·
+  restart = **erro claro** ("dispare novamente") · containers **removidos
+  no deploy** (compose down rabbit redis na VPS) · painéis/telemetria de
+  fila **removidos** (badges 🐇/⚡, /hx/fila, /api/fila, /api/cache,
+  /hx/cachepanel, _fila/_cachepanel, card Redis do dashboard, KPI cache).
+  `core/executor.py` novo (telemetria tipo "jobs"); `core/fila.py` e
+  `core/cache.py` DELETADOS; `estatisticas.cache_resumo` fora; ETA das
+  tarefas em memória; compose dev/prod sem os services, requirements sem
+  pika/redis, CI sobe só qdrant, setups/env.example/gitignore limpos;
+  README/AGENTS reescritos (menções a Rabbit/Redis em bullets ANTIGOS
+  desta lista são HISTÓRICAS — a arquitetura ATIVA está na §1/§3/§5).
+  ⚠️ pós-deploy: `docker compose down rabbit redis` manual na VPS (os
+  services saíram do compose, os containers velhos precisam do down) e
+  o .env da VPS pode descartar RABBIT_*/REDIS_*.

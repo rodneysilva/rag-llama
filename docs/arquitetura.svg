@@ -1,52 +1,58 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif">
-<title>RagAroy — arquitetura em camadas</title>
-<defs><marker id="s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/></marker></defs>
-<rect width="1200" height="760" fill="#f8fafc"/>
-<text x="600.0" y="40" text-anchor="middle" font-size="18" font-weight="700" fill="#0f172a">RagAroy — arquitetura em camadas</text>
-<text x="600.0" y="60" text-anchor="middle" font-size="12" fill="#64748b">toda tarefa longa vira JOB na fila · comportamento vive em specs · local-first</text>
-<text x="24" y="106" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" font-weight="700" fill="#1e3a8a" letter-spacing="1">USUÁRIO</text>
-<rect x="24" y="100" width="520" height="56" rx="12" fill="#ffffff" stroke="#1e3a8a" stroke-width="1.6"/><rect x="24" y="100" width="5" height="56" rx="2.5" fill="#1e3a8a"/><text x="44" y="126" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="14.5" font-weight="700" fill="#0f172a">👤 navegador (desktop · celular · PWA)</text><text x="44" y="146" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" fill="#64748b">chat · biblioteca · dashboard · sistema — uma conta, dados isolados</text>
-<text x="24" y="208" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" font-weight="700" fill="#2563eb" letter-spacing="1">INTERFACE</text>
-<rect x="24" y="202" width="520" height="56" rx="12" fill="#ffffff" stroke="#2563eb" stroke-width="1.6"/><rect x="24" y="202" width="5" height="56" rx="2.5" fill="#2563eb"/><text x="44" y="228" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="14.5" font-weight="700" fill="#0f172a">🖥️ webui server-rendered</text><text x="44" y="248" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" fill="#64748b">HTMX + Jinja + Tailwind — swaps parciais, zero build de Node</text>
-<line x1="284" y1="156" x2="284" y2="202" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#s)"/><text x="296" y="183" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="10.5" fill="#64748b">HTTPS</text>
-<text x="24" y="310" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" font-weight="700" fill="#1d4ed8" letter-spacing="1">APLICAÇÃO</text>
-<rect x="24" y="304" width="252" height="96" rx="12" fill="#ffffff" stroke="#1d4ed8" stroke-width="1.6"/><rect x="24" y="304" width="5" height="96" rx="2.5" fill="#1d4ed8"/><text x="44" y="330" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="14.5" font-weight="700" fill="#0f172a">⚙️ API FastAPI :8000</text><text x="44" y="350" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" fill="#64748b">/api/* (OpenAPI) + páginas /hx</text><text x="44" y="367" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" fill="#64748b">auth scrypt · perfis</text><text x="44" y="384" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" fill="#64748b">core/ lógica + specs/*.md</text>
-<rect x="292" y="304" width="252" height="96" rx="12" fill="#ffffff" stroke="#1d4ed8" stroke-width="1.6"/><rect x="292" y="304" width="5" height="96" rx="2.5" fill="#1d4ed8"/><text x="312" y="330" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="14.5" font-weight="700" fill="#0f172a">🔌 agente ReAct (MCP)</text><text x="312" y="350" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" fill="#64748b">ferramentas selecionáveis</text><text x="312" y="367" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" fill="#64748b">portão de aprovação</text><text x="312" y="384" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" fill="#64748b">verificação anti-invenção</text>
-<rect x="560" y="304" width="180" height="96" rx="12" fill="#ffffff" stroke="#1d4ed8" stroke-width="1.6"/><rect x="560" y="304" width="5" height="96" rx="2.5" fill="#1d4ed8"/><text x="580" y="330" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="14.5" font-weight="700" fill="#0f172a"> 🌐 provedores</text><text x="580" y="350" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" fill="#64748b">glm · deepseek · openai</text><text x="580" y="367" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" fill="#64748b">claude… via .env</text><text x="580" y="384" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" fill="#64748b">multimodais 👁 (i2t)</text>
-<line x1="150" y1="258" x2="150" y2="304" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#s)"/><text x="162" y="285" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="10.5" fill="#64748b">HTMX/JSON</text>
-<line x1="418" y1="304" x2="418" y2="258" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#s)"/><text x="300" y="285" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="10.5" fill="#64748b">raciocínio ao vivo</text>
-<text x="24" y="448" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" font-weight="700" fill="#0e7490" letter-spacing="1">DADOS &amp; FILA</text>
-<rect x="24" y="442" width="160" height="84" rx="12" fill="#ffffff" stroke="#c2410c" stroke-width="1.6"/><rect x="24" y="442" width="5" height="84" rx="2.5" fill="#c2410c"/><text x="44" y="468" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="14.5" font-weight="700" fill="#0f172a">🗂️ Qdrant</text><text x="44" y="488" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" fill="#64748b">vetores + full-text</text><text x="44" y="505" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" fill="#64748b">fusão RRF + rerank</text>
-<rect x="196" y="442" width="150" height="84" rx="12" fill="#ffffff" stroke="#0e7490" stroke-width="1.6"/><rect x="196" y="442" width="5" height="84" rx="2.5" fill="#0e7490"/><text x="216" y="468" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="14.5" font-weight="700" fill="#0f172a">⚡ Redis</text><text x="216" y="488" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" fill="#64748b">cache semântico</text><text x="216" y="505" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" fill="#64748b">contadores</text>
-<rect x="358" y="442" width="160" height="84" rx="12" fill="#ffffff" stroke="#0e7490" stroke-width="1.6"/><rect x="358" y="442" width="5" height="84" rx="2.5" fill="#0e7490"/><text x="378" y="468" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="14.5" font-weight="700" fill="#0f172a">🐇 RabbitMQ</text><text x="378" y="488" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" fill="#64748b">fila de jobs + DLQ</text><text x="378" y="505" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" fill="#64748b">re-executáveis</text>
-<rect x="530" y="442" width="150" height="84" rx="12" fill="#ffffff" stroke="#475569" stroke-width="1.6"/><rect x="530" y="442" width="5" height="84" rx="2.5" fill="#475569"/><text x="550" y="468" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="14.5" font-weight="700" fill="#0f172a">📦 Sandbox</text><text x="550" y="488" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" fill="#64748b">10 linguagens</text><text x="550" y="505" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" fill="#64748b">sites + link ~30min</text>
-<line x1="110" y1="400" x2="110" y2="442" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#s)"/>
-<line x1="271" y1="400" x2="271" y2="442" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#s)"/>
-<line x1="438" y1="400" x2="438" y2="442" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#s)"/><text x="450" y="425" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="10.5" fill="#64748b">jobs (AMQP)</text>
-<line x1="605" y1="400" x2="605" y2="442" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#s)"/><text x="617" y="425" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="10.5" fill="#64748b">executa código</text>
-<rect x="722" y="100" width="454" height="426" rx="14" fill="#ffffff" stroke="#7c3aed" stroke-width="1.6" stroke-dasharray="6,4"/>
-<text x="746" y="130" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="13.5" font-weight="700" fill="#7c3aed">🎮 ESTAÇÃO COM GPU (opcional — ou endpoint remoto)</text>
-<rect x="746" y="158" width="406" height="50" rx="10" fill="#f8fafc" stroke="#e2e8f0"/>
-<text x="766" y="179" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="12.5" font-weight="700" fill="#0f172a">llama-server :8090</text>
-<text x="766" y="196" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" fill="#64748b">conversa (GGUF, troca a quente)</text>
-<rect x="746" y="220" width="406" height="50" rx="10" fill="#f8fafc" stroke="#e2e8f0"/>
-<text x="766" y="241" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="12.5" font-weight="700" fill="#0f172a">llama-server :8081</text>
-<text x="766" y="258" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" fill="#64748b">embedding bge-m3 — sempre no ar</text>
-<rect x="746" y="282" width="406" height="50" rx="10" fill="#f8fafc" stroke="#e2e8f0"/>
-<text x="766" y="303" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="12.5" font-weight="700" fill="#0f172a">llama-server :8082</text>
-<text x="766" y="320" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" fill="#64748b">visão Qwen2.5-VL (sob demanda)</text>
-<rect x="746" y="344" width="406" height="50" rx="10" fill="#f8fafc" stroke="#e2e8f0"/>
-<text x="766" y="365" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="12.5" font-weight="700" fill="#0f172a">sd-cli</text>
-<text x="766" y="382" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" fill="#64748b">FLUX.1 (t2i) · Wan2.1/2.2 (t2v/i2v)</text>
-<rect x="746" y="406" width="406" height="50" rx="10" fill="#f8fafc" stroke="#e2e8f0"/>
-<text x="766" y="427" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="12.5" font-weight="700" fill="#0f172a">whisper · piper</text>
-<text x="766" y="444" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" fill="#64748b">transcrição e voz (CPU)</text>
-<path d="M 560 352 C 650 352, 660 352, 722 352" fill="none" stroke="#7c3aed" stroke-width="1.8" stroke-dasharray="5,4" marker-end="url(#s)"/>
-<text x="636" y="344" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="10.5" fill="#7c3aed">OpenAI-compat · túnel</text>
-<rect x="24" y="556" width="1152" height="150" rx="14" fill="#ffffff" stroke="#e2e8f0"/>
-<text x="48" y="586" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="13" font-weight="700" fill="#0f172a">conceitos do desenho</text>
-<text x="48" y="612" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" fill="#64748b">• camadas = processos independentes (reiniciam/escalam separados) · faixa roxa = opcional (sem GPU, aponte para qualquer endpoint OpenAI-compatible)</text>
-<text x="48" y="634" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" fill="#64748b">• toda tarefa longa (chat, ingestão, mídia, sandbox, pesquisa) é um JOB na fila — a UI nunca bloqueia e jobs sobrevivem a restarts</text>
-<text x="48" y="656" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" fill="#64748b">• comportamento da LLM vive em core/specs/*.md (editar spec ≠ editar código) · coleções do Qdrant são genéricas por domínio</text>
-<text x="48" y="678" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11.5" fill="#64748b">• modo Revisão: NADA entra na base sem aprovação (chunks, duplicados, clusters e score de aderência visíveis antes de aplicar)</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="330" viewBox="0 0 880 330" font-family="Segoe UI, Arial, sans-serif">
+  <rect width="880" height="330" fill="#0f141a"/>
+  <text x="24" y="34" fill="#e8eaf0" font-size="17" font-weight="600">RagAroy — arquitetura em camadas</text>
+  <text x="24" y="52" fill="#7f8b99" font-size="11">usuário → webui HTMX → API FastAPI (executor async de jobs) → dados · estação GPU opcional</text>
+
+  <!-- usuário -->
+  <rect x="24" y="72" width="120" height="46" rx="10" fill="#1a212b" stroke="#2c3644"/>
+  <text x="84" y="99" fill="#cfd6df" font-size="12" text-anchor="middle">👤 navegador</text>
+
+  <!-- api -->
+  <rect x="176" y="66" width="300" height="150" rx="12" fill="#14202c" stroke="#2b6cb0" stroke-width="1.5"/>
+  <text x="326" y="90" fill="#8fb8e8" font-size="13" font-weight="600" text-anchor="middle">api :8000 — FastAPI + webui (HTMX)</text>
+  <rect x="192" y="102" width="268" height="30" rx="8" fill="#1b2a3a" stroke="#31597e"/>
+  <text x="326" y="121" fill="#a9c6e2" font-size="11" text-anchor="middle">⚙️ executor async de jobs (in-process)</text>
+  <rect x="192" y="138" width="128" height="28" rx="8" fill="#1b2a3a" stroke="#31597e"/>
+  <text x="256" y="156" fill="#a9c6e2" font-size="11" text-anchor="middle">🧭 bússola (Qdrant)</text>
+  <rect x="330" y="138" width="130" height="28" rx="8" fill="#1b2a3a" stroke="#31597e"/>
+  <text x="395" y="156" fill="#a9c6e2" font-size="11" text-anchor="middle">🌐 provedores LLM</text>
+  <rect x="192" y="172" width="268" height="28" rx="8" fill="#1b2a3a" stroke="#31597e"/>
+  <text x="326" y="190" fill="#a9c6e2" font-size="11" text-anchor="middle">📊 contadores em arquivo · telemetria jsonl</text>
+
+  <!-- dados -->
+  <rect x="508" y="66" width="160" height="70" rx="10" fill="#221a10" stroke="#a06a1f"/>
+  <text x="588" y="92" fill="#e8c98f" font-size="12" text-anchor="middle" font-weight="600">🗄️ qdrant</text>
+  <text x="588" y="110" fill="#b89b6b" font-size="10.5" text-anchor="middle">vetores + full-text</text>
+  <rect x="508" y="146" width="160" height="70" rx="10" fill="#101f18" stroke="#2f7d4f"/>
+  <text x="588" y="172" fill="#9fd8b4" font-size="12" text-anchor="middle" font-weight="600">🧪 sandbox</text>
+  <text x="588" y="190" fill="#7bab8f" font-size="10.5" text-anchor="middle">execução isolada + sites</text>
+
+  <!-- estação -->
+  <rect x="700" y="66" width="156" height="192" rx="12" fill="#191428" stroke="#6b4fa0"/>
+  <text x="778" y="90" fill="#c3aee8" font-size="12" font-weight="600" text-anchor="middle">estação com GPU</text>
+  <text x="778" y="106" fill="#8d7bab" font-size="10" text-anchor="middle">(opcional — a SUA máquina)</text>
+  <rect x="712" y="116" width="132" height="26" rx="7" fill="#241c38"/>
+  <text x="778" y="133" fill="#b7a4dd" font-size="10.5" text-anchor="middle">llama-server :8090/:8081</text>
+  <rect x="712" y="148" width="132" height="26" rx="7" fill="#241c38"/>
+  <text x="778" y="165" fill="#b7a4dd" font-size="10.5" text-anchor="middle">visão :8082 (on-demand)</text>
+  <rect x="712" y="180" width="132" height="26" rx="7" fill="#241c38"/>
+  <text x="778" y="197" fill="#b7a4dd" font-size="10.5" text-anchor="middle">agente :8010 · troca</text>
+  <rect x="712" y="212" width="132" height="26" rx="7" fill="#241c38"/>
+  <text x="778" y="229" fill="#b7a4dd" font-size="10.5" text-anchor="middle">sd-cli · Flux · Wan · whisper</text>
+
+  <!-- setas -->
+  <line x1="144" y1="95" x2="176" y2="95" stroke="#7f8b99" stroke-width="1.5" marker-end="url(#s)"/>
+  <line x1="476" y1="100" x2="508" y2="100" stroke="#7f8b99" stroke-width="1.5" marker-end="url(#s)"/>
+  <line x1="476" y1="180" x2="508" y2="180" stroke="#7f8b99" stroke-width="1.5" marker-end="url(#s)"/>
+  <line x1="476" y1="140" x2="700" y2="140" stroke="#6b4fa0" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#s)"/>
+  <text x="588" y="132" fill="#7f8b99" font-size="10" text-anchor="middle">túnel</text>
+
+  <defs>
+    <marker id="s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7f8b99"/>
+    </marker>
+  </defs>
+
+  <text x="24" y="286" fill="#7f8b99" font-size="10.5">Toda tarefa longa é um job no executor async (fila serial, retry com backoff p/ transientes) — sem broker externo.</text>
+  <text x="24" y="302" fill="#7f8b99" font-size="10.5">A GPU é a estação do usuário; o servidor não hospeda modelos de linguagem (llm/embed/agente via túnel).</text>
 </svg>
