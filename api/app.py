@@ -4038,7 +4038,7 @@ def midia_enviar(body: MidiaEnviarIn, request: Request):
                     # real do dono — igual ao que já corrigi no i2t do chat)
                     if config.EM_CONTAINER and ":" not in modelo:
                         import base64 as _b64
-                        with open(alvo, "rb") as f:
+                        with open(payload["referencia"], "rb") as f:
                             img_b64 = _b64.b64encode(f.read()).decode()
                         t_vl = time.time()
                         r = modelos._chamar_agente(
