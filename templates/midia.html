@@ -21,12 +21,17 @@
         <span id="mid-chip" class="chip-ref" hidden></span>
       </div>
       <div style="grid-column:1/-1;">
-        <label>modelo multimodal</label>
+        <label>modelo multimodal — TODOS (local + cloud)</label>
         <select id="mid-modelo">
-          {% for m in modelos_visao %}
-          <option value="{{ m.id }}" title="{{ m.info }}{% if m.ctx %} · ctx {{ m.ctx // 1000 }}k{% endif %}">{{ m.nome }}{% if m.ctx %} · {{ m.ctx // 1000 }}k{% endif %}</option>
+          {% for g in grupos_visao %}
+          <optgroup label="{{ g.rotulo }}">
+            {% for m in g.modelos %}
+            <option value="{{ m.id }}" title="{{ m.info }}">{{ m.nome }}</option>
+            {% endfor %}
+          </optgroup>
           {% endfor %}
         </select>
+        <p class="mini" id="mid-modelo-info" style="margin:.25rem 0 0; opacity:.75;"></p>
       </div>
       <div style="grid-column:1/-1;">
         <label>pergunta sobre a imagem</label>
@@ -58,6 +63,16 @@
 
 <script>
   let _arquivo = null, _job = null, _poll = null, _analise = "";
+
+  // info do modelo selecionado (aviso 🔑 de cadastro na cara, não escondido)
+  const selModelo = document.getElementById("mid-modelo");
+  const infoModelo = document.getElementById("mid-modelo-info");
+  function mostrarInfo() {
+    const o = selModelo.selectedOptions[0];
+    infoModelo.textContent = o ? (o.title || "") : "";
+  }
+  selModelo.addEventListener("change", mostrarInfo);
+  mostrarInfo();
 
   async function midSubir(inp) {
     const f = inp.files[0];

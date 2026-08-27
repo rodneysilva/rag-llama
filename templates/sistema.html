@@ -4,12 +4,14 @@
 <div class="pagina-conteudo">
 
 <h1>Sistema</h1>
+<p class="descricao">o que está RODANDO, os provedores cloud e as
+  configurações — cada cartão é um objeto: <b>🧠 Motor</b> (GPU da estação),
+  <b>☁️ Provedores</b> (cadastro cloud), <b>🔌 Serviços</b> (infra) e
+  <b>⚙️ Configurações</b> (.env).</p>
 
+{# ═══ OBJETO 1: MOTOR — onde a conversa roda AGORA ═══ ═══ ═══ ═══ ═══ ═══ #}
 <section class="cartao">
-  <h2>Motor LLM — modelos ativos (GPU do host)</h2>
-  <p class="descricao">Quem está servindo AGORA. O chat (:8090) troca pelo .env;
-     o embedding (:8081) nunca desce sozinho; o multimodal (:8082, Qwen2.5-VL,
-     lê/descreve imagens) sobe quando pedida.</p>
+  <h2>🧠 Motor LLM — quem está servindo</h2>
   <div class="grade">
     <div class="kpi">
       <div class="rotulo">💬 chat · :8090</div>
@@ -21,7 +23,6 @@
         {% elif motor.rodando %}<span style="color:var(--aviso)">⏸️ pausado — a GPU está com:</span>
           {% for r in motor.rodando[:3] %}<br><span class="mini">🎨 {{ r.rotulo }}</span>{% endfor %}
         {% else %}<span style="color:var(--erro)">○ fora</span>{% endif %}
-        {% if ativos.chat %} · no ar: {{ ativos.chat }}{% endif %}{% if ativos.visao %} · 👁 {{ ativos.visao }}{% endif %}{% if ativos.difusores %} · 🎬 {{ ativos.difusores | length }} difusor(es){% endif %}
       </div>
     </div>
     <div class="kpi">
@@ -33,136 +34,58 @@
       </div>
     </div>
     <div class="kpi">
-      <div class="rotulo">🖼️ multimodal · :8082 / 🌐 externo</div>
+      <div class="rotulo">🖼️ visão · :8082 / 🌐</div>
       <div class="valor" style="font-size:1rem; word-break:break-all;">
         {% if ativos.visao %}{{ ativos.visao }}{% elif ativos.visao_externa %}{{ ativos.visao_externa[0] }}{% else %}— sobe quando pedida —{% endif %}
       </div>
       <div class="sub">
-        {% if ativos.visao %}<span style="color:var(--ok)">● servindo (local)</span>
-        {% elif ativos.visao_externa %}<span style="color:var(--ok)">● ativo via API externa</span>
-          <br><span class="mini">{{ ativos.visao_externa | join(' · ') }}</span>
-        {% else %}<span style="color:var(--suave)">○ aguardando demanda</span>{% endif %}
-        <br><span class="mini">imagem → texto (descreve/analisa imagens anexadas)</span>
+        {% if ativos.visao %}<span style="color:var(--ok)">● local</span>
+        {% elif ativos.visao_externa %}<span style="color:var(--ok)">● via API externa</span>
+        {% else %}<span style="color:var(--suave)">○ módulo 👁 Multimídia</span>{% endif %}
+        {% if ativos.difusores %} · 🎨 {{ ativos.difusores | length }} difusor(es){% endif %}
       </div>
     </div>
     <div class="kpi">
-      <div class="rotulo">🎮 VRAM em uso</div>
+      <div class="rotulo">🎮 VRAM</div>
       <div class="valor">{{ motor.vram_mi if motor.vram_mi is not none else "—" }}<small style="font-size:.6em; color:var(--suave);"> MiB</small></div>
-      <div class="sub">
-        {% if motor.agente is sameas true %}via agente do host (:8010)
-        {% elif motor.agente %}⚠️ {{ motor.agente }}
-        {% else %}leitura local{% endif %}
-      </div>
+      <div class="sub">{% if motor.agente is sameas true %}via agente (:8010)
+        {% elif motor.agente %}⚠️ {{ motor.agente }}{% else %}leitura local{% endif %}</div>
     </div>
   </div>
-  <div style="margin-top:.7rem; display:flex; gap:.6rem; flex-wrap:wrap;">
-    <button hx-post="/api/llm/ligar" hx-swap="none" hx-confirm="subir o llama-server do chat (LLM_MODEL do .env)?">🧠 ligar chat</button>
-    <button hx-post="/api/llm/desligar" hx-swap="none" hx-confirm="derrubar o chat e TRAVAR a religação automática?">⏸️ desligar chat</button>
-    <button hx-post="/api/embed/ligar" hx-swap="none">🧬 religar embedding</button>
-    <button hx-post="/api/vl/ligar" hx-swap="none">🖼️ subir multimodal</button>
-    <button hx-post="/api/vl/desligar" hx-swap="none">🖼️ derrubar multimodal</button>
+
+  {# provedores CADASTRADOS: chips resumidos (o detalhe por categoria vive no
+     chat/cadastro — aqui é o retrato do que existe) #}
+  {% if provedores_externos %}
+  <div style="display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.7rem;">
+    {% for p in provedores_externos %}
+    <span class="chip-prompt" title="modelos no seletor do chat (grupo 🌐 {{ p.nome }})">
+      🌐 {{ p.nome }}{% if p.n_modelos %} <span class="mini">· {{ p.n_modelos }} modelo(s)</span>{% endif %}</span>
+    {% endfor %}
   </div>
+  {% endif %}
+
+  {# manutenção: ações RARAS de GPU fora do caminho (OOUX: níveis) #}
+  <details style="margin-top:.8rem;">
+    <summary class="mini" style="cursor:pointer;">🔧 manutenção da GPU
+      (ligar/desligar servidores)</summary>
+    <div style="display:flex; gap:.6rem; flex-wrap:wrap; margin-top:.5rem;">
+      <button hx-post="/api/llm/ligar" hx-swap="none" hx-confirm="subir o llama-server do chat (LLM_MODEL do .env)?">🧠 ligar chat</button>
+      <button hx-post="/api/llm/desligar" hx-swap="none" hx-confirm="derrubar o chat e TRAVAR a religação automática?">⏸️ desligar chat</button>
+      <button hx-post="/api/embed/ligar" hx-swap="none">🧬 religar embedding</button>
+      <button hx-post="/api/vl/ligar" hx-swap="none">🖼️ subir visão</button>
+      <button hx-post="/api/vl/desligar" hx-swap="none">🖼️ derrubar visão</button>
+    </div>
+  </details>
 </section>
 
+{# ═══ OBJETO 2: PROVEDORES CLOUD — cadastro e estado ═══ ═══ ═══ ═══ ═══ ══ #}
 <section class="cartao">
-  <h2>LLMs — local + provedores</h2>
-  <p class="mini" style="margin-top:-.4rem;">escolha ONDE a conversa roda:
-    local usa o llama-server (URL abaixo); provedores externos mostram os
-    modelos da própria API — chaves entram nos campos <b>Provedor …</b> do
-    form (salvas no .env, mascaradas).</p>
-  <div style="display:flex; gap:.6rem; align-items:center; flex-wrap:wrap;">
-    <select id="sel-llm-onde" onchange="llmOndeMudou(this)" style="min-width:16rem;">
-      <option value="local">💻 local (llama-server · {{ ativos.chat or "desligado" }})</option>
-      {% for p in provedores_externos %}
-      <option value="{{ p.id }}">🌐 {{ p.nome }}</option>
-      {% endfor %}
-    </select>
-    <span id="llm-onde-info" class="mini"></span>
-  </div>
-  <div id="llm-onde-modelos" style="margin-top:.5rem; display:flex; gap:.4rem; flex-wrap:wrap;"></div>
-  <script>
-    async function llmOndeMudou(sel) {
-      const info = document.getElementById("llm-onde-info");
-      const box = document.getElementById("llm-onde-modelos");
-      if (sel.value === "local") {
-        info.textContent = "a URL/modelo locais estão nos campos LLM_BASE_URL / LLM_MODEL do form abaixo";
-        box.innerHTML = ""; return;
-      }
-      info.textContent = "modelos reais da API — por CATEGORIA (👁 = entende imagens; passe o mouse para o que serve):";
-      box.innerHTML = "<span class='mini'>carregando…</span>";
-      try {
-        const r = await fetch("/api/provedores");
-        const provs = (await r.json()).provedores || [];
-        const p = provs.find(x => x.id === sel.value);
-        const fmt = n => n >= 1000 ? Math.round(n / 1000) + "k" : n;
-        const CAT_EMOJI = {visao: "👁", programacao: "💻", raciocinio: "🧠",
-                           conversa: "💬", imagem: "🎨", audio: "🔊", embed: "🧲"};
-        const ORD = ["visao", "programacao", "raciocinio", "conversa",
-                     "imagem", "audio", "embed"];
-        const porCat = {};
-        (p?.modelos || []).forEach(m => {
-          const c = m.cat || "conversa";
-          (porCat[c] = porCat[c] || []).push(m);
-        });
-        let html = "";
-        ORD.filter(c => porCat[c]).forEach(c => {
-          html += "<p class='mini' style='margin:.5rem 0 .2rem;'><b>"
-                + CAT_EMOJI[c] + " " + c.replace("programacao", "programação")
-                                         .replace("raciocinio", "raciocínio")
-                + "</b> <span style='opacity:.65;'>— " + (porCat[c][0].uso || "") + "</span></p>";
-          html += porCat[c].map(m =>
-            "<span class='chip-prompt' title='" + ((m.info || m.uso || "")
-              + (m.ctx ? " · ctx " + fmt(m.ctx) : "")) + "'>"
-            + CAT_EMOJI[c] + " " + m.nome
-            + (m.ctx ? " <span class='mini'>· " + fmt(m.ctx) + "</span>" : "")
-            + "</span>").join("");
-        });
-        box.innerHTML = html
-          || "<span class='mini'>nenhum modelo listado — confira a chave/URL</span>";
-      } catch { box.innerHTML = "<span class='mini'>indisponível agora</span>"; }
-    }
-    // ☁️ cadastro em 1 CLIQUE: card do provedor conhecido preenche o form
-    function usarProv(id, nome, url) {
-      const f = document.getElementById("form-prov");
-      f.pid.value = id; f.pnome.value = nome; f.purl.value = url;
-      f.pkey.focus();
-      document.getElementById("prov-res").textContent =
-        "preenchido — cole a chave da API e clique em cadastrar";
-    }
-    // ☁️ CADASTRO de provedor cloud — grava no .env na hora e os modelos
-    // da própria API entram no seletor do chat (grupo 🌐)
-    async function cadastrarProv(f) {
-      const res = document.getElementById("prov-res");
-      res.textContent = "cadastrando e consultando a API…";
-      try {
-        const r = await fetch("/api/provedores/cadastrar", {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({
-            id: f.pid.value, nome: f.pnome.value,
-            base_url: f.purl.value, api_key: f.pkey.value,
-            modelos: f.pmodelos.value})
-        });
-        const d = await r.json();
-        if (!r.ok) { res.textContent = "⚠️ " + (d.detail || "erro"); return; }
-        const n = (d.modelos || []).length;
-        res.textContent = "✅ " + d.id + " cadastrado — " + n + " modelo(s): "
-          + (d.modelos || []).map(m => m.nome).slice(0, 8).join(", ")
-          + ((d.modelos || []).length > 8 ? "…" : "") + ". " + d.dica;
-        setTimeout(() => location.reload(), 2600);
-      } catch (e) { res.textContent = "⚠️ " + e; }
-      return false;
-    }
-  </script>
-</section>
-
-<section class="cartao">
-  <h2>☁️ Cadastrar provedor cloud</h2>
-  <p class="mini" style="margin-top:-.4rem;">qualquer API OpenAI-compatible —
-    os <b>principais</b> abaixo em 1 clique (falta só a chave); os modelos e
-    as informações deles (janela de contexto, descrição/preço quando a API
-    entrega) são lidos AUTOMATICAMENTE da própria API. A chave vai para o
-    .env (mascarada) e o grupo 🌐 entra no seletor do chat na hora.</p>
+  <h2>☁️ Provedores cloud</h2>
+  <p class="mini" style="margin-top:-.4rem;">APIs OpenAI-compatible — os
+    <b>principais</b> em 1 clique (falta só a chave). Modelos e informações
+    (contexto, descrição/preço quando a API entrega) são lidos
+    automaticamente; a chave vai para o .env mascarada e o grupo 🌐 entra no
+    seletor do chat na hora.</p>
   <div style="display:flex; gap:.4rem; flex-wrap:wrap; margin:.4rem 0 .8rem;">
     {% for c in prov_conhecidos %}
     <button type="button" class="chip-prompt" style="cursor:pointer;"
@@ -194,8 +117,9 @@
   <p id="prov-res" class="mini" style="margin:.5rem 0 0;"></p>
 </section>
 
+{# ═══ OBJETO 3: SERVIÇOS — infraestrutura ═══ ═══ ═══ ═══ ═══ ═══ ═══ ═══ ═ #}
 <section class="cartao">
-  <h2>Serviços</h2>
+  <h2>🔌 Serviços</h2>
   <table>
     <thead><tr><th>serviço</th><th>estado</th><th>detalhe</th></tr></thead>
     <tbody>
@@ -208,13 +132,16 @@
       {% endfor %}
     </tbody>
   </table>
-  <div style="margin-top:.7rem; display:flex; gap:.6rem; flex-wrap:wrap;">
+  <div style="margin-top:.7rem;">
     <button hx-post="/hx/parar-tudo" hx-confirm="parar TUDO (jobs + motores de GPU)?">⏹ parar tudo</button>
   </div>
 </section>
 
+{# ═══ OBJETO 4: CONFIGURAÇÕES — .env ═══ ═══ ═══ ═══ ═══ ═══ ═══ ═══ ═══ ══ #}
 <section class="cartao">
-  <h2>Configurações (.env — aplica na hora, sem reiniciar)</h2>
+  <h2>⚙️ Configurações (.env)</h2>
+  <p class="mini" style="margin-top:-.4rem;">aplica na hora, sem reiniciar —
+    segredo definido fica mascarado; vazio mantém o atual.</p>
   <form hx-post="/hx/settings" hx-swap="none">
     {% for grupo, campos in grupos_cfg.items() %}
     <h3 class="mini" style="margin:.9rem 0 .3rem; text-transform:uppercase; letter-spacing:.04em;">{{ grupo }}</h3>
@@ -242,14 +169,13 @@
     {% endfor %}
     <div style="margin-top:.7rem; display:flex; gap:.6rem; align-items:center;">
       <button class="primario" type="submit" id="btn-salvar-cfg">salvar</button>
-      <span class="mini" id="cfg-feedback">🔒 segredo definido aparece mascarado — vazio mantém o atual</span>
+      <span class="mini" id="cfg-feedback"></span>
     </div>
   </form>
   <script>
-    /* UX DO SALVAR (pedido do dono — "nada aconteceu"): estado no botão +
-       TOAST de sucesso/erro. O endpoint responde redirect+HX-Refresh no
-       sucesso (a página recarrega com os valores aplicados) e 422 JSON
-       quando um tipo é inválido — o toast mostra o detalhe SEM recarregar. */
+    /* UX DO SALVAR: estado no botão + TOAST de sucesso/erro (endpoint
+       responde redirect+HX-Refresh no sucesso; 422 JSON mostra o detalhe
+       SEM recarregar). */
     (function () {
       const form = document.querySelector('form[hx-post="/hx/settings"]');
       if (!form) return;
@@ -265,7 +191,7 @@
         toastEl.textContent = msg;
         toastEl.className = "mostrar " + (tipo || "ok");
         clearTimeout(toast._t);
-        toast._t = setTimeout(() => (toastEl.className = ""), 4200);
+        toastEl._t = setTimeout(() => (toastEl.className = ""), 4200);
       };
       form.addEventListener("htmx:beforeRequest", () => {
         btn.disabled = true; btn.textContent = "salvando…"; fb.textContent = "…";
@@ -285,6 +211,37 @@
         toast("⚠️ " + detalhe, "erro");
       });
     })();
+    // ☁️ cadastro em 1 CLIQUE: card do provedor conhecido preenche o form
+    function usarProv(id, nome, url) {
+      const f = document.getElementById("form-prov");
+      f.pid.value = id; f.pnome.value = nome; f.purl.value = url;
+      f.pkey.focus();
+      document.getElementById("prov-res").textContent =
+        "preenchido — cole a chave da API e clique em cadastrar";
+    }
+    // ☁️ CADASTRO: grava no .env na hora e devolve os modelos da própria API
+    async function cadastrarProv(f) {
+      const res = document.getElementById("prov-res");
+      res.textContent = "cadastrando e consultando a API…";
+      try {
+        const r = await fetch("/api/provedores/cadastrar", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            id: f.pid.value, nome: f.pnome.value,
+            base_url: f.purl.value, api_key: f.pkey.value,
+            modelos: f.pmodelos.value})
+        });
+        const d = await r.json();
+        if (!r.ok) { res.textContent = "⚠️ " + (d.detail || "erro"); return; }
+        const n = (d.modelos || []).length;
+        res.textContent = "✅ " + d.id + " cadastrado — " + n + " modelo(s): "
+          + (d.modelos || []).map(m => m.nome).slice(0, 8).join(", ")
+          + ((d.modelos || []).length > 8 ? "…" : "") + ". " + d.dica;
+        setTimeout(() => location.reload(), 2600);
+      } catch (e) { res.textContent = "⚠️ " + e; }
+      return false;
+    }
   </script>
 </section>
 </div>

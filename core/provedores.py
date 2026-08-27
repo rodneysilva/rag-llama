@@ -52,31 +52,40 @@ _SUGESTOES = {
 }
 
 # ☁️ PROVEDORES PRINCIPAIS (catálogo p/ o cadastro em 1 clique — falta SÓ a
-# chave; "zai coding plan" é o plano de API da Z.AI, mesmo endpoint GLM)
+# chave; "zai coding plan" é o plano de API da Z.AI, mesmo endpoint GLM).
+# `visao` = multimodais TÍPICOS da casa — aparecem no módulo Multimídia
+# mesmos SEM cadastro (marcados 🔑 requer chave) para o dono ver o que tem.
 CONHECIDOS = {
     "zai": {"nome": "Z.AI Coding Plan (GLM)",
             "base_url": "https://api.z.ai/api/paas/v4",
-            "site": "z.ai", "dica": "glm-4.6 · glm-4.5 · glm-4.5v (plano coding)"},
+            "site": "z.ai", "dica": "glm-4.6 · glm-4.5 · glm-4.5v (plano coding)",
+            "visao": ["glm-4.5v", "glm-v5-turbo", "glm-4.6v"]},
     "openai": {"nome": "ChatGPT / OpenAI",
                "base_url": "https://api.openai.com/v1",
-               "site": "platform.openai.com", "dica": "gpt-5 · gpt-5-mini · o3"},
+               "site": "platform.openai.com", "dica": "gpt-5 · gpt-5-mini · o3",
+               "visao": ["gpt-5", "gpt-4o", "o3"]},
     "anthropic": {"nome": "Claude / Anthropic",
                   "base_url": "https://api.anthropic.com/v1",
                   "site": "console.anthropic.com",
-                  "dica": "claude-sonnet-4-5 · claude-opus-4-1"},
+                  "dica": "claude-sonnet-4-5 · claude-opus-4-1",
+                  "visao": ["claude-sonnet-4-5", "claude-opus-4-1"]},
     "deepseek": {"nome": "DeepSeek",
                  "base_url": "https://api.deepseek.com/v1",
                  "site": "platform.deepseek.com", "dica": "deepseek-chat · reasoner"},
     "openrouter": {"nome": "OpenRouter (vários)",
                    "base_url": "https://openrouter.ai/api/v1",
                    "site": "openrouter.ai",
-                   "dica": "1 chave, modelos de TODAS as casas (com preço)"},
+                   "dica": "1 chave, modelos de TODAS as casas (com preço)",
+                   "visao": ["anthropic/claude-sonnet-4.5",
+                             "google/gemini-2.5-pro"]},
     "gemini": {"nome": "Google Gemini",
                "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
-               "site": "aistudio.google.com", "dica": "gemini-2.5-pro · flash"},
+               "site": "aistudio.google.com", "dica": "gemini-2.5-pro · flash",
+               "visao": ["gemini-2.5-pro", "gemini-2.5-flash"]},
     "grok": {"nome": "xAI Grok",
              "base_url": "https://api.x.ai/v1",
-             "site": "console.x.ai", "dica": "grok-4 · grok-code-fast"},
+             "site": "console.x.ai", "dica": "grok-4 · grok-code-fast",
+             "visao": ["grok-4"]},
     "groq": {"nome": "Groq (rápidos)",
              "base_url": "https://api.groq.com/openai/v1",
              "site": "console.groq.com", "dica": "llama/openai na GPU deles"},

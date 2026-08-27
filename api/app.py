@@ -1935,11 +1935,11 @@ def pagina_sistema(request: Request):
     # 🧠 ATIVOS pela FONTE ÚNICA (`modelos_ativos`): o cabeçalho mostra o
     # que está SERVINDO agora (chat/visão/difusores) — nunca o .env velho.
     ctx["ativos"] = modelos_ativos()
-    # 🌐 provedores externos p/ a seção simples de LLMs (Sistema)
+    # 🌐 provedores externos p/ o retrato do Motor (Sistema): nome + contagem
     try:
         from core import provedores as _prov
         ctx["provedores_externos"] = [
-            {"id": p["id"], "nome": p["nome"]}
+            {"id": p["id"], "nome": p["nome"], "n_modelos": len(p["modelos"])}
             for p in _prov.listar() if p["externo"]]
         ctx["prov_conhecidos"] = [{"id": k, **v} for k, v in
                                   _prov.CONHECIDOS.items()]
@@ -3836,6 +3836,14 @@ def midia_analisar(body: MidiaAnalisarIn, request: Request):
                        etapa="análise")
             try:
                 modelo = payload["modelo"]
+                if ":" in modelo:
+                    from core import provedores as _prov
+                    pid, _ = modelo.split(":", 1)
+                    if not _prov.resolver(pid, modelo.split(":", 1)[1]):
+                        raise RuntimeError(
+                            f"provedor {pid.upper()} não configurado — cole a "
+                            "chave dele em Sistema → ☁️ Cadastrar provedor "
+                            "cloud e tente de novo")
                 if not modelo and config.EM_CONTAINER:
                     # LOCAL em CONTAINER: a GPU está na ESTAÇÃO — a imagem
                     # (b64, o upload vive no volume DA VPS) viaja ao AGENTE
@@ -3873,23 +3881,52 @@ def midia_analisar(body: MidiaAnalisarIn, request: Request):
 
 @app.get("/midia")
 def midia_pagina(request: Request):
-    """👁 MÓDULO MULTIMÍDIA (pedido do dono): analisar imagens com qualquer
-    modelo multimodal — o 👁 local da GPU ou os 👁 dos provedores cloud
-    (glm-4.5v, gpt-5, claude, gemini…) categorizados no cadastro."""
+    """👁 MÓDULO MULTIMÍDIA (pedido do dono): analisar imagens com QUALQUER
+    multimodal — TODOS listados (pedido: 'aparecer todos os modelos que
+    tenho, tanto os locais quanto os cloud'): GGUFs de visão da estação,
+    👁 dos provedores CADASTRADOS e 👁 típicos dos conhecidos 🔑 (que
+    ainda não têm chave — o job orienta o cadastro ao usar)."""
     ctx = _paginas_ctx(request, "midia")
-    visao = [{"id": "", "nome": "👁 local (Qwen2.5-VL · GPU da estação)",
-              "ctx": None, "info": "pausa o chat durante a análise e restaura"}]
+    grupos = [{"rotulo": "🖥 local (GPU da estação)", "modelos": []},
+              {"rotulo": "🌐 provedores cadastrados", "modelos": []},
+              {"rotulo": "🔑 conhecidos — requer cadastro/chave", "modelos": []}]
+    # 1) locais: TODOS os GGUFs de visão da estação (modelos.listar)
+    try:
+        for m in modelos.listar():
+            if m.get("categoria") == "visao":
+                grupos[0]["modelos"].append({
+                    "id": "", "nome": m["nome"],
+                    "info": "analisa na GPU local (pausa o chat e restaura)"})
+    except Exception:
+        pass
+    if not grupos[0]["modelos"]:
+        grupos[0]["modelos"].append({"id": "", "nome": "Qwen2.5-VL (local)",
+                                     "info": "GPU da estação"})
+    # 2) cloud CADASTRADOS (cat=visao) · 3) conhecidos sem cadastro (🔑)
+    cadastrados = set()
     try:
         from core import provedores as _prov
         for p in _prov.listar():
+            cadastrados.add(p["id"])
             for m in p.get("modelos", []):
                 if m.get("cat") == "visao":
-                    visao.append({"id": f"{p['id']}:{m['nome']}",
-                                  "nome": f"{m['nome']} · {p['nome']}",
-                                  "ctx": m.get("ctx"), "info": m.get("info", "")})
+                    grupos[1]["modelos"].append({
+                        "id": f"{p['id']}:{m['nome']}",
+                        "nome": f"{m['nome']} · {p['nome']}",
+                        "info": (m.get("uso") or m.get("info") or "")
+                                + (f" · ctx {m['ctx'] // 1000}k"
+                                   if m.get("ctx") else "")})
+        for pid, c in _prov.CONHECIDOS.items():
+            if pid in cadastrados:
+                continue   # já cadastrado: os modelos VEM da API dele
+            for nome in c.get("visao", []):
+                grupos[2]["modelos"].append({
+                    "id": f"{pid}:{nome}", "nome": f"{nome} · {c['nome']}",
+                    "info": f"requer chave — cadastre o provedor {pid.upper()} "
+                            f"no Sistema ({c['site']})"})
     except Exception:
         pass
-    ctx["modelos_visao"] = visao
+    ctx["grupos_visao"] = [g for g in grupos if g["modelos"]]
     return TEMPLATES.TemplateResponse(request, "midia.html", ctx)
 
 
