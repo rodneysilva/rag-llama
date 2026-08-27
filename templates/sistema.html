@@ -100,7 +100,63 @@
           || "<span class='mini'>nenhum modelo listado — confira a chave/URL</span>";
       } catch { box.innerHTML = "<span class='mini'>indisponível agora</span>"; }
     }
+    // ☁️ CADASTRO de provedor cloud — grava no .env na hora e os modelos
+    // da própria API entram no seletor do chat (grupo 🌐)
+    async function cadastrarProv(f) {
+      const res = document.getElementById("prov-res");
+      res.textContent = "cadastrando e consultando a API…";
+      try {
+        const r = await fetch("/api/provedores/cadastrar", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            id: f.pid.value, nome: f.pnome.value,
+            base_url: f.purl.value, api_key: f.pkey.value,
+            modelos: f.pmodelos.value})
+        });
+        const d = await r.json();
+        if (!r.ok) { res.textContent = "⚠️ " + (d.detail || "erro"); return; }
+        const n = (d.modelos || []).length;
+        res.textContent = "✅ " + d.id + " cadastrado — " + n + " modelo(s): "
+          + (d.modelos || []).map(m => m.nome).slice(0, 8).join(", ")
+          + ((d.modelos || []).length > 8 ? "…" : "") + ". " + d.dica;
+        setTimeout(() => location.reload(), 2600);
+      } catch (e) { res.textContent = "⚠️ " + e; }
+      return false;
+    }
   </script>
+</section>
+
+<section class="cartao">
+  <h2>☁️ Cadastrar provedor cloud</h2>
+  <p class="mini" style="margin-top:-.4rem;">qualquer API OpenAI-compatible
+    (Z.AI/GLM, DeepSeek, OpenAI, Anthropic, OpenRouter, Groq…) — a chave vai
+    para o .env (mascarada) e os modelos são lidos DA PRÓPRIA API
+    (GET /models); o grupo 🌐 aparece no seletor do chat na hora.</p>
+  <form onsubmit="cadastrarProv(this); return false;"
+        style="display:grid; gap:.5rem; grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));">
+    <div><label>id (slug)</label>
+      <input name="pid" required placeholder="zai" maxlength="12" style="text-transform:uppercase;"></div>
+    <div><label>nome (rótulo)</label>
+      <input name="pnome" placeholder="Z.AI"></div>
+    <div style="grid-column:1/-1;"><label>base URL da API</label>
+      <input name="purl" required list="prov-presets" placeholder="https://api.z.ai/api/paas/v4">
+      <datalist id="prov-presets">
+        <option value="https://api.z.ai/api/paas/v4">Z.AI — GLM (internacional)</option>
+        <option value="https://open.bigmodel.cn/api/paas/v4">Zhipu bigmodel — GLM (China)</option>
+        <option value="https://api.deepseek.com/v1">DeepSeek</option>
+        <option value="https://api.openai.com/v1">OpenAI</option>
+        <option value="https://api.anthropic.com/v1">Anthropic</option>
+        <option value="https://openrouter.ai/api/v1">OpenRouter</option>
+        <option value="https://api.groq.com/openai/v1">Groq</option>
+      </datalist></div>
+    <div><label>chave da API 🔒</label>
+      <input name="pkey" type="password" autocomplete="off" placeholder="sk-…"></div>
+    <div style="grid-column:1/-1;"><label>modelos (opcional — manual, vírgula)</label>
+      <input name="pmodelos" placeholder="glm-4.6, glm-4.5-air (só se a API não listar)"></div>
+    <div style="grid-column:1/-1;"><button type="submit">☁️ cadastrar provedor</button></div>
+  </form>
+  <p id="prov-res" class="mini" style="margin:.5rem 0 0;"></p>
 </section>
 
 <section class="cartao">

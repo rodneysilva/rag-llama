@@ -5026,6 +5026,49 @@ def api_provedores(force: bool = False):
     return {"provedores": provedores.listar(force=force)}
 
 
+class ProvedorIn(BaseModel):
+    """Cadastro de provedor cloud PELA UI (pedido do dono: 'preciso ter um
+    cadastro de provedores cloud') — grava PROV_<ID>_* no .env na hora."""
+    id: str
+    base_url: str
+    nome: str = ""
+    api_key: str = ""
+    modelos: str = ""   # opcional: lista manual separada por vírgula
+
+
+@app.post("/api/provedores/cadastrar")
+def api_provedores_cadastrar(body: ProvedorIn, request: Request):
+    """Cadastra (ou SOBRESCREVE) um provedor OpenAI-compatible: grava
+    PROV_<ID>_BASE_URL/_API_KEY/_NOME(/_MODELOS) no .env, recarrega a
+    config e devolve o catálogo JÁ com os modelos reais da API (GET
+    /models com a chave — o grupo 🌐 aparece no seletor do chat)."""
+    _exigir_admin(request)
+    pid = re.sub(r"[^A-Z0-9]", "", (body.id or "").upper().strip())
+    base = (body.base_url or "").strip().rstrip("/")
+    if not (2 <= len(pid) <= 12):
+        raise HTTPException(422, "id: 2 a 12 letras/números (ex.: zai, glm, deepseek)")
+    if not base.startswith(("http://", "https://")):
+        raise HTTPException(422, "base_url deve começar com http(s):// "
+                            "(ex.: https://api.z.ai/api/paas/v4)")
+    from core import provedores
+    config.set_env_inplace(f"PROV_{pid}_BASE_URL", base)
+    if (body.api_key or "").strip():
+        config.set_env_inplace(f"PROV_{pid}_API_KEY",
+                               body.api_key.strip())
+    if (body.nome or "").strip():
+        config.set_env_inplace(f"PROV_{pid}_NOME", body.nome.strip())
+    if (body.modelos or "").strip():
+        config.set_env_inplace(f"PROV_{pid}_MODELOS", body.modelos.strip())
+    config.reload()
+    cat = provedores.listar(force=True)
+    meu = next((p for p in cat if p["id"] == pid), None)
+    return {"ok": True, "id": pid, "modelos": (meu or {}).get("modelos", []),
+            "dica": ("modelos carregados da API do provedor" if (meu or {})
+                     .get("modelos") else
+                     "nenhum modelo veio da API — confira a chave; ou preencha "
+                     "'modelos' com a lista manual separada por vírgula")}
+
+
 @app.post("/api/query")
 def query(body: QueryIn):
     """Consulta: "rag" responde só com a base; "hibrido" base + modelo;
