@@ -5010,7 +5010,7 @@ def criar_tarefa(body: TarefaIn, request: Request):
         threading.Thread(target=_t2i_ext, daemon=True,
                          name=f"t2i-ext-{tid}").start()
         return {"tarefa": tid, "modalidade": "t2i",
-                "rotulo": f"gerar imagem (externo {modelo})",
+                "rotulo": f"gerar imagem (externo {_modelo})",
                 "estimativa_s": 30, "etapas": ["gerar"],
                 "status": f"/api/tarefas/status/{tid}"}
     # 👁 i2t com MULTIMODAL EXTERNO (openai:gpt-4o…): roda NA PRÓRIA API —
