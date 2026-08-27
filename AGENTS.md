@@ -1505,7 +1505,21 @@ operador) vive em AGENTS-historico.md — arquivo PRIVADO, fora do git.
   antigo travava (CSS manda). (5) **nova sessão** via `HX-Redirect`
   (com `hx-swap=none` o `<script>` inline NÃO roda). (6) **home do
   flask sandbox com ROTAS CLICÁVEIS** (`<a href='{r.rule}'>`, métodos
-  != GET marcados — "só mostra a rota, não a aplicação"). ⚠️ PS 5.1
-  `Add-Content` grava ANSI — CSS regravado utf-8 via python. E2E
-  `Temp\kilo\e2e_midia3.py` (fullscreen 60vh, mobile 1 col, guia 22
-  chips, ✨, ordem 👤→🤖).
+   != GET marcados — "só mostra a rota, não a aplicação"). ⚠️ PS 5.1
+   `Add-Content` grava ANSI — CSS regravado utf-8 via python. E2E
+   `Temp\kilo\e2e_midia3.py` (fullscreen 60vh, mobile 1 col, guia 22
+   chips, ✨, ordem 👤→🤖).
+
+- **🧩 BLOCO DE SESSÕES PADRONIZADO (27/08, noite 4)**: pedido do dono
+  ("padronizar multimídia × chat — prefiro o padrão multimídia"). MESMO
+  visual nos dois: botão **primário cheio** no topo (➕ nova
+  conversa/sessão), itens `conv-item` com `conv-titulo` truncado +
+  `conv-contagem` ("N mensagem(ns)" / "N envio(s)" + "⏳ em curso"),
+  largura única **13,5rem**. Chat: `.conv-nova` agora É `.primario`,
+  **ALÇA de resize removida** (div + JS do arrasto + CSS), slug fora;
+  extras funcionais preservados (sticky, drawer mobile, ⏳ apagando com
+  auto-polling — `list_sessions` ganhou `job_ativo`). Multimídia:
+  itens viram `conv-item` com **✕ apagar** (`DELETE
+  /api/midia/sessao/{id}`, owner conferido; confirma e recarrega).
+  E2E `Temp\kilo\e2e_padrao.py` (fundo do botão IDÊNTICO
+  rgb(15,98,254) nos dois, contagens, sem alça, apagar 6→5).
