@@ -1219,6 +1219,26 @@ da API**.
   finos). ⚠️ diagnóstico visual SEM screenshot (modelo do ambiente não
   lê imagem): DOM por Playwright (bounding boxes, options contadas,
   dataset lido) resolve. E2E `Temp\kilo\e2e_fixes.py`.
+- **🌗 DARKMODE + MODO integrado + i2t EM BOLHA (27/08, manhã 9)**:
+  (1) **inputs BRANCOS no dark**: o CSS estiliza por `input[type=text]` —
+  `pid/purl/pmodelos` estavam SEM `type` (default do browser ≠ seletor
+  CSS) → fundo branco e largura quebrada; sempre declarar `type` (PS
+  5.1 `Set-Content -Encoding UTF8` POE BOM — remover). (2) **legenda
+  solta "análise direta"**: o hint `<span>` fora do fluxo virou o
+  PRÓPRIO select modo assumindo "👁 análise de imagem" no i2t
+  (dataset.original guarda/restaura as options — zero elemento solto).
+  (3) **i2t como RESPOSTA DE CHAT**: era card de TAREFA cru ("✓
+  concluído · análise:…" — "por que o chat perdeu o layout?") — novo
+  branch cria job no REGISTRY DO CHAT (kind "i2t") com a análise como
+  `answer` (mesmo formato do _processar_query) → partial inicial
+  `_chat_inicio` + polling → MENSAGEM em bolha com raciocínio.
+  ⚠️ 3 BUGS do caminho: `resp_stub` UnboundLocal (a variável nasce no
+  fluxo de TEXTO — cookie vem do `_stub_sid` criado antes do corpo);
+  closure capturava o PARÂMETRO `midia: str` do form (sombreia o MÓDULO
+  — import local `from core import midia as _midia`); modelo local
+  (value "qwen2.5-vl-7b", não vazio) caía no caminho direto no
+  container — `EM_CONTAINER and ":" not in modelo` → AGENTE. E2E
+  `Temp\kilo\e2e_layout.py` (Playwright dark: `emulate_media`).
 - **📝 CHAT SÓ-TEXTO (27/08, manhã 7)**: pedido do dono ("geração de
   imagem e vídeo fica só em Multimídia, o retorno da tela do chat é
   texto"). Composer perdeu os TIPOS de geração (imagem/video/gif/i2v/
