@@ -522,6 +522,25 @@ def _mmproj() -> str | None:
     return str(cand[0]) if cand else None
 
 
+def _vl_arquivos() -> tuple[str | None, str | None]:
+    """(modelo, mmproj) de visão por GLOB TOLERANTE em D:\\models\\visao —
+    nome fixo quebrava quando o arquivo real difere (bug real do dono
+    27/08: "eu TENHO o modelo, por que não subiu?" — o agente da estação
+    pode estar com caminho velho e exists() dava False → 'ausente')."""
+    pasta = Path(VL_GGUF).parent
+    if not pasta.is_dir():
+        return None, None
+    modelo = None
+    if Path(VL_GGUF).exists():
+        modelo = VL_GGUF
+    else:
+        cand = sorted(pasta.glob("*[Vv][Ll]**.gguf"))
+        cand = [c for c in cand if "mmproj" not in c.name.lower()]
+        modelo = str(cand[0]) if cand else None
+    mmproj = _mmproj()
+    return modelo, mmproj
+
+
 def _subir_vl(esperar: bool = True) -> bool:
     """Sobe a visão (Qwen2.5-VL + mmproj) na :8082 para legendar/ler mídia.
 
@@ -535,10 +554,13 @@ def _subir_vl(esperar: bool = True) -> bool:
         raise RuntimeError("multimodal desligado manualmente — religue em "
                            "Sistema → '🖼️ subir multimodal' (análises de "
                            "imagem precisam dele)")
-    mmproj = _mmproj()
-    if not (Path(VL_GGUF).exists() and mmproj):
-        raise RuntimeError("modelo de visão ausente: baixe Qwen2.5-VL-7B + mmproj "
-                           "(tests_manual/baixar_multimodal.py)")
+    modelo, mmproj = _vl_arquivos()
+    if not (modelo and mmproj):
+        pasta = Path(VL_GGUF).parent
+        raise RuntimeError(
+            "modelo de visão ausente: coloque o Qwen2.5-VL GGUF + mmproj em "
+            f"{pasta} (tests_manual/baixar_multimodal.py) — encontrei: "
+            f"modelo={modelo}, mmproj={mmproj}")
     alias = servido(VL_PORTA)
     if alias:
         if "vl" in alias.lower():
@@ -549,7 +571,7 @@ def _subir_vl(esperar: bool = True) -> bool:
     LOGS.mkdir(exist_ok=True)
     log = open(LOGS / "llama-vl.log", "ab")
     subprocess.Popen(
-        [config.LLAMA_BIN, "-m", VL_GGUF, "--mmproj", mmproj, "-ngl", "99", "-c", "8192",
+        [config.LLAMA_BIN, "-m", modelo, "--mmproj", mmproj, "-ngl", "99", "-c", "8192",
          "--alias", "qwen2.5-vl-7b", "--host", "127.0.0.1",
          "--port", str(VL_PORTA)],
         stdout=log, stderr=subprocess.STDOUT,

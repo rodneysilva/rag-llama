@@ -4016,6 +4016,7 @@ def midia_enviar(body: MidiaEnviarIn, request: Request):
         jid = payload["job"]
 
         def rodar():
+            t0 = time.time()
             _midia.log(jid, f"{'👁 análise' if payload['tipo'] == 'analise' else '🎨 geração'}"
                            f" · {payload['modelo'] or 'local'}"
                            + (f" · {payload['tipo']}" if payload["tipo"] in ("melhoria", "video") else ""),
@@ -4116,6 +4117,10 @@ def midia_enviar(body: MidiaEnviarIn, request: Request):
                                 jid, msg, **({"etapa": g} if g else {})))
             except Exception as e:
                 erro = str(e)[:400]
+            # ⏱ tempo de retorno em TODOS os resultados (pedido do dono —
+            # chat já mostra; multimídia agora também)
+            if resultado is not None:
+                resultado = {**resultado, "segundos": round(time.time() - t0)}
             # HISTÓRICO: item gravado na sessão em AMBOS os caminhos
             linhas = []
             try:

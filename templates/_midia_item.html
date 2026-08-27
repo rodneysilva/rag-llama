@@ -2,12 +2,13 @@
    dono: "o texto está indo depois da resposta"): bolha do usuário com o
    prompt + anexo PRIMEIRO, raciocínio recolhido, saída formatada depois. #}
 <div class="msg" id="item-{{ it.id }}" style="border:1px solid var(--borda); border-radius:.8rem; padding:.7rem;">
+  {% set r = it.resultado or {} %}
   {# ── 1) BOLHA DO USUÁRIO (o texto do pedido vem PRIMEIRO) ── #}
   <div class="cab-msg" style="display:flex; justify-content:space-between; gap:.5rem; align-items:baseline;">
     <span class="quem">👤 você
       {%- if it.tipo == 'analise' %} · 👁 análise{% elif it.tipo == 'melhoria' %} · 🪄 melhoria (i2i){% elif it.tipo == 'video' %} · 🎬 vídeo{% elif it.tipo == 'gif' %} · 🎞 gif{% else %} · 🎨 imagem{% endif %}
       com {{ it.modelo }}</span>
-    <span class="hora">{{ it.ts }}</span>
+    <span class="hora">{{ it.ts }}{% if r.segundos %} · ⏱ {{ r.segundos }}s{% endif %}</span>
   </div>
   <div class="resposta" style="margin:.35rem 0;">
     {{ it.prompt }}
@@ -29,7 +30,6 @@
   {% endif %}
 
   {# ── 3) SAÍDA FORMATADA (depois da pergunta) ── #}
-  {% set r = it.resultado or {} %}
   {% if r.erro %}
   <div class="rodape">⚠️ {{ r.erro }}</div>
   {% elif it.tipo == 'analise' %}
