@@ -2,293 +2,187 @@
 {% block titulo %}Multimídia — RagAroy{% endblock %}
 {% block classe %}pagina-midia{% endblock %}
 {% block conteudo %}
-<div class="pagina-conteudo">
-  <h1>👁 Multimídia</h1>
+<div class="pagina-conteudo" style="max-width:78rem;">
+<div id="m-dados" data-sessao='{{ m_sessao.id }}'
+     data-job='{{ (m_sessao.job_ativo or None) | tojson }}' hidden></div>
 
+<h1>👁 Multimídia</h1>
+<p class="descricao">conversa única de mídia: cada envio escolhe o modelo —
+  👁 <b>análise</b> de imagem (local ou provedor), 🎨 <b>gerar/melhorar</b>
+  imagem (Flux local — com anexo vira i2i — ou provedor) e 🎬
+  <b>vídeo/gif</b> (Wan local). O histórico fica na sessão; mudou de página?
+  voltou? o envio em curso retoma sozinho.</p>
+
+<div style="display:grid; grid-template-columns:15rem 1fr; gap:1rem; align-items:start;">
+  {# ── sidebar de sessões ── #}
+  <section class="cartao" style="padding:.6rem;">
+    <button class="primario" style="width:100%;" hx-post="/hx/midia/nova" hx-swap="none">&#10133; nova sessão</button>
+    <div id="m-sessoes" class="log" style="margin-top:.6rem; max-height:26rem; overflow:auto;">
+      {% for s in m_sessoes %}
+      <a href="/midia?s={{ s.id }}" class="conv-item{{ ' atual' if s.id == m_sessao.id }}"
+         style="display:block; padding:.45rem .5rem; border-radius:8px; text-decoration:none;">
+        <span class="conv-titulo" style="display:block; font-size:.8rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ s.titulo }}</span>
+        <span class="mini" style="opacity:.65;">{{ s.itens }} envio(s){{ ' · ⏳ em curso' if s.job_ativo }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ── conversa ── #}
   <section class="cartao">
-    <p class="mini" style="margin-top:-.5rem;">suba uma imagem e pergunte
-      qualquer coisa sobre ela — o modelo multimodal escolhido ANALISA e
-      responde. Modelos 👁 locais usam a GPU da estação (o chat pausa e
-      volta sozinho); modelos 👁 de provedores cloud (glm-4.5v, gpt-5,
-      claude, gemini…) rodam na API deles. Ao final, você pode
-      <b>ensinar a base</b> com a análise.</p>
+    <div id="m-conversa" style="max-height:30rem; overflow:auto; display:flex; flex-direction:column; gap:.9rem;">
+      {% if not m_sessao.itens %}
+      <p class="mini" style="opacity:.7;">comece anexando uma imagem e perguntando, ou escolha um gerador e descreva a cena…</p>
+      {% endif %}
+      {% for it in m_sessao.itens %}
+      {% include "_midia_item.html" %}
+      {% endfor %}
+    </div>
 
-    <div style="display:grid; gap:.6rem; grid-template-columns:repeat(auto-fit,minmax(14rem,1fr));">
-      <div style="grid-column:1/-1;">
-        <label>imagem</label>
-        <input type="file" id="mid-arquivo" accept="image/*"
-               onchange="midSubir(this)">
-        <span id="mid-chip" class="chip-ref" hidden></span>
+    {# job em curso (retomado do servidor ao voltar pra página) #}
+    <div id="m-andamento" style="margin-top:.8rem;"></div>
+
+    {# ── composer ÚNICO ── #}
+    <form id="m-form" onsubmit="return mEnviar(event)" style="margin-top:.9rem;
+          display:grid; gap:.5rem; grid-template-columns:1fr;">
+      <div>
+        <input type="file" id="m-arquivo" accept="image/*" hidden onchange="mSubir(this)">
+        <button type="button" class="acao-btn" onclick="document.getElementById('m-arquivo').click()"
+                title="anexo: imagem para ANALISAR (modelo 👁) ou ponto de partida da MELHORIA (Flux i2i)">📎 anexar imagem</button>
+        <span class="chip-ref" id="m-chip" hidden title="clique para remover"></span>
       </div>
-      <div style="grid-column:1/-1;">
-        <label>modelo multimodal — TODOS (local + cloud)</label>
-        <select id="mid-modelo">
-          {% for g in grupos_visao %}
+      <textarea id="m-prompt" rows="2" placeholder="pergunta sobre a imagem anexada, ou prompt da cena a gerar…"></textarea>
+      <div style="display:flex; gap:.5rem; flex-wrap:wrap; align-items:center;">
+        <select id="m-modelo" title="o modelo decide o que acontece com este envio">
+          {% for g in m_grupos %}
           <optgroup label="{{ g.rotulo }}">
-            {% for m in g.modelos %}
-            <option value="{{ m.id }}" title="{{ m.info }}">{{ m.nome }}</option>
-            {% else %}
-            <option value="" disabled title="cadastre um provedor com modelos 👁 (Z.AI, OpenAI, Claude, Gemini…)">
-              — nenhum multimodal cadastrado —</option>
+            {% for mm in g.modelos %}
+            <option value="{{ mm.id }}" title="{{ mm.info }}">{{ mm.nome }}</option>
             {% endfor %}
           </optgroup>
           {% endfor %}
         </select>
-        <p class="mini" id="mid-modelo-info" style="margin:.25rem 0 0; opacity:.75;"></p>
+        <span class="mini" id="m-modelo-info" style="opacity:.7; flex:1; min-width:8rem;"></span>
+        <select id="m-dur" title="duração do vídeo (16 fps)">
+          <option value="2">⏱ 2s</option><option value="3" selected>⏱ 3s</option>
+          <option value="5">⏱ 5s</option><option value="8">⏱ 8s</option>
+        </select>
+        <label class="mini" title="loop de 17 frames a 12 fps"><input type="checkbox" id="m-gif"> 🎞 gif</label>
+        <button class="primario" type="submit" id="m-btn">➤ enviar</button>
       </div>
-      <div style="grid-column:1/-1;">
-        <label>pergunta sobre a imagem</label>
-        <textarea id="mid-pergunta" rows="2" placeholder="o que tem nesta imagem? (vazio = descrição detalhada)"></textarea>
-      </div>
-      <div style="grid-column:1/-1; display:flex; gap:.6rem; flex-wrap:wrap;">
-        <button id="mid-btn" onclick="midAnalisar()" disabled>👁 analisar</button>
-        <button onclick="midEnsinar()" id="mid-ensinar" hidden>📚 ensinar a base com a análise</button>
-      </div>
-    </div>
-
-    <div id="mid-log" class="log" style="margin-top:.8rem;" hidden></div>
-    <div id="mid-resultado" class="cartao" style="margin-top:.8rem;" hidden>
-      <b>análise</b>
-      <div id="mid-texto" style="white-space:pre-wrap; margin-top:.4rem;"></div>
-      <button class="mini" style="margin-top:.5rem; cursor:pointer;" onclick="navigator.clipboard.writeText(document.getElementById('mid-texto').textContent); window.toast&&toast('análise copiada')">copiar</button>
-    </div>
-  </section>
-
-  <section class="cartao">
-    <h2>🎨🎬 Gerar mídia (GPU local)</h2>
-    <div id="gen-dados" data-geracao='{{ geracao | tojson }}'
-         data-geracao-ext='{{ geracao_externa | tojson }}' hidden></div>
-    <p class="mini" style="margin-top:-.4rem;">seus GERADORES da estação —
-      Flux (imagem) e Wan (vídeo/gif). A geração pausa as LLMs enquanto
-      usa a VRAM e devolve tudo sozinho ao terminar (8 GB).</p>
-    <div style="display:grid; gap:.5rem; grid-template-columns:repeat(auto-fit,minmax(10rem,1fr));">
-      <div><label>tipo</label>
-        <select id="gen-tipo" onchange="genTipoMudou()">
-          <option value="t2i">🖼 imagem</option>
-          <option value="t2v">🎬 vídeo</option>
-          <option value="gif">🎞 gif (17 frames)</option>
-        </select></div>
-      <div><label>modelo local</label>
-        <select id="gen-modelo"></select></div>
-      <div id="gen-dur-linha"><label>duração</label>
-        <select id="gen-dur">
-          <option value="2">2 s</option>
-          <option value="3" selected>3 s</option>
-          <option value="5">5 s</option>
-          <option value="8">8 s</option>
-        </select></div>
-      <div style="grid-column:1/-1;"><label>prompt</label>
-        <textarea id="gen-prompt" rows="2" placeholder="descreva a cena (estilo, ambiente, luz, ação)…"></textarea></div>
-      <div style="grid-column:1/-1;"><button id="gen-btn" onclick="midGerar()">✨ gerar</button></div>
-    </div>
-    <div id="gen-log" class="log" style="margin-top:.8rem;" hidden></div>
-    <div id="gen-resultado" style="margin-top:.8rem;" hidden></div>
-  </section>
-
-  <section class="cartao">
-    <h2>também no chat</h2>
-    <p class="mini" style="margin-top:-.4rem;">anexando uma imagem no chat
-      (📎) com um modelo 👁 selecionado a análise entra NA CONVERSA; áudio
-      (🎤) vira texto com o whisper local. Este módulo é o atalho DIRETO
-      para análise e geração avulsas.</p>
+    </form>
   </section>
 </div>
 
+</div>
+
 <script>
-  // dados de geração via data-attribute (jinja NUNCA no JS cru)
-  const GERACAO = JSON.parse(
-    document.getElementById("gen-dados").dataset.geracao || "{}");
-  const GERACAO_EXT = JSON.parse(
-    document.getElementById("gen-dados").dataset.geracaoExt || "[]");
+  // dados via data-attribute (jinja NUNCA no JS cru — o teste de sintaxe
+  // roda node --check no bloco)
+  const DADOS = document.getElementById("m-dados").dataset;
+  const SESSAO = DADOS.sessao;
+  function _jobKey() { return "ragaroy.midiaJob." + SESSAO; }
 
-  function genModelos(tipo) {
-    if (tipo === "t2i")
-      return (GERACAO.imagem || []).concat(GERACAO_EXT || []);
-    return GERACAO.video || [];
+  const selM = document.getElementById("m-modelo");
+  const infoM = document.getElementById("m-modelo-info");
+  function mInfo() {
+    const o = selM.selectedOptions[0];
+    const t = (o && o.parentElement && o.parentElement.label) || "";
+    infoM.textContent = (o && o.title) || "";
+    document.getElementById("m-dur").style.display =
+      t.includes("vídeo") ? "" : "none";
+    document.getElementById("m-gif").parentElement.style.display =
+      t.includes("vídeo") ? "" : "none";
   }
-  function genTipoMudou() {
-    const tipo = document.getElementById("gen-tipo").value;
-    const sel = document.getElementById("gen-modelo");
-    const modelos = genModelos(tipo);
-    sel.innerHTML = modelos.map(m =>
-      `<option value="${m.nome}" title="${m.info || ''}">`
-      + (String(m.nome).includes(":") ? "☁️ " : "")
-      + m.nome + (m.gb ? ` · ${m.gb}GB` : "") + `</option>`).join("")
-      || "<option value='' disabled>— nenhum modelo local de "
-         + (tipo === "t2i" ? "imagem" : "vídeo") + " —</option>";
-    document.getElementById("gen-dur-linha").style.display =
-      (tipo === "t2i") ? "none" : "";
-  }
-  genTipoMudou();
+  selM.addEventListener("change", mInfo); mInfo();
 
-  let _genPoll = null;
-  async function midGerar() {
-    const btn = document.getElementById("gen-btn");
-    const tipo = document.getElementById("gen-tipo").value;
-    const modelo = document.getElementById("gen-modelo").value;
-    const prompt = document.getElementById("gen-prompt").value.trim();
-    if (!modelo || !prompt) {
-      document.getElementById("gen-log").hidden = false;
-      document.getElementById("gen-log").innerHTML =
-        "<span class='mini'>escolha o modelo e escreva o prompt</span>";
-      return;
-    }
-    btn.disabled = true; btn.textContent = "gerando…";
-    document.getElementById("gen-log").hidden = false;
-    document.getElementById("gen-log").innerHTML = "";
-    document.getElementById("gen-resultado").hidden = true;
-    const params = {modelo};   // ⚠️ o gerador viaja em params (o campo
-    // `modelo` do contrato é o de CHAT — guard 409 "modelo divergente")
-    if (tipo === "gif") params.gif = true;
-    else if (tipo === "t2v")
-      params.frames = parseInt(document.getElementById("gen-dur").value) * 16 + 1;
+  let _ref = null;
+  async function mSubir(inp) {
+    const f = inp.files[0]; inp.value = ""; if (!f) return;
+    const chip = document.getElementById("m-chip");
+    chip.hidden = false; chip.textContent = "subindo " + f.name + "…";
     try {
-      const r = await fetch("/api/tarefas", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({modalidade: tipo === "gif" ? "t2v" : tipo,
-                              texto: prompt, params})
-      });
-      const d = await r.json();
-      if (!r.ok) throw (d.detail || "erro ao disparar a tarefa");
-      _genPoll = setInterval(() => genPoll(d.tarefa || d.job), 2000);
-    } catch (e) {
-      document.getElementById("gen-log").innerHTML += "⚠️ " + e + "<br>";
-      btn.disabled = false; btn.textContent = "✨ gerar";
-    }
-  }
-
-  async function genPoll(tid) {
-    try {
-      const r = await fetch("/api/tarefas/status/" + tid);
-      const j = await r.json();
-      document.getElementById("gen-log").innerHTML = (j.lines || [])
-        .map(l => `<span class="mini">${l.ts || ""} ${String(l.msg || l).replace(/</g, "&lt;")}</span>`).join("<br>");
-      if (!j.running) {
-        clearInterval(_genPoll);
-        const btn = document.getElementById("gen-btn");
-        btn.disabled = false; btn.textContent = "✨ gerar";
-        if (j.erro || j.error) {
-          document.getElementById("gen-log").innerHTML +=
-            "<br><b>⚠️ " + (j.erro || j.error) + "</b>";
-          return;
-        }
-        const res = j.result || j.resultado || {};
-        const nome = res.arquivo;
-        const alvo = document.getElementById("gen-resultado");
-        alvo.hidden = false;
-        if (!nome) {
-          alvo.innerHTML = "<p class='mini'>geração concluída</p>";
-          return;
-        }
-        const url = res.tipo === "gif" ? "/api/midia/gif/" + encodeURIComponent(nome)
-          : res.tipo === "video" ? "/api/midia/video/" + encodeURIComponent(nome)
-          : "/api/midia/imagem/" + encodeURIComponent(nome);
-        alvo.innerHTML = (res.tipo === "video"
-          ? `<video controls style="max-width:100%; border-radius:.6rem;" src="${url}"></video>`
-          : `<img style="max-width:100%; border-radius:.6rem;" src="${url}" alt="mídia gerada">`)
-          + `<p class="mini">${nome}${res.segundos ? " · " + res.segundos + "s" : ""}`
-          + ` · <a href="${url}" download="${nome}" target="_blank">baixar ↗</a></p>`;
-      }
-    } catch (e) { /* engasgo de rede: próximo tick tenta de novo */ }
-  }
-
-  let _arquivo = null, _job = null, _poll = null, _analise = "";
-
-  // info do modelo selecionado (aviso 🔑 de cadastro NA CARA com atalho)
-  const selModelo = document.getElementById("mid-modelo");
-  const infoModelo = document.getElementById("mid-modelo-info");
-  function mostrarInfo() {
-    const o = selModelo.selectedOptions[0];
-    const id = selModelo.value || "";
-    const prov = id.includes(":") ? id.split(":")[0] : "";
-    infoModelo.innerHTML = (o && o.title ? o.title : "")
-      + (prov && o && /requer/i.test(o.title || "")
-         ? ' — <a href="/sistema?prov=' + prov + '">cadastrar a chave →</a>' : "");
-  }
-  selModelo.addEventListener("change", mostrarInfo);
-  mostrarInfo();
-
-  async function midSubir(inp) {
-    const f = inp.files[0];
-    if (!f) return;
-    const fd = new FormData();
-    fd.append("file", f);
-    document.getElementById("mid-chip").hidden = false;
-    document.getElementById("mid-chip").textContent = "subindo " + f.name + "…";
-    try {
+      const fd = new FormData(); fd.append("file", f);
       const r = await fetch("/api/upload", {method: "POST", body: fd});
       const d = await r.json();
-      _arquivo = d;
-      document.getElementById("mid-chip").textContent = "📎 " + d.nome;
-      document.getElementById("mid-btn").disabled = false;
-    } catch (e) {
-      document.getElementById("mid-chip").textContent = "falha no upload";
-    }
+      if (!r.ok) throw new Error(d.detail || r.status);
+      _ref = d.arquivo;
+      chip.textContent = "📎 " + d.nome + " ✓"; chip.title = "clique para remover";
+    } catch (e) { chip.textContent = "⚠️ " + e.message; _ref = null; }
+  }
+  document.getElementById("m-chip").addEventListener("click", () => {
+    _ref = null; const c = document.getElementById("m-chip");
+    c.hidden = true; c.textContent = "";
+  });
+
+  function mCancelarAnterior() {
+    const jid = localStorage.getItem(_jobKey());
+    if (jid) fetch("/api/midia/cancel/" + jid, {method: "POST"});
+    localStorage.removeItem(_jobKey());
+    document.getElementById("m-andamento").innerHTML = "";
   }
 
-  async function midAnalisar() {
-    if (!_arquivo) return;
-    const btn = document.getElementById("mid-btn");
-    btn.disabled = true; btn.textContent = "analisando…";
-    document.getElementById("mid-log").hidden = false;
-    document.getElementById("mid-log").innerHTML = "";
-    document.getElementById("mid-resultado").hidden = true;
-    document.getElementById("mid-ensinar").hidden = true;
+  async function mEnviar(ev) {
+    ev.preventDefault();
+    const prompt = document.getElementById("m-prompt").value.trim();
+    if (!prompt) return false;
+    mCancelarAnterior();
+    const btn = document.getElementById("m-btn");
+    btn.disabled = true; btn.textContent = "enviando…";
     try {
-      const r = await fetch("/api/midia/analisar", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-          arquivo: _arquivo.arquivo,
-          pergunta: document.getElementById("mid-pergunta").value,
-          modelo: document.getElementById("mid-modelo").value})
+      const r = await fetch("/api/midia/enviar", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({sessao: SESSAO, prompt,
+                              modelo: selM.value, referencia: _ref || "",
+                              duracao: parseInt(document.getElementById("m-dur").value) || 3,
+                              gif: document.getElementById("m-gif").checked})
       });
       const d = await r.json();
-      if (!r.ok) throw (d.detail || "erro");
-      _job = d.job;
-      _poll = setInterval(midPoll, 1500);
+      if (!r.ok) throw new Error(d.detail || ("HTTP " + r.status));
+      localStorage.setItem(_jobKey(), d.job);
+      mPoll(d.job, d.tipo);
     } catch (e) {
-      document.getElementById("mid-log").innerHTML += "⚠️ " + e + "\n";
-      btn.disabled = false; btn.textContent = "👁 analisar";
+      document.getElementById("m-andamento").innerHTML =
+        "<div class='log'><span class='mini'>⚠️ " + String(e.message).replace(/</g,"&lt;") + "</span></div>";
     }
+    btn.disabled = false; btn.textContent = "➤ enviar";
+    return false;
   }
 
-  async function midPoll() {
-    try {
-      const r = await fetch("/api/midia/status/" + _job);
-      const j = await r.json();
-      document.getElementById("mid-log").innerHTML = (j.lines || [])
-        .map(l => `<span class="mini">${l.ts} · ${String(l.msg).replace(/</g,"&lt;")}</span>`).join("<br>");
-      if (!j.running) {
-        clearInterval(_poll);
-        const btn = document.getElementById("mid-btn");
-        btn.disabled = false; btn.textContent = "👁 analisar";
-        if (j.error) {
-          document.getElementById("mid-log").innerHTML += "<br><b>⚠️ " + j.error + "</b>";
-          return;
+  let _timer = null;
+  function mPoll(jid, tipo) {
+    const area = document.getElementById("m-andamento");
+    clearInterval(_timer);
+    _timer = setInterval(async () => {
+      try {
+        const j = await (await fetch("/api/midia/status/" + jid)).json();
+        const linhas = (j.lines || []).map(l =>
+          "<div><span class='hora'>" + (l.ts || "") + "</span>" +
+          String(l.msg || "").replace(/</g,"&lt;") + "</div>").join("");
+        area.innerHTML =
+          "<div class='pensando-cab'><span class='ponto'></span> processando (" + (tipo || "mídia") + ")…</div>" +
+          "<details class='raciocinio-vivo'><summary>raciocínio · " +
+          (j.lines || []).length + " linha(s) — clique para abrir</summary>" +
+          "<div class='log'>" + linhas + "</div></details>";
+        if (!j.running) {
+          clearInterval(_timer); localStorage.removeItem(_jobKey());
+          if (j.error) {
+            area.innerHTML += "<div class='rodape'>⚠️ " + String(j.error).replace(/</g,"&lt;") + "</div>";
+            setTimeout(() => location.reload(), 2600);
+          } else {
+            location.reload();   // item concluído entra pelo histórico (markdown/mídia prontos)
+          }
         }
-        _analise = (j.result || {}).analise || "";
-        document.getElementById("mid-texto").textContent = _analise;
-        document.getElementById("mid-resultado").hidden = false;
-        document.getElementById("mid-ensinar").hidden = false;
-      }
-    } catch (e) { /* engasgo de rede: tenta de novo no próximo tick */ }
+      } catch (e) { /* engasgo de rede: próximo tick tenta de novo */ }
+    }, 1800);
   }
 
-  async function midEnsinar() {
-    if (!_analise) return;
-    const colecao = prompt("gravar a análise em qual coleção?", "multimidia");
-    if (!colecao) return;
-    const r = await fetch("/api/ingest/web-salvar", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({colecao: colecao, documentos: [
-        {titulo: "análise multimodal — " + (_arquivo ? _arquivo.nome : "imagem"),
-         url: "", content: _analise}]})
-    });
-    if (window.toast) window.toast(r.ok ? "análise indo para a base " + colecao
-                                        : "falha ao ensinar a base");
-  }
+  // RETOMADA: job ativo da sessão (anotado no SERVIDOR) → polling volta
+  (function retomar() {
+    let ja = null;
+    try { ja = JSON.parse(DADOS.job || "null"); } catch (e) {}
+    const jid = (ja && ja.job) || localStorage.getItem(_jobKey());
+    if (jid) { localStorage.setItem(_jobKey(), jid); mPoll(jid, ja && ja.tipo); }
+  })();
 </script>
 {% endblock %}

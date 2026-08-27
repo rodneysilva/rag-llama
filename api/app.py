@@ -632,6 +632,12 @@ def _md_fallback(texto: str) -> str:
     return p.replace("\n", "<br>")
 
 
+# markdown disponível AO TEMPLATE (itens do histórico multimídia renderizam
+# a análise formatada — pedido do dono: "retorno das informações não estão
+# formatadas para exibição na tela")
+TEMPLATES.env.globals["_md_basico"] = _md_basico
+
+
 def _paginas_ctx(request: Request, aba: str) -> dict:
     user = _usuario(request)
     return {"request": request, "aba": aba, "usuario": user,
@@ -2807,14 +2813,31 @@ class JobRegistry:
             pass  # disco cheio/permissão: o log ao vivo segue valendo
 
     def concluir(self, jid: str, result=None, error=None) -> None:
-        """Fecha o job (running=False) gravando result e/ou error."""
+        """Fecha o job (running=False) gravando result e/ou error. Job
+        CANCELADO pelo usuário: o resultado tardio é DESCARTADO (o cancelou
+        porque mandou outra — sobrescrever ressuscitaria a resposta morta)."""
         with self.lock:
-            if jid in self.jobs:
-                if result is not None:
-                    self.jobs[jid]["result"] = result
-                if error is not None:
-                    self.jobs[jid]["error"] = error
-                self.jobs[jid]["running"] = False
+            j = self.jobs.get(jid)
+            if not j or j.get("cancelado"):
+                return
+            if result is not None:
+                j["result"] = result
+            if error is not None:
+                j["error"] = error
+            j["running"] = False
+
+    def cancelar(self, jid: str, motivo: str = "cancelado pelo usuário") -> bool:
+        """Cancela UM job (pedido do dono: nova mensagem enquanto pensa →
+        interrompe). A thread segue até o fim (não se mata LLM no meio), mas
+        o resultado é descartado e o polling vê 'cancelado' na hora."""
+        with self.lock:
+            j = self.jobs.get(jid)
+            if not j or not j.get("running"):
+                return False
+            j["cancelado"] = True
+            j["running"], j["error"] = False, motivo
+            j["lines"].append({"msg": f"⚠️ {motivo}"})
+            return True
 
     def ativos(self) -> int:
         return sum(1 for j in self.jobs.values() if j.get("running"))
@@ -3854,32 +3877,62 @@ def midia_analisar(body: MidiaAnalisarIn, request: Request):
 
 
 @app.get("/midia")
-def midia_pagina(request: Request):
-    """👁 MÓDULO MULTIMÍDIA (pedido do dono): analisar imagens com QUALQUER
-    multimodal — TODOS listados (pedido: 'aparecer todos os modelos que
-    tenho, tanto os locais quanto os cloud'): GGUFs de visão da estação,
-    👁 dos provedores CADASTRADOS e 👁 típicos dos conhecidos 🔑 (que
-    ainda não têm chave — o job orienta o cadastro ao usar)."""
+def midia_pagina(request: Request, s: str = ""):
+    """👁 MÓDULO MULTIMÍDIA como CONVERSA ÚNICA (pedido do dono 27/08:
+    "manter histórico de sessões" + "ser apenas um chat único onde posso
+    alternar os modelos"): sidebar de sessões + composer com TODOS os
+    modelos (👁 análise local/cloud · 🎨 geradores c/ i2i · 🎬 vídeo/gif).
+    O TIPO do item deriva do modelo escolhido + anexo. O job ativo da
+    sessão volta anotado — o polling RETOMA ao voltar pra página."""
+    from core import midia_sessoes
     ctx = _paginas_ctx(request, "midia")
-    grupos = [{"rotulo": "🖥 local (GPU da estação)", "modelos": []},
-              {"rotulo": "🌐 provedores cadastrados", "modelos": []},
-              {"rotulo": "🔑 conhecidos — requer cadastro/chave", "modelos": []}]
-    # 1) locais: TODOS os GGUFs de visão da estação (modelos.listar)
+    owner = _usuario(request)
+    ctx["m_sessoes"] = midia_sessoes.listar(owner)
+    sessao = None
+    if s:
+        sessao = midia_sessoes.abrir(s, owner)
+    if sessao is None and ctx["m_sessoes"]:
+        try:
+            sessao = midia_sessoes.abrir(ctx["m_sessoes"][0]["id"], owner)
+        except Exception:
+            pass
+    if sessao is None:
+        sessao = midia_sessoes.criar(owner)
+        ctx["m_sessoes"] = midia_sessoes.listar(owner)
+    ctx["m_sessao"] = sessao
+    # TODOS os modelos num select só, agrupados por CAPACIDADE — o dono
+    # alterna livremente entre as mensagens
+    grupos = [
+        {"rotulo": "👁 análise de imagem (local)", "cat": "visao", "modelos": []},
+        {"rotulo": "👁 análise de imagem (provedores)", "cat": "visao_ext", "modelos": []},
+        {"rotulo": "🎨 gerar imagem (Flux local — com anexo vira MELHORIA i2i)", "cat": "imagem", "modelos": []},
+        {"rotulo": "🎨 gerar imagem (provedores)", "cat": "imagem_ext", "modelos": []},
+        {"rotulo": "🎬 vídeo/gif (Wan local)", "cat": "video", "modelos": []},
+    ]
     try:
         for m in modelos.listar():
-            if m.get("categoria") == "visao":
-                grupos[0]["modelos"].append({
-                    "id": "", "nome": m["nome"],
-                    "info": "analisa na GPU local (pausa o chat e restaura)"})
+            cat = m.get("categoria")
+            if cat == "visao":
+                grupos[0]["modelos"].append(
+                    {"id": m["nome"], "nome": m["nome"],
+                     "info": "GPU da estação (pausa o chat e restaura)"})
+            elif cat == "imagem":
+                grupos[2]["modelos"].append(
+                    {"id": m["nome"], "nome": f"{m['nome']}"
+                     + (f" · {m['gb']}GB" if m.get("gb") else ""),
+                     "info": "com anexo = i2i (melhoria, força 0.65)"})
+            elif cat == "video":
+                grupos[4]["modelos"].append(
+                    {"id": m["nome"], "nome": m["nome"],
+                     "info": "cena única 2–8 s (16 fps); gif = 17 frames"})
     except Exception:
         pass
     if not grupos[0]["modelos"]:
         grupos[0]["modelos"].append({"id": "", "nome": "Qwen2.5-VL (local)",
                                      "info": "GPU da estação"})
-    # 2) cloud CADASTRADOS (cat=visao) · 3) conhecidos sem cadastro (🔑)
-    cadastrados = set()
     try:
         from core import provedores as _prov
+        cadastrados = set()
         for p in _prov.listar():
             cadastrados.add(p["id"])
             for m in p.get("modelos", []):
@@ -3887,46 +3940,226 @@ def midia_pagina(request: Request):
                     grupos[1]["modelos"].append({
                         "id": f"{p['id']}:{m['nome']}",
                         "nome": f"{m['nome']} · {p['nome']}",
-                        "info": (m.get("uso") or m.get("info") or "")
+                        "info": (m.get("uso") or "")
                                 + (f" · ctx {m['ctx'] // 1000}k"
                                    if m.get("ctx") else "")})
+                elif m.get("cat") == "imagem":
+                    grupos[3]["modelos"].append({
+                        "id": f"{p['id']}:{m['nome']}",
+                        "nome": f"{m['nome']} · {p['nome']}",
+                        "info": m.get("info", "") or f"via API {p['nome']}"})
         for pid, c in _prov.CONHECIDOS.items():
             if pid in cadastrados:
-                continue   # já cadastrado: os modelos VEM da API dele
+                continue
             for nome in c.get("visao", []):
-                grupos[2]["modelos"].append({
+                grupos[1]["modelos"].append({
                     "id": f"{pid}:{nome}", "nome": f"{nome} · {c['nome']}",
-                    "info": f"requer chave — cadastre o provedor {pid.upper()} "
-                            f"no Sistema ({c['site']})"})
+                    "info": f"requer chave — /sistema?prov={pid}"})
     except Exception:
         pass
-    ctx["grupos_visao"] = [g for g in grupos
-                           if g["modelos"] or "cadastrados" in g["rotulo"]]
-    # 🎨🎬 GERAÇÃO local (Flux/Wan da estação) + ☁️ GERADORES de provedores
-    # (glm-image/gpt-image-1… via /images/generations — pedido do dono)
-    try:
-        ger = {"imagem": [], "video": []}
-        for m in modelos.listar():
-            if m.get("categoria") in ger:
-                ger[m["categoria"]].append(
-                    {"nome": m["nome"],
-                     "gb": m.get("gb"),
-                     "info": "pausa as LLMs durante a geração (8 GB de VRAM)"})
-        ctx["geracao"] = ger
-        from core import provedores as _prov
-        ext = []
-        for p in _prov.listar():
-            for m in p.get("modelos", []):
-                if m.get("cat") == "imagem":
-                    ext.append({"nome": f"{p['id']}:{m['nome']}",
-                                "gb": None,
-                                "info": m.get("info", "") or
-                                        f"geração via API {p['nome']}"})
-        ctx["geracao_externa"] = ext
-    except Exception:
-        ctx["geracao"] = {"imagem": [], "video": []}
-        ctx["geracao_externa"] = []
+    ctx["m_grupos"] = [g for g in grupos if g["modelos"]]
     return TEMPLATES.TemplateResponse(request, "midia.html", ctx)
+
+
+class MidiaEnviarIn(BaseModel):
+    """UM envio no chat multimídia: o MODELO decide o que acontece —
+    visao(+anexo) = análise; gerador de imagem = t2i (com anexo = i2i
+    melhoria); gerador de vídeo = t2v/gif. A sessão guarda o histórico."""
+    sessao: str
+    prompt: str
+    modelo: str = ""
+    referencia: str = ""   # upload (/api/upload) — análise OU init do i2i
+    duracao: int = 3       # vídeo: segundos
+    gif: bool = False
+
+
+@app.post("/api/midia/enviar")
+def midia_enviar(body: MidiaEnviarIn, request: Request):
+    """Envio ÚNICO do módulo Multimídia — job com raciocínio ao vivo que ao
+    CONCLUIR grava o item na sessão (histórico) e limpa o job_ativo."""
+    from core import midia as _m
+    from core import midia_sessoes
+    owner = _usuario(request)
+    sessao = midia_sessoes.abrir(body.sessao, owner)
+    if sessao is None:
+        raise HTTPException(404, "sessão multimídia não encontrada")
+    prompt = (body.prompt or "").strip()
+    if not prompt:
+        raise HTTPException(422, "escreva o que quer (pergunta ou prompt)")
+    modelo = (body.modelo or "").strip()
+    referencia = (body.referencia or "").strip()
+    # tipo pelo modelo
+    if ":" in modelo:
+        from core import provedores as _prov
+        pid, mnome = modelo.split(":", 1)
+        info = next((mm for mm in (_prov.listar_por(pid) or [])
+                     if mm["nome"] == mnome), None)
+        cat = (info or {}).get("cat", "visao")
+    else:
+        cat = next((m.get("categoria") for m in modelos.listar()
+                    if m["nome"] == modelo), "visao")
+    if cat == "visao" and not referencia:
+        raise HTTPException(422, "análise precisa de imagem — anexe (📎)")
+    nome_ref = Path(referencia).name if referencia else ""
+    alvo_ref = (_m.ENTRADA / nome_ref) if nome_ref else None
+    if nome_ref and (not alvo_ref or not alvo_ref.exists()):
+        raise HTTPException(422, f"anexo '{nome_ref}' não encontrado — suba de novo")
+    tipo = ("analise" if cat == "visao"
+            else "video" if cat == "video" else "imagem")
+    if tipo == "imagem" and referencia:
+        tipo = "melhoria"
+
+    job = _midia.novo_id()
+    midia_sessoes.marcar_job(body.sessao, job, tipo, modelo)
+
+    def _fabricar(payload: dict):
+        jid = payload["job"]
+
+        def rodar():
+            _midia.log(jid, f"{'👁 análise' if payload['tipo'] == 'analise' else '🎨 geração'}"
+                           f" · {payload['modelo'] or 'local'}"
+                           + (f" · {payload['tipo']}" if payload["tipo"] in ("melhoria", "video") else ""),
+                       etapa="multimídia")
+            resultado, erro = None, None
+            try:
+                if payload["tipo"] == "analise":
+                    modelo = payload["modelo"]
+                    if ":" in modelo:
+                        from core import provedores as _prov
+                        pid, _ = modelo.split(":", 1)
+                        if not _prov.resolver(pid, modelo.split(":", 1)[1]):
+                            raise RuntimeError(
+                                f"provedor {pid.upper()} não configurado — "
+                                f"cadastre em /sistema?prov={pid.lower()}")
+                    if not modelo and config.EM_CONTAINER:
+                        import base64 as _b64
+                        with open(payload["referencia"], "rb") as f:
+                            img_b64 = _b64.b64encode(f.read()).decode()
+                        r = modelos._chamar_agente(
+                            "/visao", {"b64": img_b64,
+                                       "nome": payload["nome_ref"],
+                                       "pergunta": payload["prompt"]},
+                            timeout=420)
+                        texto = r.get("descricao", "")
+                    else:
+                        texto = _m.legendar_imagem(
+                            payload["referencia"], payload["prompt"] or None,
+                            modelo=modelo,
+                            log=lambda msg, g="": _midia.log(
+                                jid, msg, **({"etapa": g} if g else {})))
+                    resultado = {"tipo": "analise", "texto": texto or "(vazio)",
+                                 "modelo": modelo or "local",
+                                 "referencia": payload["nome_ref"]}
+                elif payload["tipo"] in ("imagem", "melhoria"):
+                    if ":" in payload["modelo"]:
+                        from core import provedores as _prov
+                        pid, mnome = payload["modelo"].split(":", 1)
+                        resultado = _prov.gerar_imagem(
+                            pid, mnome, payload["prompt"],
+                            log=lambda msg, e=None: _midia.log(
+                                jid, msg, **({"etapa": e} if e else {})))
+                        resultado = {**resultado, "tipo": "imagem",
+                                     "modelo": payload["modelo"]}
+                    else:
+                        # LOCAL: conjuntos pausam/restauram as LLMs
+                        from core import conjuntos as _conj
+                        try:
+                            _conj.garantir("difusao",
+                                           log=lambda m, g="": _midia.log(
+                                               jid, m, **({"etapa": g} if g else {})))
+                        except Exception as e:
+                            _midia.log(jid, f"⚠️ conjunto: {str(e)[:120]} — seguindo",
+                                       etapa="modelo")
+                        estado = _m.pausar_servicos(
+                            log=lambda msg, g="": _midia.log(
+                                jid, msg, **({"etapa": g} if g else {})),
+                            pesado=False)
+                        try:
+                            r = _m.gerar_imagem(
+                                payload["prompt"], payload["modelo"],
+                                imagem_inicial=(payload.get("referencia")
+                                                if payload["tipo"] == "melhoria" else None),
+                                log=lambda msg, g="": _midia.log(
+                                    jid, msg, **({"etapa": g} if g else {})))
+                            resultado = {**r, "tipo": "imagem",
+                                         "modelo": payload["modelo"]}
+                        finally:
+                            _m.restaurar_servicos(
+                                estado, log=lambda msg, g="": _midia.log(
+                                    jid, msg, **({"etapa": g} if g else {})))
+                else:  # vídeo/gif
+                    from core import conjuntos as _conj
+                    try:
+                        _conj.garantir("difusao",
+                                       log=lambda m, g="": _midia.log(
+                                           jid, m, **({"etapa": g} if g else {})))
+                    except Exception as e:
+                        _midia.log(jid, f"⚠️ conjunto: {str(e)[:120]} — seguindo",
+                                   etapa="modelo")
+                    estado = _m.pausar_servicos(
+                        log=lambda msg, g="": _midia.log(
+                            jid, msg, **({"etapa": g} if g else {})), pesado=True)
+                    try:
+                        params = ({"gif": True, "frames": 17}
+                                  if payload["gif"]
+                                  else {"frames": payload["duracao"] * 16 + 1})
+                        r = _m.gerar_video(
+                            payload["prompt"], frames=params.get("frames", 49),
+                            gif=params.get("gif", False),
+                            log=lambda msg, g="": _midia.log(
+                                jid, msg, **({"etapa": g} if g else {})))
+                        resultado = {**r, "tipo": "gif" if payload["gif"] else "video",
+                                     "modelo": payload["modelo"]}
+                    finally:
+                        _m.restaurar_servicos(
+                            estado, log=lambda msg, g="": _midia.log(
+                                jid, msg, **({"etapa": g} if g else {})))
+            except Exception as e:
+                erro = str(e)[:400]
+            # HISTÓRICO: item gravado na sessão em AMBOS os caminhos
+            linhas = []
+            try:
+                with _midia.lock:
+                    linhas = [dict(l) for l in _midia.jobs.get(jid, {}).get("lines", [])]
+            except Exception:
+                pass
+            midia_sessoes.anexar_item(
+                payload["sessao"],
+                {"id": jid, "ts": time.strftime("%H:%M:%S"),
+                 "tipo": payload["tipo"], "modelo": payload["modelo"] or "local",
+                 "prompt": payload["prompt"],
+                 "referencia": payload["nome_ref"],
+                 "linhas": linhas[-60:],
+                 "resultado": resultado or {"erro": erro}},
+                titulo=payload["prompt"])
+            if erro:
+                _midia.concluir(jid, error=erro)
+            else:
+                _midia.concluir(jid, result=resultado)
+        return rodar
+
+    _despachar(_fabricar, "midia",
+               {"sessao": body.sessao, "prompt": prompt, "modelo": modelo,
+                "referencia": str(alvo_ref) if alvo_ref else "",
+                "nome_ref": nome_ref, "tipo": tipo,
+                "duracao": body.duracao, "gif": body.gif, "job": job},
+               _midia)
+    return {"job": job, "tipo": tipo}
+
+
+@app.post("/api/midia/cancel/{job}")
+def midia_cancel(job: str, request: Request):
+    """Interrompe o envio multimídia em curso (novo envio cancela o anterior)."""
+    _usuario(request)
+    return {"cancelado": _midia.cancelar(job, "interrompido — novo envio")}
+
+
+@app.post("/hx/midia/nova")
+def midia_nova(request: Request):
+    from core import midia_sessoes
+    owner = _usuario(request)
+    d = midia_sessoes.criar(owner)
+    return HTMLResponse(f"<script>location.href='/midia?s={d['id']}'</script>")
 
 
 @app.post("/api/limpeza")
@@ -5321,8 +5554,19 @@ def query(body: QueryIn):
     return {"job": job, "status": f"/api/query/status/{job}"}
 
 
-_rota_status("/api/query/status/{job}", _query,
-             "Job de consulta não encontrado")
+@app.post("/api/query/cancel/{job}")
+def query_cancel(job: str, request: Request):
+    """Interrompe o job do chat em curso (pedido do dono: "toda vez que eu
+    mandar mensagem estiver pensando, pare o raciocínio e mande a nova
+    INCLUINDO o contexto da interrompida"). A thread termina sozinha e o
+    resultado é descartado; a pergunta interrompida já está na sessão —
+    entra no histórico da nova mensagem."""
+    _usuario(request)
+    ok = _query.cancelar(job, "interrompido — nova mensagem enviada")
+    return {"cancelado": ok}
+
+
+_rota_status("/api/query/status/{job}", _query,             "Job de consulta não encontrado")
 
 
 def _processar_query(body: QueryIn, log=None, on_token=None):

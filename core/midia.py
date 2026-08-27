@@ -262,11 +262,16 @@ def _erro_limpo(codigo: int, linhas: list[str], limite_s: int) -> str:
 
 def gerar_imagem(prompt: str, modelo: str | None = None, largura: int = 1024,
                  altura: int = 1024, seed: int | None = None,
-                 negativo: str | None = None,
+                 negativo: str | None = None, imagem_inicial: str | None = None,
+                 forca: float = 0.65,
                  log=print, progresso=None) -> dict:
     """Gera UMA imagem com Flux pelo sd-cli (progresso parseado). O chamador
     cuida de pausar/restaurar os serviços. `negativo` editável (default
-    `NEG_WAN` — o usuário pode escrever 'negativo: …' no prompt do chat)."""
+    `NEG_WAN` — o usuário pode escrever 'negativo: …' no prompt do chat).
+    `imagem_inicial` = i2i/MELHORIA (pedido do dono 27/08: "flux pode
+    utilizar i2i? fazer melhorias?"): a imagem anexa é o ponto de partida
+    (--init-img) e `forca` controla o quanto muda (0.65 preserva a
+    composição e melhora detalhes)."""
     candidatos = sorted(IMAGEM_DIR.glob("flux1-*.gguf"))
     if not candidatos:
         raise RuntimeError("nenhum Flux em D:\\models\\imagem")
@@ -284,7 +289,25 @@ def gerar_imagem(prompt: str, modelo: str | None = None, largura: int = 1024,
     saida = SAIDAS["imagem"] / f"{chave}_{seed}_{int(time.time())}.png"
 
     t0 = time.time()
-    log(f"🖌️ {alvo.stem} · {largura}x{altura} · {perfil['steps']} passos · seed {seed}", "gerar")
+    if imagem_inicial:
+        # i2i: redimensiona a origem p/ o alvo (o sd-cli exige mesmas dims)
+        try:
+            from PIL import Image as _Im
+            with _Im.open(imagem_inicial) as im:
+                im = im.convert("RGB")
+                if im.size != (largura, altura):
+                    im = im.resize((largura, altura))
+                    init = SAIDAS["imagem"] / f"init_{seed}_{int(t0)}.png"
+                    im.save(init)
+                else:
+                    init = Path(imagem_inicial)
+        except Exception:
+            init = Path(imagem_inicial)
+        log(f"🖌️ i2i {alvo.stem} · força {forca} · {largura}x{altura} · "
+            f"{perfil['steps']} passos · seed {seed}", "gerar")
+    else:
+        init = None
+        log(f"🖌️ {alvo.stem} · {largura}x{altura} · {perfil['steps']} passos · seed {seed}", "gerar")
     cmd = [motor.sd_cli(),
            "--diffusion-model", str(alvo),
            "--t5xxl", FLUX_AUX["t5xxl"], "--clip_l", FLUX_AUX["clip_l"],
@@ -295,6 +318,8 @@ def gerar_imagem(prompt: str, modelo: str | None = None, largura: int = 1024,
            "--steps", str(perfil["steps"]), "--guidance", str(perfil["guidance"]),
            "--seed", str(seed), "-o", str(saida),
            "--fa", "--diffusion-fa", "--vae-tiling"]
+    if init is not None:
+        cmd += ["--init-img", str(init), "--strength", str(max(0.1, min(1.0, forca)))]
     if negativo:
         log(f"🚫 negative prompt do pedido: {negativo[:120]}", "gerar")
 

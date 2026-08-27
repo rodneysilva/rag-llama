@@ -391,3 +391,12 @@ def listar(force: bool = False) -> list[dict]:
         out.append({"id": pid, "nome": _cfg(pid, "NOME") or pid.upper(),
                     "externo": True, "modelos": modelos(pid, force)})
     return out
+
+
+def listar_por(pid: str) -> list[dict]:
+    """Modelos de UM provedor ({nome, cat, visao, ctx, info, uso}) — usado
+    pelo envio multimídia p/ decidir o tipo pelo modelo escolhido."""
+    pid = (pid or "").lower()
+    if not _cfg(pid, "BASE_URL"):
+        return []
+    return modelos(pid)

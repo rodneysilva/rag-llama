@@ -1,0 +1,51 @@
+{# Item do histórico multimídia — entrada + raciocínio RECOLHIDO + saída
+   FORMATADA (markdown p/ análise; <img>/<video> p/ mídia com baixar). #}
+<div class="msg" style="border:1px solid var(--borda); border-radius:.8rem; padding:.7rem;">
+  <div class="cab-msg" style="display:flex; justify-content:space-between; gap:.5rem; align-items:baseline;">
+    <span class="quem">
+      {%- if it.tipo == 'analise' %}👁 análise{% elif it.tipo == 'melhoria' %}🪄 melhoria (i2i){% elif it.tipo == 'video' %}🎬 vídeo{% elif it.tipo == 'gif' %}🎞 gif{% else %}🎨 imagem{% endif %}
+      · {{ it.modelo }}</span>
+    <span class="hora">{{ it.ts }}</span>
+  </div>
+
+  {# ── ENTRADA: prompt + thumb do anexo ── #}
+  <div class="resposta" style="margin:.35rem 0;">
+    {{ it.prompt }}
+    {% if it.referencia %}
+    <a href="/api/midia/entrada/{{ it.referencia }}" target="_blank" title="ver a imagem de entrada">
+      <img src="/api/midia/entrada/{{ it.referencia }}" alt="entrada"
+           style="max-width:7rem; border-radius:.5rem; vertical-align:middle; margin-left:.4rem;"></a>
+    {% endif %}
+  </div>
+
+  {# ── RACIOCÍNIO: SEMPRE recolhido (abrir é escolha) ── #}
+  {% if it.linhas %}
+  <details>
+    <summary class="mini" style="cursor:pointer;">raciocínio · {{ it.linhas | length }} linha(s)</summary>
+    <div class="log">
+      {% for l in it.linhas %}<div><span class="hora">{{ l.ts }}</span>{{ l.msg }}</div>{% endfor %}
+    </div>
+  </details>
+  {% endif %}
+
+  {# ── SAÍDA FORMATADA ── #}
+  {% set r = it.resultado or {} %}
+  {% if r.erro %}
+  <div class="rodape">⚠️ {{ r.erro }}</div>
+  {% elif it.tipo == 'analise' %}
+  <div class="resposta" style="margin-top:.5rem;">{{ _md_basico(r.texto or '') | safe }}</div>
+  <div class="acoes-msg" style="margin-top:.4rem;">
+    <button type="button" class="acao" onclick="navigator.clipboard.writeText(this.closest('.msg').querySelectorAll('.resposta')[1].innerText); window.toast && window.toast('análise copiada')">📋 copiar</button>
+  </div>
+  {% else %}
+  <div style="margin-top:.5rem;">
+    {% if it.tipo == 'video' %}
+    <video controls style="max-width:100%; border-radius:.6rem;" src="/api/midia/video/{{ r.arquivo }}"></video>
+    {% else %}
+    <img style="max-width:100%; border-radius:.6rem;" src="/api/midia/{{ 'gif' if it.tipo == 'gif' else 'imagem' }}/{{ r.arquivo }}" alt="mídia gerada">
+    {% endif %}
+    <p class="mini" style="margin:.3rem 0 0;">{{ r.arquivo }}{% if r.kb %} · {{ r.kb }} KB{% endif %}{% if r.segundos %} · {{ r.segundos }}s{% endif %}
+      · <a href="/api/midia/{{ 'gif' if it.tipo == 'gif' else ('video' if it.tipo == 'video' else 'imagem') }}/{{ r.arquivo }}" download="{{ r.arquivo }}">baixar ↗</a></p>
+  </div>
+  {% endif %}
+</div>

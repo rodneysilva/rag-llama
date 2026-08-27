@@ -296,6 +296,16 @@ FORM.addEventListener("htmx:beforeRequest", (e) => {
     _ultimoEnvio = "";
     return;
   }
+  // ✂️ INTERRUPÇÃO (pedido do dono): job ainda "pensando" na tela + nova
+  // mensagem → CANCELA o job antigo no servidor (o resultado tardio é
+  // descartado lá) e tira o card da vista. A pergunta interrompida JÁ está
+  // na sessão — o histórico do novo POST a inclui como contexto.
+  const cardAntigo = document.querySelector('#pensando [hx-get*="/hx/chat/"]');
+  if (cardAntigo) {
+    const jid = (cardAntigo.getAttribute("hx-get").match(/\/hx\/chat\/([\w-]+)/) || [])[1];
+    if (jid) fetch("/api/query/cancel/" + jid, {method: "POST"});
+    cardAntigo.closest("div")?.remove();
+  }
   _enviando = true;   // agora o request vai sair: bloqueia duplicados
   // ⚡ a caixa limpa AQUI (não no submit!): a este ponto o htmx JÁ capturou
   // os parâmetros do form — limpar antes fazia o POST sair com question=""
