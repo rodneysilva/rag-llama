@@ -3835,17 +3835,28 @@ def midia_analisar(body: MidiaAnalisarIn, request: Request):
                               if payload["modelo"] else " (local Qwen2.5-VL)"),
                        etapa="análise")
             try:
-                r = _m.legendar_imagem(payload["arquivo"],
-                                       payload["pergunta"] or None,
-                                       modelo=payload["modelo"],
-                                       # ⚠️ JobRegistry.log(jid, msg, **extra):
-                                       # grupo é KWARG (bug de 3 args posicional
-                                       # mandava o job pra DLQ na 1ª chamada)
-                                       log=lambda msg, g="": _midia.log(
-                                           jid, msg, **({"etapa": g} if g else {})))
-                _midia.concluir(jid, result={"analise": r,
-                                             "arquivo": payload["nome"],
-                                             "modelo": payload["modelo"] or "local"})
+                modelo = payload["modelo"]
+                if not modelo and config.EM_CONTAINER:
+                    # LOCAL em CONTAINER: a GPU está na ESTAÇÃO — a análise
+                    # (e a subida do :8082) roda NO AGENTE do host, não aqui
+                    # (bug real: _subir_vl direto procurava D:\models dentro
+                    # do container Linux e morria "modelo de visão ausente")
+                    r = modelos._chamar_agente(
+                        "/visao", {"arquivo": payload["arquivo"],
+                                   "pergunta": payload["pergunta"]},
+                        timeout=420)
+                    analise = r.get("descricao", "")
+                else:
+                    analise = _m.legendar_imagem(
+                        payload["arquivo"], payload["pergunta"] or None,
+                        modelo=modelo,
+                        # ⚠️ JobRegistry.log(jid, msg, **extra): grupo é KWARG
+                        # (3 args posicionais mandavam o job pra DLQ)
+                        log=lambda msg, g="": _midia.log(
+                            jid, msg, **({"etapa": g} if g else {})))
+                _midia.concluir(jid, result={
+                    "analise": analise, "arquivo": payload["nome"],
+                    "modelo": modelo or "local"})
             except Exception as e:
                 _midia.concluir(jid, error=str(e)[:400])
         return rodar
