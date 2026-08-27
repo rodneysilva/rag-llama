@@ -11,14 +11,10 @@
   <div class="kpi"><div class="rotulo">tokens (total)</div><div class="valor">{{ kpis.tokens_total }}</div><div class="sub">🔻{{ kpis.tokens_in }} · 🔺{{ kpis.tokens_out }} · {{ kpis.chamadas }} cham.</div></div>
   <div class="kpi"><div class="rotulo">embedding (bge-m3)</div><div class="valor">{{ embed_resumo.documentos }}<small style="font-size:.6em;color:var(--suave);"> docs</small></div>
     <div class="sub">{{ embed_resumo.chamadas }} chamada(s) · {{ "%.0f" | format(embed_resumo.segundos or 0) }}s de GPU</div></div>
-  <div class="kpi"><div class="rotulo">cache semântico</div><div class="valor">{{ cache_stats.hits }}<small style="font-size:.6em;color:var(--suave);"> hits</small></div>
-    <div class="sub">{{ cache_stats.stores }} gravado(s) · {{ cache_stats.misses }} miss(es) — hits = tokens poupados</div></div>
   <div class="kpi"><div class="rotulo">VRAM em uso</div><div class="valor">{{ vram_mi if vram_mi is not none else "—" }}<small style="font-size:.6em;color:var(--suave);"> MiB</small></div>
     <div class="sub">{% if servindo %}servindo: {{ servindo }}{% else %}— sem leitura —{% endif %}</div></div>
 </div>
 
-{# INFRA + FILA lado a lado em telas largas (pedido: aproveitar o espaço) #}
-<div class="dash-2col">
 <section class="cartao">
   <h2>Infraestrutura</h2>
   <div class="grade-infra">
@@ -35,36 +31,8 @@
         {% if not colecoes_detalhe %}<div class="mini">sem coleções (Qdrant offline?)</div>{% endif %}
       </div>
     </div>
-    <div class="infra-card">
-      <b>⚡ Redis (cache)</b>
-      <div class="mini" style="margin:.25rem 0 .5rem;">
-        {% if cache_info.online %}
-        {{ cache_info.entradas }} entrada(s) · limiar {{ cache_info.limiar }} · máx {{ cache_info.max }}
-        {% else %}offline — buscas seguem normais, sem atalho{% endif %}
-      </div>
-      <div class="mini">
-        {{ cache_stats.hits }} hit(s) · {{ cache_stats.stores }} gravado(s) · {{ cache_stats.misses }} miss(es)
-        — hit = resposta na hora, zero token
-      </div>
-      <div class="mini" style="margin-top:.4rem;"><a href="#" onclick="fetch('/api/cache',{method:'DELETE'}).then(()=>location.reload()); return false;" class="doc-col" title="apaga TODAS as entradas do cache">🗑 limpar cache</a></div>
-    </div>
-    <div class="infra-card">
-      <b>🐇 RabbitMQ</b>
-      <div class="mini" style="margin:.25rem 0 .4rem;">
-        {{ kpis.fila }} (pendentes/mortas) — detalhe ao vivo na seção ao lado
-      </div>
-      <div class="mini">jobs re-executáveis pós-restart (fábrica por kind); DLQ = falhas para investigar.</div>
-    </div>
   </div>
 </section>
-
-<section class="cartao">
-  <h2>Fila RabbitMQ — em tempo real</h2>
-  <div hx-get="/hx/fila" hx-trigger="load, every 10s" hx-swap="innerHTML">
-    <span class="mini">carregando…</span>
-  </div>
-</section>
-</div>
 
 <section class="cartao">
   <h2>Modelos de linguagem</h2>

@@ -29,17 +29,6 @@
                    data-fontes='{{ m.docs | tojson | e }}'>📚 {{ m.docs | length }} fonte(s) — ver no painel</a>
               </div>
               {% endif %}
-              {% if m.cache and m.cache.usado %}
-              <div class="rodape">⚡ cache semântico ({{ '%.3f'|format(m.cache.similaridade) }}) — resposta imediata, zero chamada à LLM</div>
-              <details class="cache-conteudo">
-                <summary>o que estava no cache</summary>
-                <div class="log">
-                  <div><span class="hora">pergunta guardada</span>{{ m.cache.pergunta_original }}</div>
-                  <div><span class="hora">similaridade</span>{{ '%.3f'|format(m.cache.similaridade) }} · modo {{ m.cache.modo or '?' }} · modelo {{ m.cache.modelo or '?' }}{% if m.cache.criado_em %} · guardada em {{ m.cache.criado_em | strftime('%d/%m %H:%M') }}{% endif %}</div>
-                  <div><span class="hora">resposta guardada</span>{{ m.cache.resumo or '' }}{% if (m.cache.resumo or '') | length >= 280 %}…{% endif %}</div>
-                </div>
-              </details>
-              {% endif %}
               {% if m.tokens %}
               <div class="rodape">🪙 🔻{{ m.tokens.entrada }} · 🔺{{ m.tokens.saida }}
                 {%- if m.tok_s %} · ⚡ {{ m.tok_s }} tok/s{% endif %} · {{ m.tokens.chamadas }} chamada(s)</div>
@@ -61,8 +50,8 @@
       </section>
       <!-- área do job em curso: log INLINE, linha por linha (sem popup) -->
       {# JOB ATIVO da sessão (recarregou no meio): o polling volta AQUI —
-         nada se perde no refresh (o job vive no servidor/RabbitMQ; só o
-         card na tela é reconstruído). #}
+          nada se perde no refresh (o job vive no servidor/executor; só o
+          card na tela é reconstruído). #}
       <div id="pensando">
         {% if job_ativo %}
           {% if job_ativo.kind == "chat" %}

@@ -1,8 +1,7 @@
 {# TOPBAR em tempo real (polling 5s): LLM CARREGADA (sutil) + tokens.
    IMPORTANTE: a resposta substitui o span por outerHTML — ela precisa
    CARREGAR os mesmos atributos hx-*, senão o polling morre no 1º swap. #}
-<span class="tok-live-slot tok-live" title="tokens em tempo real (llama-server usage · Redis)"
+<span class="tok-live-slot tok-live" title="tokens em tempo real (llama-server usage)"
       hx-get="/hx/contagem" hx-trigger="every 5s" hx-swap="outerHTML">
   {% if modelo %}<span class="llm-tag" title="modelo carregado agora{{ ' · multimodal no ar' if vl else ' · multimodal sob demanda' }}">🧠 {{ modelo }}{% if vl %} + 👁{% endif %}</span> · {% endif %}🔻 {{ entrada }} · 🔺 {{ saida }} · {{ chamadas }} cham.
-  {% if cache_on %}· ⚡ {{ cache_n }} cache{% endif %}
 </span>

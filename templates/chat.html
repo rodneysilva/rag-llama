@@ -21,17 +21,6 @@
   <div class="chat-col">
     <div class="chat-sub">
       <button class="mini-btn so-mobile" onclick="abrirDrawer()" title="conversas">💬</button>
-      {# ⚡ CACHE CARREGADO (pedido do dono): o badge abre um popover com AS
-         ENTRADAS do Redis — pergunta, quando, escopo e a resposta pronta;
-         recarrega a cada abertura (e a cada 30 s enquanto aberto) #}
-      <details class="cache-popover">
-        <summary class="badge-cache" title="cache semântico — clique para ver o que está carregado">
-          {% if cache.online %}⚡ {{ cache.entradas }} em cache{% else %}⚡ cache off{% endif %}
-        </summary>
-        <div class="cache-popover-corpo" hx-get="/hx/cachepanel"
-             hx-trigger="load, every 30s whileVisible"
-             hx-swap="innerHTML"><span class="mini">carregando…</span></div>
-      </details>
       <button type="button" class="badge-cache" id="badge-modelo"
               title="modelo de conversa NO AR AGORA — lido do servidor (/api/modelo/ativo)">🧠 …</button>
       <button type="button" class="btn-fontes" onclick="copiarConversa(this)"

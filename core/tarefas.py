@@ -40,31 +40,15 @@ _vram_ocupada_por: str | None = None
 
 _ATIVAS = Path(__file__).resolve().parent.parent / "saidas" / "tarefas_ativas.json"
 
-# média de duração por modalidade (s) — Redis se der, senão memória
-# (host do Redis vem do ENV: no container 127.0.0.1 não alcança o serviço)
-try:
-    import os
-    import redis
-    _r = redis.Redis(host=os.getenv("REDIS_HOST", "127.0.0.1"),
-                     port=int(os.getenv("REDIS_PORT", "6379")),
-                     socket_connect_timeout=0.3)
-    _r.ping()
-except Exception:
-    _r = None
-_medias: dict = {}           # fallback em memória
+# média de duração por modalidade (s) — MEMÓRIA (Redis removido 27/08; as
+# bases declarativas das modalidades cobrem o 1º uso de cada restart)
+_medias: dict = {}
 
 
 # ---------- média de tempo por modalidade (para o ETA exibido antes) ------
 
 def estimativa(modalidade: str) -> int | None:
     """Estimativa (s) da modalidade: média real medida, senão a base."""
-    if _r is not None:
-        try:
-            v = _r.get(f"rag:eta:{modalidade}")
-            if v:
-                return int(v)
-        except Exception:
-            pass
     from . import modalidades
     base = _MOD_BASE(modalidade)
     med = _medias.get(modalidade)
@@ -78,13 +62,7 @@ def _MOD_BASE(modalidade: str):
 
 def registrar_duracao(modalidade: str, segundos: float) -> None:
     media = (_medias.get(modalidade) or _MOD_BASE(modalidade) or segundos)
-    nova = round(0.7 * media + 0.3 * segundos)  # média móvel
-    _medias[modalidade] = nova
-    if _r is not None:
-        try:
-            _r.set(f"rag:eta:{modalidade}", nova)
-        except Exception:
-            pass
+    _medias[modalidade] = round(0.7 * media + 0.3 * segundos)  # média móvel
 
 
 # ---------- persistência das ativas (sweep pós-restart) ---------------------

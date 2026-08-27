@@ -40,7 +40,7 @@ echo "✔ dependências Python instaladas (.venv)"
   echo "# Nomes permitidos a criar login (um por linha)" > usuarios_permitidos.txt
 mkdir -p sessions saidas logs datasets
 
-# 3) stack docker (qdrant + rabbit + redis + sandbox + api)
+# 3) stack docker (qdrant + sandbox + api)
 if command -v docker >/dev/null 2>&1; then
   docker compose up -d --build
   echo "✔ docker compose no ar"
@@ -59,7 +59,6 @@ cat <<'FIM'
 == RagAroy pronto =="
    app         : http://localhost:8000  (crie o login na 1ª visita)
    qdrant      : http://localhost:6333/dashboard
-   rabbit mgmt : http://localhost:15672 (RABBIT_USER/PASS do .env)
 
    MODELOS (host): python servicos_llm.py   # sobe chat :8090 + embed :8081
    baixar mais   : python scripts/baixar_modelos.py --listar

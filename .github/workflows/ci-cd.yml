@@ -66,10 +66,10 @@ jobs:
             set -e
             cd ~/apps/rag-llama
             git pull --ff-only
-            mkdir -p sessions saidas logs datasets modelos_voz qdrant_data rabbit_data
+            mkdir -p sessions saidas logs datasets modelos_voz qdrant_data
             [[ -f users.json ]] || echo '{}' > users.json
             COMPOSE="docker compose -f docker-compose.yml -f $HOME/infra/services/rag-llama/docker-compose.prod.yml"
-            $COMPOSE up -d qdrant rabbit redis
+            $COMPOSE up -d qdrant
             docker compose -f docker-compose.yml build sandbox
             $COMPOSE up -d --no-deps sandbox
             $COMPOSE build api

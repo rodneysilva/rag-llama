@@ -116,27 +116,3 @@ def embedding_resumo(tail: int = 6000) -> dict:
     _EMB_CACHE.update(mtime=st.st_mtime if ARQ.exists() else 0,
                       tamanho=st.st_size if ARQ.exists() else 0, dados=r)
     return r
-
-
-def cache_resumo(tail: int = 4000) -> dict:
-    """Cache semântico: hits/stores (eventos tipo redis/cache) para o KPI
-    do dashboard — 'quantos tokens o cache poupou' ≈ hits."""
-    hits = stores = misses = 0
-    try:
-        for linha in ARQ.read_text(encoding="utf-8", errors="replace").splitlines()[-tail:]:
-            try:
-                ev = json.loads(linha)
-            except ValueError:
-                continue
-            if ev.get("tipo") not in ("redis", "cache"):
-                continue
-            msg = str(ev.get("msg", "")).lower()
-            if "hit" in msg or ev.get("hit"):
-                hits += 1
-            elif "store" in msg or "gravad" in msg:
-                stores += 1
-            elif "miss" in msg:
-                misses += 1
-    except OSError:
-        pass
-    return {"hits": hits, "stores": stores, "misses": misses}

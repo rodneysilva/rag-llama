@@ -28,7 +28,7 @@ from pydantic import BaseModel
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct
 
-from core import agent, auth, bussola, cache, catalog, config, contadores, fila, grafo, hf, limpeza, midia, modalidades, modelos, mcp_registry, rag, rerank, sessoes, sessions, tarefas, voz
+from core import agent, auth, bussola, catalog, config, contadores, executor, grafo, hf, limpeza, midia, modalidades, modelos, mcp_registry, rag, rerank, sessoes, sessions, tarefas, voz
 from core import historico, resolucoes, telemetria
 from core.linguagens import LINGUAGENS
 from core.auto import responde_auto, _web_aprofundado
@@ -60,37 +60,28 @@ app.mount("/static", StaticFiles(directory=str(
 
 auth.bootstrap_admin()  # cria o usuário inicial do .env (uma vez)
 
-# ---------- fila de jobs (RabbitMQ + DLX/DLQ) ----------
-
-# Jobs RE-EXECUTÁVEIS: a mensagem da fila carrega kind+payload; a FÁBRICA de
-# cada kind (registrada no import) reconstrói o executor a partir do payload.
-# Antes a mensagem trazia só o id e o executor era uma closure em memória —
-# restart da API descartava a mensagem silenciosamente (job perdido).
-# `_despachar(fabricar, kind, payload)` chama `fabricar(payload)` na hora E
-# registra a fábrica: o worker reconstrói executores perdidos no consumo.
-_FABRICAS: dict[str, object] = {}
-# registry de status por kind — para o worker detectar REENTREGA (mensagem
-# re-entregada após queda de conexão) e NÃO re-executar o que já rodou
-_REGISTROS: dict = {}
+# ---------- executor de jobs (async, in-process — substituiu o RabbitMQ) ----------
+# Decisão do dono (27/08): "para esses tipos de chamadas não tem necessidade
+# do rabbitmq; quero o controle de erros". Fila asyncio SERIAL (VRAM segue
+# gargalo), fábricas rodam em to_thread (event loop livre), retry com
+# backoff p/ transientes, falha de negócio registrada no próprio job.
+# Restart da API: jobs somem com ERRO CLARO no polling (404 tratado).
 
 
 def _despachar(fabricar, kind: str, payload: dict,
                reg: "JobRegistry | None" = None) -> None:
-    """Executa um job VIA FILA (RabbitMQ — sobrevive a restart, DLX/DLQ);
-    sem broker no ar, cai para thread direta (o sistema nunca para).
+    """Executa um job no EXECUTOR ASYNC; sem event loop (scripts CLI) cai
+    para thread direta. Com `reg` informado, a entrada de status já existe
+    ANTES do return (status nunca dá 404 entre despacho e pickup).
 
-    `fabricar(payload)` devolve o runner (closure) — é chamado aqui para o
-    caminho imediato E de novo no worker se o executor se perder. Com
-    `reg` informado, a entrada de status já existe ANTES do return (o
-    worker pode demorar a pegar a mensagem — status não pode dar 404)."""
+    `fabricar(payload)` devolve o runner (closure) — contrato inalterado
+    das 21 fábricas do sistema."""
     jid = payload.get("job") or uuid.uuid4().hex
     payload = {**payload, "job": jid}
     if reg is not None:
-        _REGISTROS[kind] = reg
         reg.iniciar(jid)
 
-    # HISTÓRICO: embrulha a FÁBRICA (não o runner) — cobre o caminho direto
-    # E o replay do worker, que chama fabricar(payload) de novo
+    # HISTÓRICO: embrulha a FÁBRICA — cobre o caminho async E o de thread
     fabricar_puro = fabricar
 
     def fabricar_com_historico(p: dict):
@@ -122,65 +113,31 @@ def _despachar(fabricar, kind: str, payload: dict,
         return rodar
 
     fabricar = fabricar_com_historico
-    _FABRICAS[kind] = fabricar
     rodar = fabricar(payload)
     if not callable(rodar):
         # 🚨 fábrica FORA DO CONTRATO (executa no corpo em vez de devolver
-        # rodar): o corpo JÁ RODOU nesta thread — publicar no worker
-        # executaria TUDO DE NOVO (bug real: teste de sandbox rodava 2x e
-        # o POST travava o build inteiro na request). Não publica; avisa
-        # alto para a fábrica ser corrigida.
+        # rodar): o corpo JÁ RODOU nesta thread — enfileirar executaria
+        # TUDO DE NOVO (bug real do sandbox 2x). Não despacha; avisa alto.
         print(f"🚨 fábrica de '{kind}' executou no corpo (devolve "
               f"{type(rodar).__name__} em vez de runner) — corrigir para "
-              "def fabricar(p): …; return rodar. Job NÃO publicado "
+              "def fabricar(p): …; return rodar. Job NÃO enfileirado "
               "(evitaria execução dupla)")
         return
-    if not fila.publicar(kind, jid, payload):
-        # fallback thread: É esta thread que executa — marca picked
+    if executor.despachar(kind, jid, payload, fabricar):
         if reg is not None:
-            reg.jobs[jid]["picked"] = True
-        threading.Thread(target=rodar, daemon=True).start()
-
-
-def _no_worker(msg: dict) -> None:
-    """Callback do worker: roda o executor registrado e acks; crash → DLQ.
-    Executor perdido (API reiniciou com mensagem na fila): a FÁBRICA do kind
-    reconstrói — o status do job volta a existir e o polling recupera.
-
-    IDEMPOTENTE de verdade: a entrada de status é pré-criada pelo _despachar
-    com `picked=False` (aguardando pickup). Aqui:
-      - picked=True + running  → execução em curso noutra thread → IGNORA
-        (é REENTREGA: o broker reenviou após queda de conexão — sem isto o
-        job executava 2x e a 2ª rodada zerava o status da 1ª);
-      - picked=True + concluído (result/error) → já processado → IGNORA;
-      - picked=False → PRIMEIRA entrega → marca picked e EXECUTA (a entrada
-        pré-criada NÃO é "em curso" — é o placeholder do status)."""
-    jid = msg.get("job", "")
-    kind = msg.get("kind")
-    reg = _REGISTROS.get(kind or "")
+            reg.jobs[jid]["picked"] = True   # entregue ao executor
+        return
+    # sem event loop (CLI/testes): thread direta, como sempre foi
     if reg is not None:
-        if jid in reg.jobs:
-            if reg.jobs[jid].get("picked"):
-                print(f"🔁 job {jid} ({kind}) já executado/em curso — reentrega ignorada")
-                telemetria.evento("rabbit", f"🔁 reentrega de {jid} ({kind}) IGNORADA "
-                                            "(idempotente)", job=jid, kind=kind)
-                return
-            reg.jobs[jid]["picked"] = True
-        else:
-            # replay pós-restart SEM dispatch novo nesta instância: reconstrói
-            # o placeholder JÁ marcado — reentregas seguintes são ignoradas
-            reg.iniciar(jid)
-            reg.jobs[jid]["picked"] = True
-    telemetria.evento("rabbit", f"📥 job {jid} ({kind}) pego pelo worker",
-                      job=jid, kind=kind)
-    fabricar = _FABRICAS.get(kind)
-    if fabricar:
-        fabricar(msg.get("payload") or {})()
-    else:
-        print(f"⚠️ job {jid} ({kind}) sem fábrica — descartado "
-              "(kind desconhecido nesta versão da API)")
+        reg.jobs[jid]["picked"] = True
+    threading.Thread(target=rodar, daemon=True).start()
 
-fila.iniciar_worker(_no_worker, log=lambda m: print(f"🐇 {m}"))
+
+@app.on_event("startup")
+async def _subir_executor():
+    """Sobe o worker async DENTRO do event loop do uvicorn."""
+    from core import executor as _exec
+    _exec.iniciar(log=lambda m: print(f"⚙️ {m}"))
 
 
 # ⏱️ PRÉ-AQUECIMENTO do reranker (pedido do dono — "por que demorou tanto?"):
@@ -722,14 +679,10 @@ def _msgs_da_sessao(sid: str | None, owner: str) -> list[dict]:
 @app.get("/hx/contagem")
 def hx_contagem(request: Request):
     """CONTADORES EM TEMPO REAL (partial do topbar): LLM CARREGADA (sutil,
-    pedido do dono) + tokens enviados/gerados + cache semantico."""
+    pedido do dono) + tokens enviados/gerados."""
     _usuario(request)
     tot = contadores.totais() or {}
     t = tot.get("total") or {}
-    try:
-        ci = cache.info() or {}
-    except Exception:
-        ci = {"online": False, "entradas": 0}
     modelo = modelos.servido(modelos.CHAT_PORTA)  # cache 10s: barato
     vl = False
     try:
@@ -741,9 +694,7 @@ def hx_contagem(request: Request):
                                        "modelo": modelo, "vl": vl,
                                        "entrada": t.get("entrada", 0),
                                        "saida": t.get("saida", 0),
-                                       "chamadas": t.get("chamadas", 0),
-                                       "cache_n": ci.get("entradas", 0),
-                                       "cache_on": bool(ci.get("online"))})
+                                       "chamadas": t.get("chamadas", 0)})
 
 
 @app.get("/hx/jobsbar")
@@ -808,11 +759,6 @@ def pagina_chat(request: Request):
         ctx["colecoes"] = collections() or []
     except Exception:
         ctx["colecoes"] = []
-    # ⚡ cache semântico no header do chat (estado real do core/cache)
-    try:
-        ctx["cache"] = cache.info() or {"online": False, "entradas": 0}
-    except Exception:
-        ctx["cache"] = {"online": False, "entradas": 0}
     # modelos de CONVERSA p/ o seletor (o ativo marcado), CATEGORIZADOS:
     # programação (coder) x conversa geral — optgroups no combobox
     try:
@@ -1792,12 +1738,6 @@ def hx_conversa_apagar(sid: str, request: Request):
                                 apagados.append(alvo_arq.name)
                     if apagados:
                         _conv.log(jid, f"🧹 {len(apagados)} mídia(s) apagada(s) do disco")
-                    try:
-                        n = cache.limpar_sid(alvo)
-                        if n:
-                            _conv.log(jid, f"🧹 {n} entrada(s) de cache desta sessão")
-                    except Exception as e:
-                        _conv.log(jid, f"⚠️ cache: {str(e)[:100]}")
                     sessions.delete_session(alvo)
                     _conv.log(jid, "✓ conversa apagada")
                     _conv.concluir(jid, result={"sid": alvo,
@@ -1892,32 +1832,18 @@ def pagina_dashboard(request: Request):
     uso = contadores.totais() or {}
     total = uso.get("total") or {}
     por = uso.get("por_servico") or {}
-    try:
-        cache_info = cache.info()
-    except Exception:
-        cache_info = {"online": False, "entradas": 0}
-    try:
-        fila_info = fila.estado()
-    except Exception:
-        fila_info = {"online": False, "pendentes": 0, "mortas": 0}
     ctx["kpis"] = {
         "colecoes": len(scan), "grupos": 0,
         "pontos": sum((v or {}).get("points") or 0 for v in scan.values()),
         "tokens_in": total.get("entrada", 0), "tokens_out": total.get("saida", 0),
         "tokens_total": total.get("entrada", 0) + total.get("saida", 0),
         "chamadas": total.get("chamadas", 0), "por_servico": por,
-        "cache": f"{cache_info.get('entradas', 0)}" if cache_info.get("online") else "offline",
-        "fila": (f"{fila_info.get('pendentes', 0)}/{fila_info.get('mortas', 0)}"
-                 if fila_info.get("online") else "threads"),
     }
     ctx["execucoes"] = historico.ultimos(None, 40)
-    # ── INFRA detalhada (pedido do dono: "quero saber como está o qdrant,
-    # redis, rabbitmq"): coleções do Qdrant com pontos/dimensão e o estado
-    # do cache Redis — o RabbitMQ tem seção própria AO VIVO abaixo ──
+    # ── INFRA detalhada: coleções do Qdrant com pontos/dimensão ──
     ctx["colecoes_detalhe"] = sorted(
         ((nome, v) for nome, v in (scan or {}).items()),
         key=lambda kv: -(kv[1].get("points") or 0))
-    ctx["cache_info"] = cache_info
     # ── modelos de linguagem: uso REAL por modelo (telemetria) + GB do
     # GGUF + quem está servindo agora + VRAM corrente ──
     from core import estatisticas
@@ -1972,41 +1898,9 @@ def pagina_dashboard(request: Request):
     ctx["servindo"] = servindo
     try:
         ctx["embed_resumo"] = estatisticas.embedding_resumo()
-        ctx["cache_stats"] = estatisticas.cache_resumo()
     except Exception:
         ctx["embed_resumo"] = {"chamadas": 0, "documentos": 0, "segundos": 0}
-        ctx["cache_stats"] = {"hits": 0, "stores": 0, "misses": 0}
-    # fila Rabbit (explorada em tempo real no dashboard)
-    try:
-        ctx["fila_info"] = fila.estado()
-    except Exception:
-        ctx["fila_info"] = {"online": False}
     return TEMPLATES.TemplateResponse(request, "dashboard.html", ctx)
-
-
-@app.get("/hx/fila")
-def hx_fila(request: Request):
-    """Fila RabbitMQ em TEMPO REAL (partial com polling): profundidade,
-    DLQ, worker, jobs por tipo — e o estado COMPLETO do broker (Management
-    API): por fila consumidores/taxas, PEEK da DLQ (mensagens mortas com
-    o erro) e histórico agregado da telemetria."""
-    _usuario(request)
-    try:
-        f = fila.detalhe()
-    except Exception:
-        f = {"online": False, "filas": [], "dlq_msgs": [], "telemetria": {}}
-    por_tipo = {}
-    try:
-        for e in historico.ultimos(None, 60):
-            t = e.get("tipo") or "outro"
-            d = por_tipo.setdefault(t, {"total": 0, "ok": 0, "erro": 0})
-            d["total"] += 1
-            d["ok" if e.get("ok") else "erro"] += 1
-    except Exception:
-        pass
-    return TEMPLATES.TemplateResponse(
-        request, "_fila.html",
-        {"request": request, "fila": f, "por_tipo": por_tipo})
 
 
 def _campos_config() -> dict:
@@ -2039,8 +1933,7 @@ def pagina_sistema(request: Request):
     ctx["servicos"] = st["services"]
     ctx["modelos"] = {"llm": st.get("modelo"), "embed": st.get("embedding")}
     ctx["nomes"] = {"qdrant": "Qdrant", "llm": "LLM (chat)", "embed": "Embedding",
-                    "visao": "Multimodal (imagem→texto)", "rabbit": "RabbitMQ",
-                    "redis": "Redis"}
+                    "visao": "Multimodal (imagem→texto)"}
     # 🧠 ATIVOS pela FONTE ÚNICA (`modelos_ativos`): o cabeçalho mostra o
     # que está SERVINDO agora (chat/visão/difusores) — nunca o .env velho.
     ctx["ativos"] = modelos_ativos()
@@ -3106,20 +2999,6 @@ def modelo_trocar(body: ModeloAtivarIn, request: Request):
     return {"ok": True, "iniciada": alias}
 
 
-def _check_redis() -> dict:
-    """Ping no Redis com detalhe útil (entradas do cache + uso de tokens)."""
-    try:
-        cliente = cache._redis_client()
-        if cliente is None:
-            return {"name": "Redis", "ok": False, "detail": "sem conexão"}
-        entradas = cliente.zcard("rag:cache:idx")
-        uso = int(cliente.get("rag:uso:total:chamadas") or 0)
-        return {"name": "Redis", "ok": True,
-                "detail": f"cache {entradas} · {uso} chamadas LLM"}
-    except Exception as e:
-        return {"name": "Redis", "ok": False, "detail": str(e)[:60]}
-
-
 _STATUS_CACHE: dict = {"t": 0.0, "dados": None}
 
 
@@ -3155,13 +3034,11 @@ def status():
         except Exception:
             return {}
 
-    with ThreadPoolExecutor(max_workers=6) as ex:
+    with ThreadPoolExecutor(max_workers=4) as ex:
         fut = {
             "qdrant": ex.submit(_check, "Qdrant", f"{config.QDRANT_URL}/healthz"),
             "llm": ex.submit(_check, "LLM", f"{config.LLM_BASE_URL}/models"),
             "embed": ex.submit(_check, "Embedding", f"{config.EMBED_BASE_URL}/models"),
-            "rabbit": ex.submit(_estado_rabbit),
-            "redis": ex.submit(_check_redis),
             "visao": ex.submit(_svc_visao),
             "_scan": ex.submit(_svc_scan),
         }
@@ -3182,17 +3059,6 @@ def status():
     }
     _STATUS_CACHE.update(t=agora, dados=dados)
     return dados
-
-
-def _estado_rabbit() -> dict:
-    try:
-        f = fila.estado()
-        return {"name": "RabbitMQ", "ok": bool(f.get("online")),
-                "detail": (f"{f.get('pendentes', 0)} na fila · "
-                           f"{f.get('mortas', 0)} na DLQ"
-                           if f.get("online") else "offline")}
-    except Exception as e:
-        return {"name": "RabbitMQ", "ok": False, "detail": str(e)[:60]}
 
 
 @app.get("/api/collections")
@@ -3832,10 +3698,7 @@ def parar_tudo(request: Request):
         cancelados += reg.cancelar_todos("cancelado (⏹ parar tudo)")
     tarefas.cancelar_todas()
     log(f"jobs cancelados: {len(cancelados)}")
-    # 2) fila: purga tarefas + DLQ e publica o evento de cancelamento
-    purga = fila.purgar_tudo()
-    log(f"fila Rabbit purgada: {purga}")
-    # 3) motores: desmonta todos liberando a VRAM — NO HOST (em container,
+    # 2) motores: desmonta todos liberando a VRAM — NO HOST (em container,
     # os processos pertencem ao host: proxy ao agente; senão matava nada
     # e reportava "derrubado" mentindo)
     if config.EM_CONTAINER:
@@ -3846,14 +3709,13 @@ def parar_tudo(request: Request):
             motores = {"derrubados": [], "erro": str(e)[:200]}
     else:
         motores = modelos.derrubar_todos_motores(log=log)
-    # 3b) reranker cross-encoder (CPU, residente no PRÓPRIO processo da API):
+    # 2b) reranker cross-encoder (CPU, residente no PRÓPRIO processo da API):
     # solta o modelo da memória junto com os motores (política Parar tudo)
     rerank.descarregar()
-    telemetria.evento("rabbit", "⏹ PARAR TUDO executado",
-                      jobs=len(cancelados), fila=purga.get("purgados"),
+    telemetria.evento("jobs", "⏹ PARAR TUDO executado",
+                      jobs=len(cancelados),
                       motores=motores.get("derrubados"))
-    return {"ok": True, "jobs_cancelados": cancelados, "fila": purga,
-            "motores": motores}
+    return {"ok": True, "jobs_cancelados": cancelados, "motores": motores}
 
 
 _rota_status("/api/ingest/status/{job}", _ingest,
@@ -4183,33 +4045,12 @@ def estudio_apagar_sessao(sid: str, request: Request):
     return {"removida": sid}
 
 
-@app.get("/api/cache")
-def cache_info():
-    """Estado do cache semântico (Redis)."""
-    return cache.info()
-
-
 @app.get("/api/contagem")
 def contagem_tokens():
     """📊 Uso da LLM local (llama-server :8090) — TUDO é contado pelo usage
     que o servidor devolve: por serviço (chat, ingestão, seed, limpeza,
     estúdio, manutenção, sistema/testes) e total geral."""
     return contadores.totais()
-
-
-@app.get("/api/fila")
-def fila_estado():
-    """🐇 Estado da fila de jobs (RabbitMQ): pendentes, mortas (DLQ) e o
-    modo de operação (online = via fila; offline = threads diretas)."""
-    return fila.estado()
-
-
-@app.post("/api/fila/dlq/reprocessar")
-def fila_reprocessar():
-    """Devolve as mensagens da DLQ para a fila de tarefas (reexecutar)."""
-    n = fila.reliquidar_dlq()
-    print(f"🐇 {n} mensagem(ns) da DLQ devolvida(s) à fila")
-    return {"reprocessadas": n}
 
 
 # ---------- logs dos serviços (tail em tempo real p/ o topbar) -----------
@@ -4376,27 +4217,13 @@ def gpu_modo(body: GpuModoIn, request: Request):
     return {"modo": config.GPU_MODO}
 
 
-@app.get("/hx/cachepanel")
-def hx_cachepanel(request: Request):
-    """Painel do CACHE (badge ⚡ do topbar — pedido do dono: "quero saber
-    quais caches estão carregados"): entradas REAIS do Redis — pergunta,
-    quando foi guardada, escopo e trecho da resposta pronta."""
-    _usuario(request)
-    try:
-        info = cache.info()
-    except Exception:
-        info = {"online": False, "entradas": 0, "lista": []}
-    return TEMPLATES.TemplateResponse(request, "_cachepanel.html",
-                                      {"request": request, "info": info})
-
-
 @app.get("/hx/logs/{fonte}")
 def hx_logs(fonte: str, request: Request):
     """TAIL AO VIVO com fonte QUE EXISTE NO SERVIDOR (pedido do dono: "os
     logs não aparecem em tempo real" — as fontes antigas apontavam arquivos
     do llama-server que vivem SÓ na estação com GPU). Agora:
       llm      → telemetria filtrada (cada chamada LLM: modelo/tokens/s)
-      eventos  → telemetria completa (llm + rabbit + cache + gerações)
+      eventos  → telemetria completa (llm + jobs + cache + gerações)
       jobs     → últimas linhas dos logs/jobs/*.jsonl (o que rodou)
     """
     _usuario(request)
@@ -4435,9 +4262,9 @@ def hx_logs(fonte: str, request: Request):
 @app.get("/api/telemetria")
 def get_telemetria(tipo: str = "", limit: int = 60):
     """Histórico PERSISTENTE dos eventos de infraestrutura (tail do
-    logs/telemetria.jsonl): `tipo` = llm|rabbit|redis (redis inclui cache;
-    vazio = tudo). É o "como está trabalhando" de cada peça — cada chamada
-    LLM (tokens/duração), cada job no Rabbit, cada hit/miss do cache."""
+    logs/telemetria.jsonl): `tipo` = llm|jobs (vazio = tudo). É o
+    "como está trabalhando" de cada peça — cada chamada LLM
+    (tokens/duração), cada job no executor async."""
     return {"eventos": telemetria.ultimos(tipo or None, max(1, min(limit, 300)))}
 
 
@@ -4681,14 +4508,6 @@ def _extrair_anexo(caminho: str) -> str:
         from langchain_community.document_loaders import PyPDFLoader
         return "\n".join(p.page_content for p in PyPDFLoader(caminho).load())
     return Path(caminho).read_text(encoding="utf-8", errors="replace")
-
-
-@app.delete("/api/cache")
-def cache_limpar():
-    """Apaga todo o cache semântico."""
-    n = cache.limpar()
-    print(f"🧹 Cache semântico limpo ({n} entradas)")
-    return {"removidas": n}
 
 
 @app.post("/api/specs/reload")
@@ -5666,60 +5485,28 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
                 "model": modelos.servido(modelos.CHAT_PORTA) or config.LLM_MODEL,
                 "provider": body.provider or "llama-server",
                 "tokens": contadores.balanco_ler()}
-    # ⚡ CACHE SEMÂNTICO (Redis): TODOS os modos de texto passam por ele
-    # (rag/livre/híbrido — pedido do dono: "os comandos sempre pelo cache"),
-    # INCLUSIVE com histórico: o limiar 0.97 só casa pergunta PRATICAMENTE
-    # idêntica ("e agora?" nunca bate) — repetir o comando traz a resposta
-    # na hora. O STORE continua só de respostas SEM histórico (autocontidas
-    # — resposta de follow-up citando a conversa não é guardada).
-    _motivos_cache = []
+    # (cache semântico Redis REMOVIDO por decisão do dono 27/08 — a 🧭
+    # bússola (Qdrant, coleção sessoes_chat) continua cobrindo perguntas
+    # repetidas cross-sessão com escopo por owner)
+    _motivos_bussola = []
     if body.mode not in ("rag", "livre", "hibrido"):
-        _motivos_cache.append(f"modo {body.mode}")
+        _motivos_bussola.append(f"modo {body.mode}")
     if body.mcps:
-        _motivos_cache.append("ferramentas MCP")
+        _motivos_bussola.append("ferramentas MCP")
     if body.aprovacao:
-        _motivos_cache.append("aprovação pendente")
+        _motivos_bussola.append("aprovação pendente")
     if body.anexo_imagem:
-        _motivos_cache.append("imagem anexada")
+        _motivos_bussola.append("imagem anexada")
     if body.estado_agente:
-        _motivos_cache.append("estado do agente")
-    cacheavel = not _motivos_cache
-    # DONO da sessão (guardrail: cache contextualizado por usuário —
-    # sessão de OUTRO usuário nunca vê esta resposta). ⚠️ MESMO FALLBACK
-    # do save_session: sessão AINDA NÃO SALVA (1ª mensagem — o job roda
-    # antes do POST gravar o arquivo) tem owner "" e o arquivo depois
-    # ganha AUTH_ADMIN_USER — sem o fallback o store gravava "" e o
-    # lookup da 2ª ("rodney") NUNCA batia o escopo (bug real do cache).
+        _motivos_bussola.append("estado do agente")
+    cacheavel = not _motivos_bussola
+    # DONO da sessão (guardrail de escopo da bússola — por usuário).
     try:
         owner = (sessions.get_session(body.sessao) or {}).get("owner", "") \
             if body.sessao else ""
     except Exception:
         owner = ""
     owner = owner or getattr(config, "AUTH_ADMIN_USER", "") or ""
-    # chave de MODELO = o que o SERVIDOR está servindo AGORA (nunca o
-    # .env da VPS, que fica velho depois de trocas feitas na estação)
-    modelo_cache = modelos.servido(modelos.CHAT_PORTA) or config.LLM_MODEL
-    if cacheavel:
-        hit = cache.lookup(body.question, colecoes, modelo_cache, owner=owner)
-        if hit:
-            print(f"⚡ Cache semântico ({hit['similaridade']:.3f}): {body.question[:60]}")
-            log(f"⚡ cache semântico ({hit['similaridade']:.3f}) — resposta imediata", "cache")
-            return {"question": body.question, "mode": body.mode,
-                    "collections": hit["colecoes"], "docs": [],
-                    "answer": hit["resposta"], "erros": {},
-                    "cache": {"usado": True, "similaridade": hit["similaridade"],
-                              "pergunta_original": hit["pergunta"],
-                              "modo": hit.get("modo", "?"),
-                              "modelo": hit.get("modelo", ""),
-                              "criado_em": hit.get("criado_em", 0),
-                              "resumo": (hit["resposta"] or "")[:280]},
-                    "model": modelo_cache,
-                    "provider": body.provider or "llama-server",
-                    "tokens": contadores.balanco_ler()}
-        log("⚡ cache semântico: sem equivalente — seguindo o fluxo completo", "cache")
-    else:
-        log("⚡ cache semântico: não se aplica ("
-            + ", ".join(_motivos_cache) + ")", "cache")
     # 🧭 F3 — BÚSSOLA PRÉ-TOKEN: "já respondi isso numa sessão passada?"
     # embedding contra a coleção de sistema sessoes_chat (escopo por owner).
     # GUARDRAIL (pedido do dono): a bússola NUNCA responde sozinha com o
@@ -5782,21 +5569,11 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
         contadores.set_etapa("resposta (livre)")
         resposta = rag.answer_free(body.question, body.history, on_token=on_token)
         contadores.set_etapa(None)
-        if cacheavel and not body.history:
-            # STORE só de resposta SEM histórico (autocontida — resposta de
-            # follow-up citando a conversa não é guardada); MESMO escopo do
-            # lookup (o modo livre não busca, mas a pergunta veio com as
-            # coleções resolvidas — gravar vazio nunca bateria); modelo =
-            # o que está NO AR neste momento (pode ter TROCADO no meio da
-            # resposta — a chave acompanha o servidor)
-            cache.store(body.question, resposta, "livre", colecoes,
-                        modelo=modelos.servido(modelos.CHAT_PORTA) or config.LLM_MODEL,
-                        owner=owner, sid=body.sessao or "")
-            # 🧭 F3: caminho EARLY-RETURN do livre precisa registrar também
-            # (o return do fim do fluxo não é alcançado aqui)
-            if resposta and not getattr(config, "MOCK_LLM", False):
-                bussola.registrar(body.question, resposta, body.sessao, owner,
-                                  "livre", colecoes, log=log)
+        # 🧭 F3: caminho EARLY-RETURN do livre registra a resposta na bússola
+        # (cache semântico removido — a bússola cobre repetições)
+        if resposta and not getattr(config, "MOCK_LLM", False):
+            bussola.registrar(body.question, resposta, body.sessao, owner,
+                              "livre", colecoes, log=log)
         print(f"\n🧠 Pergunta (modo livre): {body.question}\n🤖 Resposta: {resposta}\n")
         return {"question": body.question, "mode": "livre", "collections": [],
                 "docs": [], "answer": resposta, "erros": {},
@@ -6240,14 +6017,9 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
         print(f"\n🔗 Pergunta (modo {body.mode}): {body.question} [coleções: {colecoes}]"
               f"\n🔌 MCPs: {body.mcps or []} — {len(usos)} chamada(s) de ferramenta"
               f"\n📚 {len(found)} documento(s)\n🤖 Resposta: {answer}\n")
-    if cacheavel and not pendente and not body.history:
-        # STORE só de respostas SEM histórico (autocontidas) — o lookup roda
-        # sempre, mas guardar resposta de follow-up (que cita a conversa)
-        # serviria mal uma sessão limpa no futuro
-        cache.store(body.question, answer, body.mode, colecoes,
-                    modelo=modelos.servido(modelos.CHAT_PORTA) or config.LLM_MODEL,
-                    owner=owner, sid=body.sessao or "")
-        # 🧭 F3: registra (pergunta→resposta) para a PRÓXIMA sair de graça
+    if not pendente:
+        # 🧭 F3: registra (pergunta→resposta) na bússola para a PRÓXIMA
+        # pergunta igual sair de graça (cache semântico removido 27/08)
         if answer and not getattr(config, "MOCK_LLM", False):
             bussola.registrar(body.question, answer, body.sessao, owner,
                               body.mode, colecoes, log=log)

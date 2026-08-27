@@ -3,13 +3,14 @@
 Uma linha JSON por evento em logs/telemetria.jsonl (volume montado no
 container — sobrevive a restart). Tipos:
   llm    → cada chamada ao llama-server (modelo, 🔻 entrada, 🔺 saída, duração)
-  rabbit → publish/consume/DLQ/reentrega de jobs
-  redis  → cache hit/miss/store, contadores
+  jobs   → executor async (enfileirado/iniciado/retry/falha/fim)
+  geracao → mídia gerada (Flux/Wan/externos)
+  (tipos legados "rabbit"/"redis"/"cache" continuam LEGÍVEIS no histórico
+   antigo — sem novos emissores desde a remoção do Rabbit/Redis 27/08)
 
-Quem quer ver "como o Redis e o RabbitMQ estão trabalhando" (e as
-comunicações com a LLM) consulta /api/telemetria?tipo=… — o badge do topo
-da webui abre o histórico ao clicar. Telemetria NUNCA derruba a operação:
-qualquer erro aqui é engolido.
+Quem quer ver "como o sistema está trabalhando" consulta
+/api/telemetria?tipo=… Telemetria NUNCA derruba a operação: qualquer erro
+aqui é engolido.
 """
 import json
 import threading
@@ -23,7 +24,7 @@ _ultima_truncada = 0.0
 
 
 def evento(tipo: str, msg: str, **campos) -> None:
-    """Registra um evento (llm|rabbit|redis|cache) no histórico."""
+    """Registra um evento (llm|jobs|geracao…) no histórico."""
     global _ultima_truncada
     try:
         reg = {"ts": time.strftime("%d/%m %H:%M:%S"), "tipo": tipo,
@@ -64,10 +65,7 @@ def ultimos(tipo: str | None = None, limite: int = 50) -> list[dict]:
             except Exception:
                 continue
             if tipo:
-                # "cache" é alias de redis (e SÓ de redis — antes o filtro
-                # deixava eventos de cache passarem em QUALQUER consulta)
-                aceitos = {tipo} | ({"cache"} if tipo == "redis" else set())
-                if e.get("tipo") not in aceitos:
+                if e.get("tipo") != tipo:
                     continue
             eventos.append(e)
         return eventos[-limite:]

@@ -5,6 +5,9 @@
 # NENHUM segredo/host aqui: valores sensíveis via variáveis do stack
 # (definidas no dashboard) ou do .env do servidor.
 # Caminhos de estado: /home/<user>/apps/rag-llama (persistência no host).
+#
+# Redis/RabbitMQ REMOVIDOS (27/08): executor async in-process, contadores
+# em logs/uso_llm.jsonl, bússola (Qdrant) no lugar do cache semântico.
 
 services:
   qdrant:
@@ -13,27 +16,6 @@ services:
     restart: always
     volumes:
       - ${APP_DATA_DIR:-${APP_DATA_DIR:-/srv/rag-llama}}/qdrant_data:/qdrant/storage
-
-  rabbit:
-    image: rabbitmq:3.13-management
-    container_name: ragaroy-rabbit
-    restart: always
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBIT_USER:-ragaroy}
-      RABBITMQ_DEFAULT_PASS: ${RABBIT_PASS:-ragaroy}
-      RABBITMQ_DEFAULT_VHOST: /
-    volumes:
-      - ${APP_DATA_DIR:-${APP_DATA_DIR:-/srv/rag-llama}}/rabbit_data:/var/lib/rabbitmq
-
-  redis:
-    image: redis:7-alpine
-    container_name: ragaroy-redis
-    restart: always
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
 
   api:
     image: ragaroy-api:prod
@@ -45,16 +27,9 @@ services:
     depends_on:
       qdrant:
         condition: service_started
-      rabbit:
-        condition: service_started
-      redis:
-        condition: service_healthy
     environment:
       RAGAROY_CONTAINER: "1"
       QDRANT_URL: http://qdrant:6333
-      RABBIT_URL: ${RABBIT_URL}
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
       # LLM/embedding via túnel zero-trust da estação — URLs e chave do stack
       LLM_BASE_URL: ${LLM_BASE_URL}
       EMBED_BASE_URL: ${LLM_EMBED_BASE_URL}

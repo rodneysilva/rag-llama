@@ -8,17 +8,6 @@
     <button type="button" class="acao" onclick="copiarMensagem(this.closest('.msg'))">&#128203; copiar</button>
     <a href="#" class="acao" onclick="falarTexto(this.closest('.msg').querySelector('.tts-data').dataset.texto); return false;">&#9654; ouvir</a>
   </div>
-  {% if cache and cache.usado %}
-  <div class="rodape">⚡ cache semântico ({{ '%.3f'|format(cache.similaridade) }}) — resposta imediata, zero chamada à LLM</div>
-  <details class="cache-conteudo">
-    <summary>o que estava no cache</summary>
-    <div class="log">
-      <div><span class="hora">pergunta guardada</span>{{ cache.pergunta_original }}</div>
-      <div><span class="hora">similaridade</span>{{ '%.3f'|format(cache.similaridade) }} · modo {{ cache.modo or '?' }} · modelo {{ cache.modelo or '?' }}{% if cache.criado_em %} · guardada em {{ cache.criado_em | strftime('%d/%m %H:%M') }}{% endif %}</div>
-      <div><span class="hora">resposta guardada</span>{{ cache.resumo or '' }}{% if (cache.resumo or '') | length >= 280 %}…{% endif %}</div>
-    </div>
-  </details>
-  {% endif %}
   {% if docs %}
   <div class="rodape">
     {# aspas simples: tojson do Jinja escapa ' (&#x27;) mas NÃO escapa "

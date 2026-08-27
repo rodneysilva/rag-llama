@@ -16,7 +16,6 @@ sessions/
 saidas/
 logs/
 qdrant_data/
-rabbit_data/
 users.json
 .env
 mcp_servers/

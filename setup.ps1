@@ -63,7 +63,6 @@ if ($Modelos) {
 Write-Output "== RagAroy no ar =="
 Write-Output "   app           : http://localhost:8000  (ou https://<sub>.<dominio>)"
 Write-Output "   qdrant        : http://localhost:6333/dashboard"
-Write-Output "   rabbit mgmt   : http://localhost:15672  (usuario/senha: RABBIT_USER/RABBIT_PASS do .env; dev default 'ragaroy')"
 Write-Output ""
 Write-Output "   MODELOS (host): python servicos_llm.py  <- chat/embedding para o container usar"
 Write-Output "   Estudio/troca de modelo: modo host (python -m uvicorn api.app:app --host 0.0.0.0 --port 8000)"

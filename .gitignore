@@ -16,9 +16,8 @@ datasets/
 tests_manual/
 demo_docs/
 
-# volumes docker do projeto (qdrant/rabbit do compose)
+# volumes docker do projeto (qdrant do compose)
 qdrant_data/
-rabbit_data/
 
 # segredo — .env.example é a referência versionada
 .env

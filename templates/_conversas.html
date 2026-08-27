@@ -1,7 +1,7 @@
 {# Sidebar de conversas (estilo Open WebUI): só título, hover revela apagar.
-   EXCLUSÃO É JOB NA FILA (RabbitMQ): o item entra em "⏳ apagando…" e a
-   lista AUTO-POLA (every 2s) enquanto houver exclusão em curso — quando o
-   job conclui, o item some e o polling para sozinho (o div novo nasce sem
+   EXCLUSÃO É JOB EM 2º PLANO (executor async): o item entra em "⏳ apagando…"
+   e a lista AUTO-POLA (every 2s) enquanto houver exclusão em curso — quando
+   o job conclui, o item some e o polling para sozinho (o div novo nasce sem
    atributos de polling). Falhou/engasgo 502 → o item volta ao normal no
    próximo poll e o ✕ pode ser clicado de novo. #}
 <div id="lista-conversas"
@@ -10,10 +10,10 @@
   {% set apg = c.id in (apagando or []) %}
   <div class="conv-item {{ 'atual' if c.id == atual }}{{ ' apagando' if apg }}">
     {% if apg %}
-    <button class="conv-abrir" disabled title="exclusão em andamento na fila…">
+    <button class="conv-abrir" disabled title="exclusão em andamento…">
       <span class="conv-titulo">{{ c.titulo }}</span>
     </button>
-    <span class="conv-x apg" title="apagando (job na fila) — a lista atualiza sozinha">⏳</span>
+    <span class="conv-x apg" title="apagando (job em 2º plano) — a lista atualiza sozinha">⏳</span>
     {% else %}
     <button class="conv-abrir" hx-post="/hx/conversa/{{ c.id }}/abrir" hx-target="#palco" hx-swap="innerHTML"
             title="{{ c.titulo }}">

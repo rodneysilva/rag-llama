@@ -4,53 +4,24 @@ medido pelo `usage` que o próprio servidor devolve em cada chamada e
 acumulado por SERVIÇO (chat, ingestão, seed, limpeza, estúdio, manutenção,
 sistema/testes).
 
-Onde acumula: **Redis** (compartilhado entre processos — a API e os scripts
-CLI de seed/varredura contam no MESMO total via INCR atômico) e, sem Redis,
-arquivo `saidas/uso_llm.json` por processo. O contexto de serviço é
-thread-local: rotas/jobs marcam o que estão fazendo no início e todas as
-chamadas LLM daquela thread contam para o serviço certo.
+Onde acumula (decisão do dono 27/08 — Redis removido): ARQUIVO DO SERVIDOR
+`logs/uso_llm.jsonl` — cada chamada é UM append atômico (O_APPEND, linha
+curta): API e scripts CLI somam NO MESMO total sem broker e sem lock
+entre processos; `totais()` agrega o arquivo (cache 3 s por mtime).
+O contexto de serviço é thread-local: rotas/jobs marcam o que estão
+fazendo no início e todas as chamadas LLM daquela thread contam para o
+serviço certo.
 """
 import json
 import threading
 import time
 from pathlib import Path
 
-ARQUIVO = Path(__file__).resolve().parent.parent / "saidas" / "uso_llm.json"
+ARQUIVO = Path(__file__).resolve().parent.parent / "logs" / "uso_llm.jsonl"
 _lock = threading.Lock()
 _local = threading.local()
 
 SERVICOS = ("chat", "ingestao", "seed", "limpeza", "estudio", "manutencao", "sistema")
-
-# Redis compartilhado (mesmo do cache/ETA) — INCR atômico entre processos.
-# Conexão LAZY com re-teste (60 s): Redis subindo DEPOIS da API agora é
-# adotado (antes a decisão era no import e caía no arquivo para sempre).
-_r = None
-_r_off_desde = 0.0
-_RETRY_S = 60.0
-
-
-def _redis_client():
-    global _r, _r_off_desde
-    if _r is not None:
-        return _r
-    import time as _t
-    if _r is None and _t.time() - _r_off_desde < _RETRY_S:
-        return None
-    try:
-        import os
-        import redis as _redis
-        cliente = _redis.Redis(host=os.getenv("REDIS_HOST", "127.0.0.1"),
-                               port=int(os.getenv("REDIS_PORT", "6379")),
-                               socket_connect_timeout=0.3, decode_responses=True)
-        cliente.ping()
-        _r = cliente
-    except Exception:
-        _r_off_desde = _t.time()
-        return None
-    return _r
-
-
-_r = _redis_client()  # best-effort no import (o lazy cobre o resto)
 
 
 def set_servico(nome: str) -> None:
@@ -85,11 +56,7 @@ def log_atual():
     return getattr(_local, "log", None)
 
 
-# ---------- balanço da THREAD (fim da divergência de tokens) -------------
-# O diff de totais do Redis (`uso_desde`) cruzava contadores de OUTROS
-# processos/serviços rodando junto (API + CLI + jobs concorrentes) — daí os
-# números "ora aumentam ora diminuem". O balanço LOCAL da thread soma SÓ o
-# que esta execução consumiu de verdade: determinístico por job.
+# ---------- balanço da THREAD (determinístico por job) ----------
 
 def balanco_reset() -> None:
     """Zera o acumulador desta thread (início de um job/resposta)."""
@@ -105,9 +72,7 @@ def balanco_ler() -> dict:
 
 def set_vel_geracao(tok_s: float | None) -> None:
     """Velocidade REAL de geração (tokens/s) desta thread: só o trecho de
-    GERAR tokens (depois do 1º chunk) — sem o pré-processamento do prompt.
-    O rodapé antigo dividia saída pelo tempo TOTAL e o 'tok/s' caía com o
-    prompt grande sem a GPU estar mais lenta."""
+    GERAR tokens (depois do 1º chunk) — sem o pré-processamento do prompt."""
     _local.vel_geracao = tok_s
 
 
@@ -125,127 +90,79 @@ def _balanco_somar(entrada: int, saida: int) -> None:
     b["chamadas"] += 1
 
 
-# ---------- modo Redis (compartilhado: API + scripts CLI) ----------
+# ---------- persistência: append atômico em JSONL (API + CLI no mesmo
+# total, sem broker — cada linha é uma chamada LLM) ----------
 
-def _registrar_redis(cliente, entrada: int, saida: int) -> None:
-    svc = servico_atual()
-    pipe = cliente.pipeline()
-    for alvo in (f"rag:uso:{svc}", "rag:uso:total"):
-        pipe.incrby(f"{alvo}:entrada", int(entrada or 0))
-        pipe.incrby(f"{alvo}:saida", int(saida or 0))
-        pipe.incr(f"{alvo}:chamadas")
-    pipe.execute()
-
-
-def _ler_redis(cliente, chave: str) -> dict:
-    return {"entrada": int(cliente.get(f"{chave}:entrada") or 0),
-            "saida": int(cliente.get(f"{chave}:saida") or 0),
-            "chamadas": int(cliente.get(f"{chave}:chamadas") or 0)}
-
-
-# ---------- modo arquivo (sem Redis — por processo) ----------
-
-def _vazio() -> dict:
-    return {"entrada": 0, "saida": 0, "chamadas": 0}
-
-
-def _carregar() -> dict:
-    try:
-        dados = json.loads(ARQUIVO.read_text(encoding="utf-8"))
-        if isinstance(dados.get("por_servico"), dict):
-            dados.setdefault("total", _vazio())
-            return dados
-    except Exception:
-        pass
-    return {"por_servico": {}, "total": _vazio(),
-            "desde": time.strftime("%Y-%m-%dT%H:%M:%S")}
-
-
-_mem = _carregar()
-_ultima_gravacao = 0.0
-_chamadas_desde_gravacao = 0
-
-
-def _gravar() -> None:
+def registrar(entrada: int, saida: int) -> None:
+    """Acumula o uso de UMA chamada LLM (prompt/completion tokens) — no
+    balanço desta thread E no arquivo do servidor (append)."""
+    _balanco_somar(entrada, saida)
     try:
         ARQUIVO.parent.mkdir(parents=True, exist_ok=True)
-        ARQUIVO.write_text(json.dumps(_mem, ensure_ascii=False, indent=1),
-                           encoding="utf-8")
+        with open(ARQUIVO, "a", encoding="utf-8") as f:   # O_APPEND
+            f.write(json.dumps(
+                {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                 "servico": servico_atual(),
+                 "entrada": int(entrada or 0), "saida": int(saida or 0)},
+                ensure_ascii=False) + "\n")
     except Exception:
         pass  # contagem é telemetria: nunca derruba a resposta
 
 
-# ---------- API pública (mesma interface nos dois modos) ----------
+_AGREGADO: dict = {"mtime": 0.0, "t": 0.0, "dados": None}
 
-def registrar(entrada: int, saida: int) -> None:
-    """Acumula o uso de UMA chamada LLM (prompt/completion tokens) — no
-    total global E no balanço desta thread (ver balanco_reset)."""
-    _balanco_somar(entrada, saida)
-    cliente = _redis_client()
-    if cliente is not None:
-        try:
-            _registrar_redis(cliente, entrada, saida)
-            return
-        except Exception:
-            pass  # Redis caiu no meio: conta no arquivo
-    global _ultima_gravacao, _chamadas_desde_gravacao
-    with _lock:
-        svc = _mem["por_servico"].setdefault(servico_atual(), _vazio())
-        for alvo in (svc, _mem["total"]):
-            alvo["entrada"] += int(entrada or 0)
-            alvo["saida"] += int(saida or 0)
-            alvo["chamadas"] += 1
-        _chamadas_desde_gravacao += 1
-        agora = time.time()
-        if agora - _ultima_gravacao > 5 or _chamadas_desde_gravacao >= 25:
-            _gravar()
-            _ultima_gravacao = agora
-            _chamadas_desde_gravacao = 0
+
+def _agregar(forcar: bool = False) -> dict:
+    """Soma o JSONL inteiro (cache 3 s por mtime — o /hx/contagem pola
+    a cada 5 s). Retorna {por_servico, total, desde}."""
+    agora = time.time()
+    try:
+        mtime = ARQUIVO.stat().st_mtime
+    except OSError:
+        mtime = 0.0
+    if (not forcar and _AGREGADO["dados"] is not None
+            and mtime == _AGREGADO["mtime"]
+            and agora - _AGREGADO["t"] < 3):
+        return _AGREGADO["dados"]
+    por: dict[str, dict] = {}
+    total = {"entrada": 0, "saida": 0, "chamadas": 0}
+    desde = ""
+    try:
+        with open(ARQUIVO, encoding="utf-8") as f:
+            for linha in f:
+                try:
+                    d = json.loads(linha)
+                except ValueError:
+                    continue
+                desde = desde or str(d.get("ts", ""))
+                svc = str(d.get("servico") or "sistema")
+                alvo = por.setdefault(
+                    svc, {"entrada": 0, "saida": 0, "chamadas": 0})
+                for a in (alvo, total):
+                    a["entrada"] += int(d.get("entrada") or 0)
+                    a["saida"] += int(d.get("saida") or 0)
+                    a["chamadas"] += 1
+    except OSError:
+        pass
+    dados = {"por_servico": {k: v for k, v in sorted(por.items())},
+             "total": total, "desde": desde, "fonte": "arquivo"}
+    _AGREGADO.update(mtime=mtime, t=agora, dados=dados)
+    return dados
 
 
 def marcador() -> dict:
     """Fotografia do total (para medir o consumo de UMA interação por diff)."""
-    cliente = _redis_client()
-    if cliente is not None:
-        try:
-            return _ler_redis(cliente, "rag:uso:total")
-        except Exception:
-            pass
-    with _lock:
-        return dict(_mem["total"])
+    return dict(_agregar(forcar=True)["total"])
 
 
 def uso_desde(marcador: dict) -> dict:
     """Quanto foi consumido desde o `marcador` (diff de totais)."""
-    cliente = _redis_client()
-    if cliente is not None:
-        try:
-            t = _ler_redis(cliente, "rag:uso:total")
-            return {"entrada": t["entrada"] - marcador.get("entrada", 0),
-                    "saida": t["saida"] - marcador.get("saida", 0),
-                    "chamadas": t["chamadas"] - marcador.get("chamadas", 0)}
-        except Exception:
-            pass
-    with _lock:
-        t = _mem["total"]
-        return {"entrada": t["entrada"] - marcador.get("entrada", 0),
-                "saida": t["saida"] - marcador.get("saida", 0),
-                "chamadas": t["chamadas"] - marcador.get("chamadas", 0)}
+    t = _agregar(forcar=True)["total"]
+    return {"entrada": t["entrada"] - marcador.get("entrada", 0),
+            "saida": t["saida"] - marcador.get("saida", 0),
+            "chamadas": t["chamadas"] - marcador.get("chamadas", 0)}
 
 
 def totais() -> dict:
     """Panorama completo (administração): por serviço + total."""
-    cliente = _redis_client()
-    if cliente is not None:
-        try:
-            por = {s: _ler_redis(cliente, f"rag:uso:{s}") for s in SERVICOS
-                   if cliente.exists(f"rag:uso:{s}:chamadas")}
-            return {"por_servico": por, "total": _ler_redis(cliente, "rag:uso:total"),
-                    "desde": "", "fonte": "redis"}
-        except Exception:
-            pass
-    with _lock:
-        _gravar()
-        por = {k: dict(v) for k, v in sorted(_mem["por_servico"].items())}
-        return {"por_servico": por, "total": dict(_mem["total"]),
-                "desde": _mem.get("desde", ""), "fonte": "arquivo"}
+    return _agregar()

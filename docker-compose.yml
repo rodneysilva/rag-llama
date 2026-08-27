@@ -6,10 +6,13 @@
 #
 # Serviços:
 #   qdrant   :6333            (vetores; dashboard /dashboard)
-#   rabbit   :5672 :15672     (fila de jobs DLX/DLQ; management web)
-#   redis    (rede interna)   (cache semântico + contagem de tokens)
-#   api      :8000            (FastAPI + webui; Traefik continua
-#                              enxergando host.docker.internal:8000)
+#   api      :8000            (FastAPI + webui; jobs rodam no executor
+#                              async IN-PROCESS — sem broker)
+#   sandbox  (rede interna)   (teste de código do chat)
+#
+# Redis/RabbitMQ REMOVIDOS (decisão do dono 27/08): jobs no executor
+# asyncio em memória, contadores em logs/uso_llm.jsonl, cache semântico
+# deu lugar à bússola (Qdrant) — nada de broker/cache externos.
 #
 # Os MODELOS (llama-server GPU, sd-cli, whisper) rodam NO HOST —
 # servicos_llm.py — e a API os alcança por host.docker.internal.
@@ -25,33 +28,6 @@ services:
       - ./qdrant_data:/qdrant/storage
     restart: unless-stopped
 
-  rabbit:
-    image: rabbitmq:3.13-management
-    container_name: ragaroy-rabbit
-    ports:
-      - "5672:5672"
-      - "15672:15672"   # management web (usuário/senha: RABBIT_USER/RABBIT_PASS do .env)
-    environment:
-      # credenciais NUNCA no código (repo público): defaults de DEV apenas —
-      # production define RABBIT_USER/RABBIT_PASS no .env/host environment
-      RABBITMQ_DEFAULT_USER: ${RABBIT_USER:-ragaroy}
-      RABBITMQ_DEFAULT_PASS: ${RABBIT_PASS:-ragaroy}
-      RABBITMQ_DEFAULT_VHOST: /
-    volumes:
-      - ./rabbit_data:/var/lib/rabbitmq
-    restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    container_name: ragaroy-redis
-    # sem porta publicada: uso interno da API (cache/tokens)
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-
   api:
     build: .
     container_name: ragaroy-api
@@ -60,18 +36,11 @@ services:
     depends_on:
       qdrant:
         condition: service_started
-      rabbit:
-        condition: service_started
-      redis:
-        condition: service_healthy
     environment:
       # infra da rede interna do compose (VENDE o .env montado — config
       # usa override=False em container justamente por isso)
       RAGAROY_CONTAINER: "1"
       QDRANT_URL: http://qdrant:6333
-      RABBIT_URL: amqp://${RABBIT_USER:-ragaroy}:${RABBIT_PASS:-ragaroy}@rabbit:5672/%2F
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
       # modelos no HOST (GPU/binários locais — servicos_llm.py)
       LLM_BASE_URL: http://host.docker.internal:8090/v1
       EMBED_BASE_URL: http://host.docker.internal:8081/v1

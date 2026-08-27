@@ -102,14 +102,6 @@ FIELDS = {
                        "BAAI/bge-reranker-base ~1,1 GB · BAAI/bge-reranker-"
                        "v2-m3 ~2,3 GB, PT-BR melhor — compare com "
                        "tests_manual\\bench_rerank.py antes de trocar)", "text"),
-    "CACHE_TTL_DIAS": ("Aplicação",
-                       "Cache semântico: dias que uma resposta fica pronta "
-                       "(HIT = 0 s/0 tokens; 30 default)", "int"),
-    "CACHE_MAX":      ("Aplicação",
-                       "Cache semântico: máximo de entradas (LRU)", "int"),
-    "CACHE_LIMIAR":   ("Aplicação",
-                       "Cache semântico: similaridade mínima p/ aproveitar "
-                       "resposta parecida (0.97)", "float"),
 }
 
 # chaves cujo valor é SEGREDO: exibidas mascaradas e nunca regravadas
@@ -203,7 +195,6 @@ def reload():
     global AUTH_SECRET, AUTH_ADMIN_USER, AUTH_ADMIN_PASS
     global LLAMA_BIN, SD_CLI, WHISPER_CLI
     global MOCK_LLM, RERANKER
-    global CACHE_TTL_DIAS, CACHE_MAX, CACHE_LIMIAR
     serper_ambiente = os.environ.get("SERPER_API_KEY", "")  # env real tem prioridade
     # em container: environment do compose VENCE o .env (endpoints de infra);
     # no host: .env é a fonte da verdade (comportamento original)
@@ -243,9 +234,6 @@ def reload():
     MOCK_LLM = _bool_env("MOCK_LLM", False)
     RERANKER = _bool_env("RERANKER", True)
     RERANK_MODEL = os.getenv("RERANK_MODEL", "BAAI/bge-reranker-base").strip()
-    CACHE_TTL_DIAS = int(os.getenv("CACHE_TTL_DIAS", "30"))
-    CACHE_MAX = int(os.getenv("CACHE_MAX", "1000"))
-    CACHE_LIMIAR = float(os.getenv("CACHE_LIMIAR", "0.97"))
 
 
 def as_dict():
@@ -274,9 +262,6 @@ def as_dict():
         "PROMPT_SYSTEM": PROMPT_SYSTEM,
         "RERANKER": int(RERANKER),
         "RERANK_MODEL": RERANK_MODEL,
-        "CACHE_TTL_DIAS": CACHE_TTL_DIAS,
-        "CACHE_MAX": CACHE_MAX,
-        "CACHE_LIMIAR": CACHE_LIMIAR,
     }
 
 
