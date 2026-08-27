@@ -5061,7 +5061,9 @@ def api_provedores_cadastrar(body: ProvedorIn, request: Request):
         config.set_env_inplace(f"PROV_{pid}_MODELOS", body.modelos.strip())
     config.reload()
     cat = provedores.listar(force=True)
-    meu = next((p for p in cat if p["id"] == pid), None)
+    # ⚠️ o catálogo usa id MINÚSCULO (provedores.ids() loweriza) — comparar
+    # com pid.lower() senão o "meu" nunca acha e devolve lista vazia
+    meu = next((p for p in cat if p["id"] == pid.lower()), None)
     return {"ok": True, "id": pid, "modelos": (meu or {}).get("modelos", []),
             "dica": ("modelos carregados da API do provedor" if (meu or {})
                      .get("modelos") else
