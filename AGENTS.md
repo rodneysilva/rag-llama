@@ -1147,6 +1147,19 @@ da API**.
   **📚 ensinar a base** (web-salvar {colecao, documentos:[{titulo,
   content}]}). Status: `/api/midia/status/{job}`. Áudio/vídeo seguem
   pelo chat (🎤/anexos) — módulo é o atalho da análise avulsa.
+  ⚠️ BUGS da rodada (todos no caminho local-em-produção): (a) log do
+  job com grupo como 3º POSICIONAL → TypeError → **DLQ** (JobRegistry.log
+  é (jid, msg, **extra) — grupo é kwarg `etapa=`); (b) `_subir_vl` no
+  CONTAINER procura `D:\models` no Linux → local em container SEMPRE
+  proxya ao AGENTE (`/visao`); (c) o upload vive no VOLUME DA VPS e a
+  GPU na ESTAÇÃO — caminho não atravessa: a imagem viaja **BASE64**
+  (`{b64, nome, pergunta}`; agente grava em saidas/entrada dele e
+  analisa) — mesmo fix no `/api/visao` do anexo do chat; (d) marker
+  `vl_off` da estação dava "desligado manualmente" — `POST /api/vl/
+  ligar` remove e PRÉ-AQUECE (o VL existia em D:\models\visao: 4,36 GB
+  + mmproj 0,79). ⚠️ AGENTE da estação roda o CÓDIGO LOCAL: mudou
+  agente_host.py → restart do processo (o deploy da VPS não o atualiza).
+  E2E `Temp\kilo\e2e_midia.py`: PNG vermelho 96×96 → análise "Vermelha".
 - **🧹 CS5001 COM CSPROJ + FASTAPI MUDO (26/08, noite 3)**: (1) conversa
   com `app.csproj` + classes SEM entry voltava `return` cedo no
   `_preparar_cs` — CS5001 na cara (bootstrap/placeholder só rodavam SEM
