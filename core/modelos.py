@@ -534,8 +534,8 @@ def _vl_arquivos() -> tuple[str | None, str | None]:
     if Path(VL_GGUF).exists():
         modelo = VL_GGUF
     else:
-        cand = sorted(pasta.glob("*[Vv][Ll]**.gguf"))
-        cand = [c for c in cand if "mmproj" not in c.name.lower()]
+        cand = [c for c in sorted(pasta.glob("*[Vv][Ll]*.gguf"))
+                if "mmproj" not in c.name.lower()]
         modelo = str(cand[0]) if cand else None
     mmproj = _mmproj()
     return modelo, mmproj
