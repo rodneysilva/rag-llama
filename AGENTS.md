@@ -1548,3 +1548,21 @@ operador) vive em AGENTS-historico.md — arquivo PRIVADO, fora do git.
   result (todos os tipos) e o item mostra "HH:MM · ⏱ Xs" (chat já
   tinha no rodapé de métricas). ⚠️ AGENTE da estação = código LOCAL:
   cada fix em modelos.py/agente_host.py exige restart do processo.
+
+- **📊 DASHBOARD ENXUGADO + multimodal VISÍVEL (27/08, noite 6)**:
+  pedido do dono. REMOVIDOS: "📜 Logs (tail ao vivo)", "Tokens por
+  serviço" e "Histórico de solicitações" (+ rotas /hx/logs/* e
+  /hx/histlog mortas, ctx execucoes). **Modelos = SÓ o que RODOU**
+  (união "sem uso" e selo fora). **Bug antigo do multimodal**:
+  (a) o LOCAL (qwen-vl via agente) gravava telemetria NA ESTAÇÃO (não
+  atravessa o túnel) e (b) o EXTERNO gravava com `duracao_s: null`
+  (tok/s nunca saía). FIX: agente `/visao` devolve `usage` real do
+  llama-server (`midia._ultimo_usage_vl`); os runners do multimídia e
+  do i2t do chat REGRAVAM o evento llm NA VPS com duração; legendar
+  externo com `t0_ext` → duração real. **2 qwencoder unificados**:
+  `nome_curto` tira o prefixo `[prov] ` antes da quant (`[estacao]
+  qwen…` ≡ `qwen…`). PROVADO: cards = 1× qwen2.5-coder-7b, glm-4.5v/
+  4.6v com 👁; análise local → evento na VPS {entrada 36, saida 5,
+  duracao 49.6} → card qwen2.5-vl-7b apareceu. ⚠️ NameError `alvo` no
+  runner do midia_enviar (a variável era `payload['referencia']`) —
+  runner novo: conferir TODOS os nomes locais do escopo.
