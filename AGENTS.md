@@ -1128,6 +1128,25 @@ da API**.
   programação → raciocínio → conversa; imagem/áudio/embed FORA do
   select — não servem chat). **Sistema**: chips agrupados por categoria
   com o uso no header do grupo e tooltip com uso/ctx/preço.
+- **👁 MÓDULO MULTIMÍDIA + decisão SwarmUI (27/08, manhã 4)**: pedido do
+  dono ("para o que for multimodal, novo módulo; vale fork do
+  SwarmUI?"). **DECISÃO: NÃO forkar** — SwarmUI é aplicação standalone
+  C#/.NET focada em GERAÇÃO t2i via backends ComfyUI: não cobre ANÁLISE
+  (i2t) de provedores cloud, não conversa com Qdrant/chat/MCP/specs/
+  sandbox, e manter um fork C# fora da nossa esteira (Python/FastAPI/
+  HTMX) viraria dívida sem ganho (mesma lógica do fork do agent
+  sandbox). O que aproveitamos são as IDEIAS (galeria/lightbox — já
+  temos). **Implementado com os componentes PRÓPRIOS**: página `/midia`
+  (nav "Multimídia") — upload de imagem (/api/upload → saidas/entrada)
+  + select de multimodais (local 👁 Qwen2.5-VL + TODOS os cat=visao dos
+  provedores, com ctx/uso) + pergunta → `POST /api/midia/analisar`
+  (job `_midia` na FILA via _despachar; anti path-traversal: só
+  basename dentro de ENTRADA) → `midia.legendar_imagem(arquivo,
+  pergunta, modelo=)` (externo `prov:nome` roda NA API sem tocar a GPU;
+  local pausa o chat, sobe :8082, restaura) → resultado com copiar e
+  **📚 ensinar a base** (web-salvar {colecao, documentos:[{titulo,
+  content}]}). Status: `/api/midia/status/{job}`. Áudio/vídeo seguem
+  pelo chat (🎤/anexos) — módulo é o atalho da análise avulsa.
 - **🧹 CS5001 COM CSPROJ + FASTAPI MUDO (26/08, noite 3)**: (1) conversa
   com `app.csproj` + classes SEM entry voltava `return` cedo no
   `_preparar_cs` — CS5001 na cara (bootstrap/placeholder só rodavam SEM

@@ -3791,6 +3791,91 @@ _rota_status("/api/sandbox/status/{job}", _sbx,
              "Teste de sandbox não encontrado")
 
 
+# ---------- 👁 Multimídia (análise multimodal como módulo próprio) ----------
+# Decisão (27/08): NÃO forkar o SwarmUI — aplicação standalone C#/.NET
+# focada em GERAÇÃO t2i via backends ComfyUI, sem análise (i2t) de
+# provedores, sem RAG/chat/MCP/Qdrant. A bancada própria já tem tudo
+# (legendar_imagem local+externo, upload, jobs com log); falta era o
+# LUGAR na UI. Ver AGENTS.md "Módulo Multimídia".
+_midia = JobRegistry("mid", "multimídia")
+_rota_status("/api/midia/status/{job}", _midia,
+             "Análise multimodal não encontrada")
+
+
+class MidiaAnalisarIn(BaseModel):
+    """Análise multimodal num arquivo subido (/api/upload → saidas/entrada):
+    imagem → descrição/resposta com o modelo 👁 local (Qwen2.5-VL, pausa o
+    chat e restaura) OU externo (`prov:modelo` — glm-4.5v/gpt-5/claude/
+    gemini; GPU local intocada)."""
+    arquivo: str
+    pergunta: str = ""
+    modelo: str = ""
+
+
+@app.post("/api/midia/analisar")
+def midia_analisar(body: MidiaAnalisarIn, request: Request):
+    """Módulo Multimídia: ANALISA imagem com o multimodal escolhido — job
+    com log ao vivo (subida do modelo local, telemetria de tokens) e
+    resultado pronto para ENSINAR A BASE (web-salvar)."""
+    _usuario(request)
+    from core import midia as _m
+    # ⚠️ anti path-traversal: o arquivo TEM que estar em saidas/entrada
+    nome = Path(body.arquivo or "").name
+    alvo = _m.ENTRADA / nome
+    if not nome or not alvo.exists():
+        raise HTTPException(422, f"arquivo '{nome}' não encontrado — suba "
+                            "uma imagem no painel antes de analisar")
+
+    def _fabricar(payload: dict):
+        jid = payload["job"]
+
+        def rodar():
+            _midia.log(jid, f"👁 análise multimodal de {payload['nome']}"
+                           + (f" com {payload['modelo']}"
+                              if payload["modelo"] else " (local Qwen2.5-VL)"),
+                       "análise")
+            try:
+                r = _m.legendar_imagem(payload["arquivo"],
+                                       payload["pergunta"] or None,
+                                       modelo=payload["modelo"],
+                                       log=lambda msg, g="": _midia.log(jid, msg, g))
+                _midia.concluir(jid, result={"analise": r,
+                                             "arquivo": payload["nome"],
+                                             "modelo": payload["modelo"] or "local"})
+            except Exception as e:
+                _midia.concluir(jid, error=str(e)[:400])
+        return rodar
+
+    job = _midia.novo_id()
+    _despachar(_fabricar, "midia",
+               {"arquivo": str(alvo), "nome": nome,
+                "pergunta": body.pergunta.strip(), "modelo": body.modelo.strip(),
+                "job": job}, _midia)
+    return {"job": job}
+
+
+@app.get("/midia")
+def midia_pagina(request: Request):
+    """👁 MÓDULO MULTIMÍDIA (pedido do dono): analisar imagens com qualquer
+    modelo multimodal — o 👁 local da GPU ou os 👁 dos provedores cloud
+    (glm-4.5v, gpt-5, claude, gemini…) categorizados no cadastro."""
+    ctx = _paginas_ctx(request, "midia")
+    visao = [{"id": "", "nome": "👁 local (Qwen2.5-VL · GPU da estação)",
+              "ctx": None, "info": "pausa o chat durante a análise e restaura"}]
+    try:
+        from core import provedores as _prov
+        for p in _prov.listar():
+            for m in p.get("modelos", []):
+                if m.get("cat") == "visao":
+                    visao.append({"id": f"{p['id']}:{m['nome']}",
+                                  "nome": f"{m['nome']} · {p['nome']}",
+                                  "ctx": m.get("ctx"), "info": m.get("info", "")})
+    except Exception:
+        pass
+    ctx["modelos_visao"] = visao
+    return TEMPLATES.TemplateResponse(request, "midia.html", ctx)
+
+
 @app.post("/api/limpeza")
 def rota_limpeza(body: HigienizarIn):
     """LIMPEZA COMPLETA da coleção em 2º plano — as duas etapas que antes

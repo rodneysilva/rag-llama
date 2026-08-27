@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block titulo %}Multimídia — RagAroy{% endblock %}
+{% block classe %}pagina-midia{% endblock %}
+{% block conteudo %}
+<div class="pagina-conteudo">
+  <h1>👁 Multimídia</h1>
+
+  <section class="cartao">
+    <p class="mini" style="margin-top:-.5rem;">suba uma imagem e pergunte
+      qualquer coisa sobre ela — o modelo multimodal escolhido ANALISA e
+      responde. Modelos 👁 locais usam a GPU da estação (o chat pausa e
+      volta sozinho); modelos 👁 de provedores cloud (glm-4.5v, gpt-5,
+      claude, gemini…) rodam na API deles. Ao final, você pode
+      <b>ensinar a base</b> com a análise.</p>
+
+    <div style="display:grid; gap:.6rem; grid-template-columns:repeat(auto-fit,minmax(14rem,1fr));">
+      <div style="grid-column:1/-1;">
+        <label>imagem</label>
+        <input type="file" id="mid-arquivo" accept="image/*"
+               onchange="midSubir(this)">
+        <span id="mid-chip" class="chip-ref" hidden></span>
+      </div>
+      <div style="grid-column:1/-1;">
+        <label>modelo multimodal</label>
+        <select id="mid-modelo">
+          {% for m in modelos_visao %}
+          <option value="{{ m.id }}" title="{{ m.info }}{% if m.ctx %} · ctx {{ m.ctx // 1000 }}k{% endif %}">{{ m.nome }}{% if m.ctx %} · {{ m.ctx // 1000 }}k{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div style="grid-column:1/-1;">
+        <label>pergunta sobre a imagem</label>
+        <textarea id="mid-pergunta" rows="2" placeholder="o que tem nesta imagem? (vazio = descrição detalhada)"></textarea>
+      </div>
+      <div style="grid-column:1/-1; display:flex; gap:.6rem; flex-wrap:wrap;">
+        <button id="mid-btn" onclick="midAnalisar()" disabled>👁 analisar</button>
+        <button onclick="midEnsinar()" id="mid-ensinar" hidden>📚 ensinar a base com a análise</button>
+      </div>
+    </div>
+
+    <div id="mid-log" class="log" style="margin-top:.8rem;" hidden></div>
+    <div id="mid-resultado" class="cartao" style="margin-top:.8rem;" hidden>
+      <b>análise</b>
+      <div id="mid-texto" style="white-space:pre-wrap; margin-top:.4rem;"></div>
+      <button class="mini" style="margin-top:.5rem; cursor:pointer;" onclick="navigator.clipboard.writeText(document.getElementById('mid-texto').textContent); window.toast&&toast('análise copiada')">copiar</button>
+    </div>
+  </section>
+
+  <section class="cartao">
+    <h2>também no chat</h2>
+    <p class="mini" style="margin-top:-.4rem;">anexando uma imagem no chat
+      (📎) com um modelo 👁 selecionado a análise entra NA CONVERSA; áudio
+      (🎤) vira texto com o whisper local; vídeo entra na análise de
+      primeiros quadros. Este módulo é o atalho DIRETO para a análise
+      avulsa com qualquer multimodal.</p>
+  </section>
+</div>
+
+<script>
+  let _arquivo = null, _job = null, _poll = null, _analise = "";
+
+  async function midSubir(inp) {
+    const f = inp.files[0];
+    if (!f) return;
+    const fd = new FormData();
+    fd.append("file", f);
+    document.getElementById("mid-chip").hidden = false;
+    document.getElementById("mid-chip").textContent = "subindo " + f.name + "…";
+    try {
+      const r = await fetch("/api/upload", {method: "POST", body: fd});
+      const d = await r.json();
+      _arquivo = d;
+      document.getElementById("mid-chip").textContent = "📎 " + d.nome;
+      document.getElementById("mid-btn").disabled = false;
+    } catch (e) {
+      document.getElementById("mid-chip").textContent = "falha no upload";
+    }
+  }
+
+  async function midAnalisar() {
+    if (!_arquivo) return;
+    const btn = document.getElementById("mid-btn");
+    btn.disabled = true; btn.textContent = "analisando…";
+    document.getElementById("mid-log").hidden = false;
+    document.getElementById("mid-log").innerHTML = "";
+    document.getElementById("mid-resultado").hidden = true;
+    document.getElementById("mid-ensinar").hidden = true;
+    try {
+      const r = await fetch("/api/midia/analisar", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          arquivo: _arquivo.arquivo,
+          pergunta: document.getElementById("mid-pergunta").value,
+          modelo: document.getElementById("mid-modelo").value})
+      });
+      const d = await r.json();
+      if (!r.ok) throw (d.detail || "erro");
+      _job = d.job;
+      _poll = setInterval(midPoll, 1500);
+    } catch (e) {
+      document.getElementById("mid-log").innerHTML += "⚠️ " + e + "\n";
+      btn.disabled = false; btn.textContent = "👁 analisar";
+    }
+  }
+
+  async function midPoll() {
+    try {
+      const r = await fetch("/api/midia/status/" + _job);
+      const j = await r.json();
+      document.getElementById("mid-log").innerHTML = (j.lines || [])
+        .map(l => `<span class="mini">${l.ts} · ${String(l.msg).replace(/</g,"&lt;")}</span>`).join("<br>");
+      if (!j.running) {
+        clearInterval(_poll);
+        const btn = document.getElementById("mid-btn");
+        btn.disabled = false; btn.textContent = "👁 analisar";
+        if (j.error) {
+          document.getElementById("mid-log").innerHTML += "<br><b>⚠️ " + j.error + "</b>";
+          return;
+        }
+        _analise = (j.result || {}).analise || "";
+        document.getElementById("mid-texto").textContent = _analise;
+        document.getElementById("mid-resultado").hidden = false;
+        document.getElementById("mid-ensinar").hidden = false;
+      }
+    } catch (e) { /* engasgo de rede: tenta de novo no próximo tick */ }
+  }
+
+  async function midEnsinar() {
+    if (!_analise) return;
+    const colecao = prompt("gravar a análise em qual coleção?", "multimidia");
+    if (!colecao) return;
+    const r = await fetch("/api/ingest/web-salvar", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({colecao: colecao, documentos: [
+        {titulo: "análise multimodal — " + (_arquivo ? _arquivo.nome : "imagem"),
+         url: "", content: _analise}]})
+    });
+    if (window.toast) window.toast(r.ok ? "análise indo para a base " + colecao
+                                        : "falha ao ensinar a base");
+  }
+</script>
+{% endblock %}
