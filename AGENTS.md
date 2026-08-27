@@ -1178,6 +1178,27 @@ da API**.
   modelo aparece ABAIXO do select ao escolher; usar um 🔑 sem cadastro
   → erro do job orienta ("cole a chave em Sistema → ☁️"). E2E
   `Temp\kilo\e2e_ooux.py`.
+- **🎨🎬 GERAÇÃO no Multimídia + FLUX no REGISTRO (27/08, manhã 6)**:
+  pedido do dono ("e a geração de vídeos/imagens? cadê meus modelos
+  locais — estão em D:\models, por que não puxa de lá?"). CAUSA: em
+  container o `modelos.listar()` usa o **REGISTRO** fixo (D:\models não
+  existe no Linux da VPS) e os **Flux NÃO estavam no REGISTRO** (os Wan
+  sim — por isso só vídeo aparecia). FIX: `flux1-schnell`/`flux1-dev`
+  (D:\models\imagem\…-Q4_K_S.gguf, categoria imagem) no REGISTRO. **/midia
+  ganhou "Gerar mídia (GPU local)"**: tipo (🖼 t2i · 🎬 t2v · 🎞 gif) +
+  modelo (categorias imagem/video do listar, com GB) + duração (2/3/5/8 s
+  → frames=s×16+1) + prompt → `POST /api/tarefas` (o MESMO motor do
+  chat; em container proxya ao agente) → poll `/api/tarefas/status/{tid}`
+  com log/progresso → render `<img>/<video>` + baixar (pull-back
+  automático). ⚠️ CONTRATOS: gerador viaja em **`params.modelo`** (o
+  campo `modelo` do TarefaIn é o de CHAT — guard 409 "modelo
+  divergente"); POST devolve **`{tarefa: tid}`** (não job); status usa
+  **`erro`** (não error); URLs de servir são **SINGULARES**
+  (`/api/midia/{imagem|video|gif|audio|entrada}/<nome>` — plural caía no
+  404 "pasta inválida" ANTES do pull-back); jinja NUNCA no JS cru
+  (`{{ x | tojson }}` quebra o teste de sintaxe — usar data-attribute +
+  JSON.parse). E2E `Temp\kilo\e2e_gen.py`: t2i flux1-schnell REAL
+  (308 s na estação, PNG 1,4 MB) servido pela produção (pull-back 200).
 - **🧹 CS5001 COM CSPROJ + FASTAPI MUDO (26/08, noite 3)**: (1) conversa
   com `app.csproj` + classes SEM entry voltava `return` cedo no
   `_preparar_cs` — CS5001 na cara (bootstrap/placeholder só rodavam SEM
