@@ -170,6 +170,10 @@ PROV_ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 - **Toda tarefa longa é um job na fila** — a UI nunca bloqueia e os jobs sobrevivem a restarts.
+- **A GPU é a estação do usuário** — o servidor (docker compose) não hospeda
+  modelos de linguagem: chat/embedding/visão/difusão rodam na SUA máquina
+  (llama.cpp/sd-cli) e o servidor os alcança por túnel; sem GPU local, os
+  provedores cloud (🌐) cobrem o chat — e a base segue no Qdrant do servidor.
 - **Comportamento vive em specs** ([`core/specs/*.md`](core/specs)): para mudar como o assistente responde, edita-se um markdown — não código.
 - API interativa em **`/docs`** (OpenAPI). Mapa completo do código em [`AGENTS.md`](AGENTS.md) e [`docs/`](docs).
 

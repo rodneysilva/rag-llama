@@ -69,6 +69,21 @@ tarefa com trabalho não versionado.
 
 ## 1. Stack e ambiente
 
+### 🏭 ONDE RODA O QUÊ — política fixa do dono (27/08)
+
+**A GPU é SEMPRE a ESTAÇÃO do dono** (a máquina local dele). A VPS **NÃO
+hospeda llama**: nenhum llama-server, nenhum GGUF — os modelos de
+conversa/embedding/visão/difusão/whisper rodam na estação e a produção os
+alcança pelos túneis (`llm.disroy.org` :8090 · `embed.disroy.org` :8081 ·
+`agente.disroy.org` :8010 — cloudflared com o config
+`~/infra/tunnels/local.yml` da estação). Na VPS vivem SÓ os serviços de
+aplicação: `api` (FastAPI+webui), `qdrant`, `rabbitmq`, `redis`,
+`sandbox` (teste de código), `traefik`/`cloudflared` e o Portainer —
+confira com `docker ps`: **se aparecer llama na VPS, está ERRADO**. O
+`MODELS_DIR=/models` montado no container é apenas um ponto de leitura
+(para o picker listar); em produção a listagem real vem do REGISTRO e do
+agente da estação.
+
 - **OS:** Windows, shell **PowerShell 5.1** (sem `&&` — usar `;`).
 - **Python:** venv em `.venv/` (`.venv\Scripts\activate`); requisitos com pins
   em `requirements.txt` (LangChain 1.x — o código já usa a API nova).
@@ -482,11 +497,14 @@ da API**.
   sem aprovação; doc de síntese com metadata `sintese: true`). Budget no
   código (≤6 consultas, ≤12 fontes, 1 síntese). JobsPopup abre a revisão sozinho
   quando o job termina.
-- **Infra (política do dono, 20/08)**: push na main = deploy VPS (GH
-  Actions) — sem paths-ignore, docs puro usa `[skip ci]`; domínio em
-  outro servidor (cloudflared+Traefik na infra central); na VPS SÓ o
-  Qdrant fica online. **Validação/retorno SEMPRE pós-push no ambiente
-  publicado (https://<sub>.<dominio>) — NUNCA forçar localhost.**
+- **Infra (política do dono, 20/08, ATUALIZADA 27/08)**: push na main =
+  deploy VPS (GH Actions) — sem paths-ignore, docs puro usa `[skip ci]`;
+  domínio em outro servidor (cloudflared+Traefik na infra central); na
+  VPS rodam SÓ os serviços de aplicação (api/qdrant/rabbit/redis/
+  sandbox/traefik) — **GPU/llama-server/GGUFs NUNCA na VPS (ver "ONDE
+  RODA O QUÊ" na seção 1)**. **Validação/retorno SEMPRE pós-push no
+  ambiente publicado (https://<sub>.<dominio>) — NUNCA forçar
+  localhost.**
 - **📦 F5 PILOTO (20/08, noite)**: `core/snapshot.py` — fotografia
   id+vetor+payload em `logs/snapshots/*.jsonl` + `restaurar()` ponto a
   ponto SEM re-embedar; rotas admin `/api/snapshot` (listar/criar/
@@ -1375,6 +1393,17 @@ da API**.
   isométrico C4-N2 (`docs/arquitetura.svg` — regenerado pelo gerador em
   temp; blocos 3D flat + cartões de legenda + cilindros laranja),
   pilares open source + lista completa em <details>.
+- **🏭 Política ONDE RODA O QUÊ documentada (27/08, tarde)**: pedido do
+  dono ("o servidor local sempre será a minha máquina, a VPS nem deve
+  ter llama hospedado"). Estado REAL verificado: VPS já CONFORME —
+  `docker ps` só tem api/qdrant/rabbit/redis/sandbox/traefik/
+  cloudflared/portainer, nenhum processo llama no host, pasta `models/`
+  VAZIA (4 KB — só ponto de montagem do picker). Documentado: AGENTS.md
+  seção 1 ganhou o bloco "🏭 ONDE RODA O QUÊ" (GPU sempre na estação
+  via túneis llm/embed/agente.disroy.org; VPS = só aplicação; "se
+  aparecer llama na VPS, está ERRADO") + item Infra reescrito (a linha
+  antiga "na VPS SÓ o Qdrant" estava desatualizada) + README/Arquitetura
+  nota "a GPU é a estação do usuário; o servidor não hospeda modelos".
 
 ## 6. Estado e decisões históricas
 
