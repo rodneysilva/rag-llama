@@ -1160,6 +1160,24 @@ da API**.
   + mmproj 0,79). ⚠️ AGENTE da estação roda o CÓDIGO LOCAL: mudou
   agente_host.py → restart do processo (o deploy da VPS não o atualiza).
   E2E `Temp\kilo\e2e_midia.py`: PNG vermelho 96×96 → análise "Vermelha".
+- **🎨 SISTEMA em OOUX + TODOS os multimodais (27/08, manhã 5)**: pedido
+  do dono ("caixas despadronizadas e funções sem serem utilizadas" +
+  "multimídia precisa aparecer todos"). **Sistema** virou 4
+  cartões-OBJETO padronizados (h2+descricao, .grade/.kpi, grids
+  auto-fit): 🧠 Motor (4 KPIs + chips dos provedores CADASTRADOS com
+  nº de modelos + 🔧 manutenção da GPU em `<details>` — ações raras
+  fora do caminho) · ☁️ Provedores cloud · 🔌 Serviços · ⚙️
+  Configurações. **REMOVIDO** o cartão "LLMs — local + provedores"
+  (select+fetch `llmOndeMudou` duplicava o seletor do CHAT — a função
+  morta apontada). **Multimídia** lista TODOS os multimodais em
+  optgroups: 🖥 local (GGUFs categoria visao de `modelos.listar()`) ·
+  🌐 cadastrados (cat=visao; grupo SEMPRE visível com placeholder "—
+  nenhum multimodal cadastrado —") · 🔑 conhecidos SEM cadastro
+  (CONHECIDOS ganhou `visao: [...]` — glm-4.5v/glm-v5-turbo, gpt-5,
+  claude-sonnet, gemini-2.5, grok-4, exemplos OpenRouter); o `info` do
+  modelo aparece ABAIXO do select ao escolher; usar um 🔑 sem cadastro
+  → erro do job orienta ("cole a chave em Sistema → ☁️"). E2E
+  `Temp\kilo\e2e_ooux.py`.
 - **🧹 CS5001 COM CSPROJ + FASTAPI MUDO (26/08, noite 3)**: (1) conversa
   com `app.csproj` + classes SEM entry voltava `return` cedo no
   `_preparar_cs` — CS5001 na cara (bootstrap/placeholder só rodavam SEM
