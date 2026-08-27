@@ -60,6 +60,12 @@ REGISTRO = {
     "bge-m3":             (r"D:\models\bge-m3-q8_0.gguf", "embed"),
     "wan2.1-t2v-1.3b":    (r"D:\models\video\Wan2.1-T2V-1.3B-Q8_0.gguf", "video"),
     "wan2.2-ti2v-5b":     (r"D:\models\video\Wan2.2-TI2V-5B-Q8_0.gguf", "video"),
+    # 🎨 FLUX (imagem): fora do REGISTRO eles NÃO apareciam em produção —
+    # em container o listar() usa o REGISTRO (a pasta D:\models não existe
+    # no Linux da VPS) e o combobox caía no fallback fixo. Pedidos do dono:
+    # "cadê meus modelos locais de geração de imagem?"
+    "flux1-schnell":      (r"D:\models\imagem\flux1-schnell-Q4_K_S.gguf", "imagem"),
+    "flux1-dev":          (r"D:\models\imagem\flux1-dev-Q4_K_S.gguf", "imagem"),
 }
 
 # Padrões de nome para categorizar arquivos que chegarem sem registro

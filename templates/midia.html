@@ -55,16 +55,137 @@
   </section>
 
   <section class="cartao">
+    <h2>🎨🎬 Gerar mídia (GPU local)</h2>
+    <p class="mini" style="margin-top:-.4rem;">seus GERADORES da estação —
+      Flux (imagem) e Wan (vídeo/gif). A geração pausa as LLMs enquanto
+      usa a VRAM e devolve tudo sozinho ao terminar (8 GB).</p>
+    <div style="display:grid; gap:.5rem; grid-template-columns:repeat(auto-fit,minmax(10rem,1fr));">
+      <div><label>tipo</label>
+        <select id="gen-tipo" onchange="genTipoMudou()">
+          <option value="t2i">🖼 imagem</option>
+          <option value="t2v">🎬 vídeo</option>
+          <option value="gif">🎞 gif (17 frames)</option>
+        </select></div>
+      <div><label>modelo local</label>
+        <select id="gen-modelo"></select></div>
+      <div id="gen-dur-linha"><label>duração</label>
+        <select id="gen-dur">
+          <option value="2">2 s</option>
+          <option value="3" selected>3 s</option>
+          <option value="5">5 s</option>
+          <option value="8">8 s</option>
+        </select></div>
+      <div style="grid-column:1/-1;"><label>prompt</label>
+        <textarea id="gen-prompt" rows="2" placeholder="descreva a cena (estilo, ambiente, luz, ação)…"></textarea></div>
+      <div style="grid-column:1/-1;"><button id="gen-btn" onclick="midGerar()">✨ gerar</button></div>
+    </div>
+    <div id="gen-log" class="log" style="margin-top:.8rem;" hidden></div>
+    <div id="gen-resultado" style="margin-top:.8rem;" hidden></div>
+  </section>
+
+  <section class="cartao">
     <h2>também no chat</h2>
     <p class="mini" style="margin-top:-.4rem;">anexando uma imagem no chat
       (📎) com um modelo 👁 selecionado a análise entra NA CONVERSA; áudio
-      (🎤) vira texto com o whisper local; vídeo entra na análise de
-      primeiros quadros. Este módulo é o atalho DIRETO para a análise
-      avulsa com qualquer multimodal.</p>
+      (🎤) vira texto com o whisper local. Este módulo é o atalho DIRETO
+      para análise e geração avulsas.</p>
   </section>
 </div>
 
 <script>
+  // dados de geração injetados pelo servidor
+  const GERACAO = {{ geracao | tojson }};
+
+  function genModelos(tipo) {
+    if (tipo === "t2i") return GERACAO.imagem || [];
+    return GERACAO.video || [];
+  }
+  function genTipoMudou() {
+    const tipo = document.getElementById("gen-tipo").value;
+    const sel = document.getElementById("gen-modelo");
+    const modelos = genModelos(tipo);
+    sel.innerHTML = modelos.map(m =>
+      `<option value="${m.nome}" title="${m.info || ''}">${m.nome}`
+      + (m.gb ? ` · ${m.gb}GB` : "") + `</option>`).join("")
+      || "<option value='' disabled>— nenhum modelo local de "
+         + (tipo === "t2i" ? "imagem" : "vídeo") + " —</option>";
+    document.getElementById("gen-dur-linha").style.display =
+      (tipo === "t2i") ? "none" : "";
+  }
+  genTipoMudou();
+
+  let _genPoll = null;
+  async function midGerar() {
+    const btn = document.getElementById("gen-btn");
+    const tipo = document.getElementById("gen-tipo").value;
+    const modelo = document.getElementById("gen-modelo").value;
+    const prompt = document.getElementById("gen-prompt").value.trim();
+    if (!modelo || !prompt) {
+      document.getElementById("gen-log").hidden = false;
+      document.getElementById("gen-log").innerHTML =
+        "<span class='mini'>escolha o modelo e escreva o prompt</span>";
+      return;
+    }
+    btn.disabled = true; btn.textContent = "gerando…";
+    document.getElementById("gen-log").hidden = false;
+    document.getElementById("gen-log").innerHTML = "";
+    document.getElementById("gen-resultado").hidden = true;
+    const params = {modelo};   // ⚠️ o gerador viaja em params (o campo
+    // `modelo` do contrato é o de CHAT — guard 409 "modelo divergente")
+    if (tipo === "gif") params.gif = true;
+    else if (tipo === "t2v")
+      params.frames = parseInt(document.getElementById("gen-dur").value) * 16 + 1;
+    try {
+      const r = await fetch("/api/tarefas", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({modalidade: tipo === "gif" ? "t2v" : tipo,
+                              texto: prompt, params})
+      });
+      const d = await r.json();
+      if (!r.ok) throw (d.detail || "erro ao disparar a tarefa");
+      _genPoll = setInterval(() => genPoll(d.tarefa || d.job), 2000);
+    } catch (e) {
+      document.getElementById("gen-log").innerHTML += "⚠️ " + e + "<br>";
+      btn.disabled = false; btn.textContent = "✨ gerar";
+    }
+  }
+
+  async function genPoll(tid) {
+    try {
+      const r = await fetch("/api/tarefas/status/" + tid);
+      const j = await r.json();
+      document.getElementById("gen-log").innerHTML = (j.lines || [])
+        .map(l => `<span class="mini">${l.ts || ""} ${String(l.msg || l).replace(/</g, "&lt;")}</span>`).join("<br>");
+      if (!j.running) {
+        clearInterval(_genPoll);
+        const btn = document.getElementById("gen-btn");
+        btn.disabled = false; btn.textContent = "✨ gerar";
+        if (j.erro || j.error) {
+          document.getElementById("gen-log").innerHTML +=
+            "<br><b>⚠️ " + (j.erro || j.error) + "</b>";
+          return;
+        }
+        const res = j.result || j.resultado || {};
+        const nome = res.arquivo;
+        const alvo = document.getElementById("gen-resultado");
+        alvo.hidden = false;
+        if (!nome) {
+          alvo.innerHTML = "<p class='mini'>geração concluída</p>";
+          return;
+        }
+        const url = res.tipo === "gif" ? "/api/midia/gif/" + encodeURIComponent(nome)
+          : res.tipo === "video" ? "/api/midia/videos/" + encodeURIComponent(nome)
+          : "/api/midia/imagens/" + encodeURIComponent(nome);
+        alvo.innerHTML = (res.tipo === "video"
+          ? `<video controls style="max-width:100%; border-radius:.6rem;" src="${url}"></video>`
+          : `<img style="max-width:100%; border-radius:.6rem;" src="${url}" alt="mídia gerada">`)
+          + `<p class="mini">${nome}${res.segundos ? " · " + res.segundos + "s" : ""}`
+          + ` · <a href="${url}" download="${nome}" target="_blank">baixar ↗</a></p>`;
+      }
+    } catch (e) { /* engasgo de rede: próximo tick tenta de novo */ }
+  }
+
   let _arquivo = null, _job = null, _poll = null, _analise = "";
 
   // info do modelo selecionado (aviso 🔑 de cadastro na cara, não escondido)

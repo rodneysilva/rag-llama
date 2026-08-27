@@ -3928,8 +3928,19 @@ def midia_pagina(request: Request):
         pass
     ctx["grupos_visao"] = [g for g in grupos
                            if g["modelos"] or "cadastrados" in g["rotulo"]]
-    # grupo de CADASTRADOS sempre visível (placeholder explica quando vazio —
-    # não deixa a categoria "sumir" para quem só tem provedor de texto)
+    # 🎨🎬 GERAÇÃO local (Flux/Wan da estação — pedido do dono: "cadê meus
+    # modelos locais de geração?"): categorias imagem/video do modelos.listar
+    try:
+        ger = {"imagem": [], "video": []}
+        for m in modelos.listar():
+            if m.get("categoria") in ger:
+                ger[m["categoria"]].append(
+                    {"nome": m["nome"],
+                     "gb": m.get("gb"),
+                     "info": "pausa as LLMs durante a geração (8 GB de VRAM)"})
+        ctx["geracao"] = ger
+    except Exception:
+        ctx["geracao"] = {"imagem": [], "video": []}
     return TEMPLATES.TemplateResponse(request, "midia.html", ctx)
 
 
