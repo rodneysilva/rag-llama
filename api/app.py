@@ -1060,7 +1060,9 @@ def hx_chat(request: Request, question: str = Form(""), mode: str = Form("hibrid
             {"request": request, "job": job, "linhas": linhas,
              "running": True, "pergunta": question,
              "otimista": request.headers.get("x-otimista") == "1"})
-        _sc = resp_stub.headers.get("set-cookie", "")
+        # cookie do sid: o _stub_sid foi criado ANTES (linha do corpo) —
+        # ler DELE (resp_stub só nasce no fluxo de texto adiante)
+        _sc = _stub_sid.headers.get("set-cookie", "")
         if _sc.startswith(SESSAO_COOKIE + "="):
             _sid = _sc.split("=", 1)[1].split(";", 1)[0]
             parcial.set_cookie(SESSAO_COOKIE, _sid, max_age=30 * 86400,
