@@ -1070,6 +1070,17 @@ da API**.
   função substitui a assinatura e ÓRFÃA o corpo (aconteceu com
   `_cmd_site` — sempre conferir com rg/compile depois de inserir
   função nova).
+- **🔤 MOJIBAKE no sistema.html (26/08, noite 6)**: a tela Sistema exibia
+  `ServiÃ§os`, `â€` (travessão) — o arquivo nasceu CORROMPIDO no squash
+  do release inicial (utf-8 lido como cp1252 e regravado: 54/80 linhas;
+  ÚNICO arquivo do repo — varredura com regex `[ÃÂ][...]` em
+  templates/core/api/static/docs/tests/scripts). REVERSÃO byte a byte:
+  `encode('cp1252')` char a char com FALLBACK para o BYTE literal nos
+  chars de controle U+0080..U+009F (cp1252 não mapeia 0x81/0x8D/0x8F/
+  0x90/0x9D — encode direto falha) `.decode('utf-8')`; BOM duplo
+  removido (utf-8-sig falha quando há 2 — loop no \ufeff). LIÇÃO:
+  depois de qualquer WRITE grande em .html/.md, varrer mojibake antes
+  do commit. Validado em produção: `/sistema` sem mojibake.
 - **🧹 CS5001 COM CSPROJ + FASTAPI MUDO (26/08, noite 3)**: (1) conversa
   com `app.csproj` + classes SEM entry voltava `return` cedo no
   `_preparar_cs` — CS5001 na cara (bootstrap/placeholder só rodavam SEM
