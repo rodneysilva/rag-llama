@@ -1457,3 +1457,33 @@ operador) vive em AGENTS-historico.md — arquivo PRIVADO, fora do git.
   ⚠️ pós-deploy: `docker compose down rabbit redis` manual na VPS (os
   services saíram do compose, os containers velhos precisam do down) e
   o .env da VPS pode descartar RABBIT_*/REDIS_*.
+
+- **👁 MULTIMÍDIA CONVERSACIONAL + INTERRUPÇÃO (27/08, noite 2)**: pacote
+  do dono. **/midia virou CHAT ÚNICO** (pedido: "manter histórico de
+  sessões" + "ser apenas um chat único onde posso alternar os modelos"):
+  `core/midia_sessoes.py` (sessões com itens {tipo, modelo, prompt,
+  referencia, linhas, resultado} em saidas/midia_sessoes/, owner isolado,
+  job_ativo anotado) + sidebar + composer ÚNICO onde O MODELO DECIDE:
+  👁 visao+anexo = ANÁLISE (markdown formatado no histórico —
+  `TEMPLATES.env.globals['_md_basico']`; era texto cru com ### e **);
+  🎨 Flux+anexo = **MELHORIA i2i** (`gerar_imagem(imagem_inicial=,
+  forca=0.65)` → `--init-img --strength`, resize p/ dims alvo); 🎨 sem
+  anexo = t2i; provedores = /images/generations; 🎬 Wan = t2v/gif (2-8 s).
+  Formatos de melhor custo-benefício mantidos: PNG (imagem), MP4/H.264
+  (vídeo), GIF 17f p/ loop. **Raciocínio SEMPRE RECOLHIDO** (vivo e
+  histórico — pedido: "quero que fique sempre minimizado"). **Retomada**:
+  mudou de página e voltou → polling volta (job_ativo no SERVIDOR +
+  localStorage ragaroy.midiaJob.<sid>; a chamada segue no executor).
+  Novo envio CANCELA o anterior (`POST /api/midia/cancel/{job}`).
+  **CHAT: interrupção** (pedido: "toda vez que eu mandar mensagem
+  estiver pensando, pare o raciocínio e mande a nova incluindo o
+  contexto da interrompida"): `JobRegistry.cancelar(jid)` (flag
+  `cancelado` — `concluir` DESCARTA resultado tardio) +
+  `POST /api/query/cancel/{job}`; o beforeRequest do form acha o card
+  em curso, cancela no servidor e remove da tela; a pergunta
+  interrompida já está na sessão → entra no history do novo POST
+  (PROVADO: "A pergunta anterior era sobre escrever um parágrafo longo
+  sobre o oceano"). Bloco "também no chat" REMOVIDO do /midia.
+  E2E `Temp\kilo\e2e_midia_conv.py` (Playwright). Nota: o Sistema
+  mostra o modelo de CONVERSA (texto) — o multimodal/gerador em uso
+  aparece por ITEM no multimídia (badge do modelo em cada envio).
