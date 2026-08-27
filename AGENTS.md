@@ -1194,11 +1194,21 @@ da API**.
   campo `modelo` do TarefaIn é o de CHAT — guard 409 "modelo
   divergente"); POST devolve **`{tarefa: tid}`** (não job); status usa
   **`erro`** (não error); URLs de servir são **SINGULARES**
-  (`/api/midia/{imagem|video|gif|audio|entrada}/<nome>` — plural caía no
+  (  `/api/midia/{imagem|video|gif|audio|entrada}/<nome>` — plural caía no
   404 "pasta inválida" ANTES do pull-back); jinja NUNCA no JS cru
   (`{{ x | tojson }}` quebra o teste de sintaxe — usar data-attribute +
   JSON.parse). E2E `Temp\kilo\e2e_gen.py`: t2i flux1-schnell REAL
   (308 s na estação, PNG 1,4 MB) servido pela produção (pull-back 200).
+- **📝 CHAT SÓ-TEXTO (27/08, manhã 7)**: pedido do dono ("geração de
+  imagem e vídeo fica só em Multimídia, o retorno da tela do chat é
+  texto"). Composer perdeu os TIPOS de geração (imagem/video/gif/i2v/
+  i2g — sobram 📝 texto e **i2t**, que retorna TEXTO), o ⏱ duração e o
+  optgroup 🎨 geração; `midiaMudou` simplificado (📎 só no i2t); rodapé
+  linka /midia. **Backend recusa geração pelo chat** com partial de
+  aviso apontando o módulo (páginas ANTIGAS abertas que ainda mandem
+  `midia=imagem` recebem o caminho certo em vez de gerar). E2E
+  `Temp\kilo\e2e_chat_texto.py`. ⚠️ PS 5.1 + python -c com aspas:
+  JAMAIS inline — escrever script em arquivo (o PS come as aspas).
 - **🧹 CS5001 COM CSPROJ + FASTAPI MUDO (26/08, noite 3)**: (1) conversa
   com `app.csproj` + classes SEM entry voltava `return` cedo no
   `_preparar_cs` — CS5001 na cara (bootstrap/placeholder só rodavam SEM
