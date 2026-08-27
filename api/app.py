@@ -4032,7 +4032,12 @@ def midia_enviar(body: MidiaEnviarIn, request: Request):
                             raise RuntimeError(
                                 f"provedor {pid.upper()} não configurado — "
                                 f"cadastre em /sistema?prov={pid.lower()}")
-                    if not modelo and config.EM_CONTAINER:
+                    # LOCAL (com OU sem nome — o value do seletor é
+                    # "qwen2.5-vl-7b") em CONTAINER → AGENTE do host: a GPU
+                    # e o GGUF vivem na ESTAÇÃO; direto aqui o _subir_vl
+                    # procura D:\models no Linux e morre "ausente" (bug
+                    # real do dono — igual ao que já corrigi no i2t do chat)
+                    if config.EM_CONTAINER and ":" not in modelo:
                         import base64 as _b64
                         with open(payload["referencia"], "rb") as f:
                             img_b64 = _b64.b64encode(f.read()).decode()
