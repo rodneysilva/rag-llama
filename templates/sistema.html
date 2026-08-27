@@ -1,80 +1,80 @@
-﻿{% extends "base.html" %}
-{% block titulo %}Sistema â€” RagAroy{% endblock %}
+{% extends "base.html" %}
+{% block titulo %}Sistema — RagAroy{% endblock %}
 {% block conteudo %}
 <div class="pagina-conteudo">
 
 <h1>Sistema</h1>
 
 <section class="cartao">
-  <h2>Motor LLM â€” modelos ativos (GPU do host)</h2>
-  <p class="descricao">Quem estÃ¡ servindo AGORA. O chat (:8090) troca pelo .env;
+  <h2>Motor LLM — modelos ativos (GPU do host)</h2>
+  <p class="descricao">Quem está servindo AGORA. O chat (:8090) troca pelo .env;
      o embedding (:8081) nunca desce sozinho; o multimodal (:8082, Qwen2.5-VL,
-     lÃª/descreve imagens) sobe quando pedida.</p>
+     lê/descreve imagens) sobe quando pedida.</p>
   <div class="grade">
     <div class="kpi">
-      <div class="rotulo">ðŸ’¬ chat Â· :8090</div>
+      <div class="rotulo">💬 chat · :8090</div>
       <div class="valor" style="font-size:1rem; word-break:break-all;">
-        {% if motor.chat %}{{ motor.chat }}{% elif motor.rodando %}ðŸŽ¨ geraÃ§Ã£o em curso{% else %}â€” desligado â€”{% endif %}
+        {% if motor.chat %}{{ motor.chat }}{% elif motor.rodando %}🎨 geração em curso{% else %}— desligado —{% endif %}
       </div>
       <div class="sub">
-        {% if motor.chat %}<span style="color:var(--ok)">â— servindo</span>
-        {% elif motor.rodando %}<span style="color:var(--aviso)">â¸ï¸ pausado â€” a GPU estÃ¡ com:</span>
-          {% for r in motor.rodando[:3] %}<br><span class="mini">ðŸŽ¨ {{ r.rotulo }}</span>{% endfor %}
-        {% else %}<span style="color:var(--erro)">â—‹ fora</span>{% endif %}
-        {% if ativos.chat %} Â· no ar: {{ ativos.chat }}{% endif %}{% if ativos.visao %} Â· ðŸ‘ {{ ativos.visao }}{% endif %}{% if ativos.difusores %} Â· ðŸŽ¬ {{ ativos.difusores | length }} difusor(es){% endif %}
+        {% if motor.chat %}<span style="color:var(--ok)">● servindo</span>
+        {% elif motor.rodando %}<span style="color:var(--aviso)">⏸️ pausado — a GPU está com:</span>
+          {% for r in motor.rodando[:3] %}<br><span class="mini">🎨 {{ r.rotulo }}</span>{% endfor %}
+        {% else %}<span style="color:var(--erro)">○ fora</span>{% endif %}
+        {% if ativos.chat %} · no ar: {{ ativos.chat }}{% endif %}{% if ativos.visao %} · 👁 {{ ativos.visao }}{% endif %}{% if ativos.difusores %} · 🎬 {{ ativos.difusores | length }} difusor(es){% endif %}
       </div>
     </div>
     <div class="kpi">
-      <div class="rotulo">ðŸ§¬ embedding Â· :8081</div>
+      <div class="rotulo">🧬 embedding · :8081</div>
       <div class="valor" style="font-size:1rem;">bge-m3</div>
       <div class="sub">
-        {% if motor.embed %}<span style="color:var(--ok)">â— sempre no ar</span>
-        {% else %}<span style="color:var(--erro)">â—‹ fora</span>{% endif %}
+        {% if motor.embed %}<span style="color:var(--ok)">● sempre no ar</span>
+        {% else %}<span style="color:var(--erro)">○ fora</span>{% endif %}
       </div>
     </div>
     <div class="kpi">
-      <div class="rotulo">ðŸ–¼ï¸ multimodal Â· :8082 / ðŸŒ externo</div>
+      <div class="rotulo">🖼️ multimodal · :8082 / 🌐 externo</div>
       <div class="valor" style="font-size:1rem; word-break:break-all;">
-        {% if ativos.visao %}{{ ativos.visao }}{% elif ativos.visao_externa %}{{ ativos.visao_externa[0] }}{% else %}â€” sobe quando pedida â€”{% endif %}
+        {% if ativos.visao %}{{ ativos.visao }}{% elif ativos.visao_externa %}{{ ativos.visao_externa[0] }}{% else %}— sobe quando pedida —{% endif %}
       </div>
       <div class="sub">
-        {% if ativos.visao %}<span style="color:var(--ok)">â— servindo (local)</span>
-        {% elif ativos.visao_externa %}<span style="color:var(--ok)">â— ativo via API externa</span>
-          <br><span class="mini">{{ ativos.visao_externa | join(' Â· ') }}</span>
-        {% else %}<span style="color:var(--suave)">â—‹ aguardando demanda</span>{% endif %}
-        <br><span class="mini">imagem â†’ texto (descreve/analisa imagens anexadas)</span>
+        {% if ativos.visao %}<span style="color:var(--ok)">● servindo (local)</span>
+        {% elif ativos.visao_externa %}<span style="color:var(--ok)">● ativo via API externa</span>
+          <br><span class="mini">{{ ativos.visao_externa | join(' · ') }}</span>
+        {% else %}<span style="color:var(--suave)">○ aguardando demanda</span>{% endif %}
+        <br><span class="mini">imagem → texto (descreve/analisa imagens anexadas)</span>
       </div>
     </div>
     <div class="kpi">
-      <div class="rotulo">ðŸŽ® VRAM em uso</div>
-      <div class="valor">{{ motor.vram_mi if motor.vram_mi is not none else "â€”" }}<small style="font-size:.6em; color:var(--suave);"> MiB</small></div>
+      <div class="rotulo">🎮 VRAM em uso</div>
+      <div class="valor">{{ motor.vram_mi if motor.vram_mi is not none else "—" }}<small style="font-size:.6em; color:var(--suave);"> MiB</small></div>
       <div class="sub">
         {% if motor.agente is sameas true %}via agente do host (:8010)
-        {% elif motor.agente %}âš ï¸ {{ motor.agente }}
+        {% elif motor.agente %}⚠️ {{ motor.agente }}
         {% else %}leitura local{% endif %}
       </div>
     </div>
   </div>
   <div style="margin-top:.7rem; display:flex; gap:.6rem; flex-wrap:wrap;">
-    <button hx-post="/api/llm/ligar" hx-swap="none" hx-confirm="subir o llama-server do chat (LLM_MODEL do .env)?">ðŸ§  ligar chat</button>
-    <button hx-post="/api/llm/desligar" hx-swap="none" hx-confirm="derrubar o chat e TRAVAR a religaÃ§Ã£o automÃ¡tica?">â¸ï¸ desligar chat</button>
-    <button hx-post="/api/embed/ligar" hx-swap="none">ðŸ§¬ religar embedding</button>
-    <button hx-post="/api/vl/ligar" hx-swap="none">ðŸ–¼ï¸ subir multimodal</button>
-    <button hx-post="/api/vl/desligar" hx-swap="none">ðŸ–¼ï¸ derrubar multimodal</button>
+    <button hx-post="/api/llm/ligar" hx-swap="none" hx-confirm="subir o llama-server do chat (LLM_MODEL do .env)?">🧠 ligar chat</button>
+    <button hx-post="/api/llm/desligar" hx-swap="none" hx-confirm="derrubar o chat e TRAVAR a religação automática?">⏸️ desligar chat</button>
+    <button hx-post="/api/embed/ligar" hx-swap="none">🧬 religar embedding</button>
+    <button hx-post="/api/vl/ligar" hx-swap="none">🖼️ subir multimodal</button>
+    <button hx-post="/api/vl/desligar" hx-swap="none">🖼️ derrubar multimodal</button>
   </div>
 </section>
 
 <section class="cartao">
-  <h2>LLMs â€” local + provedores</h2>
+  <h2>LLMs — local + provedores</h2>
   <p class="mini" style="margin-top:-.4rem;">escolha ONDE a conversa roda:
     local usa o llama-server (URL abaixo); provedores externos mostram os
-    modelos da prÃ³pria API â€” chaves entram nos campos <b>Provedor â€¦</b> do
+    modelos da própria API — chaves entram nos campos <b>Provedor …</b> do
     form (salvas no .env, mascaradas).</p>
   <div style="display:flex; gap:.6rem; align-items:center; flex-wrap:wrap;">
     <select id="sel-llm-onde" onchange="llmOndeMudou(this)" style="min-width:16rem;">
-      <option value="local">ðŸ’» local (llama-server Â· {{ ativos.chat or "desligado" }})</option>
+      <option value="local">💻 local (llama-server · {{ ativos.chat or "desligado" }})</option>
       {% for p in provedores_externos %}
-      <option value="{{ p.id }}">ðŸŒ {{ p.nome }}</option>
+      <option value="{{ p.id }}">🌐 {{ p.nome }}</option>
       {% endfor %}
     </select>
     <span id="llm-onde-info" class="mini"></span>
@@ -85,28 +85,28 @@
       const info = document.getElementById("llm-onde-info");
       const box = document.getElementById("llm-onde-modelos");
       if (sel.value === "local") {
-        info.textContent = "a URL/modelo locais estÃ£o nos campos LLM_BASE_URL / LLM_MODEL do form abaixo";
+        info.textContent = "a URL/modelo locais estão nos campos LLM_BASE_URL / LLM_MODEL do form abaixo";
         box.innerHTML = ""; return;
       }
-      info.textContent = "modelos reais da API (ðŸ‘ = multimodal, serve anÃ¡lise de imagem):";
-      box.innerHTML = "<span class='mini'>carregandoâ€¦</span>";
+      info.textContent = "modelos reais da API (👁 = multimodal, serve análise de imagem):";
+      box.innerHTML = "<span class='mini'>carregando…</span>";
       try {
         const r = await fetch("/api/provedores");
         const provs = (await r.json()).provedores || [];
         const p = provs.find(x => x.id === sel.value);
         box.innerHTML = (p?.modelos || []).map(m =>
           "<span class='chip-prompt'" + (m.visao ? " title='multimodal'" : "") + ">"
-          + (m.visao ? "ðŸ‘ " : "") + m.nome + "</span>").join("")
-          || "<span class='mini'>nenhum modelo listado â€” confira a chave/URL</span>";
-      } catch { box.innerHTML = "<span class='mini'>indisponÃ­vel agora</span>"; }
+          + (m.visao ? "👁 " : "") + m.nome + "</span>").join("")
+          || "<span class='mini'>nenhum modelo listado — confira a chave/URL</span>";
+      } catch { box.innerHTML = "<span class='mini'>indisponível agora</span>"; }
     }
   </script>
 </section>
 
 <section class="cartao">
-  <h2>ServiÃ§os</h2>
+  <h2>Serviços</h2>
   <table>
-    <thead><tr><th>serviÃ§o</th><th>estado</th><th>detalhe</th></tr></thead>
+    <thead><tr><th>serviço</th><th>estado</th><th>detalhe</th></tr></thead>
     <tbody>
       {% for id, s in servicos.items() %}
       <tr>
@@ -118,12 +118,12 @@
     </tbody>
   </table>
   <div style="margin-top:.7rem; display:flex; gap:.6rem; flex-wrap:wrap;">
-    <button hx-post="/hx/parar-tudo" hx-confirm="parar TUDO (jobs + motores de GPU)?">â¹ parar tudo</button>
+    <button hx-post="/hx/parar-tudo" hx-confirm="parar TUDO (jobs + motores de GPU)?">⏹ parar tudo</button>
   </div>
 </section>
 
 <section class="cartao">
-  <h2>ConfiguraÃ§Ãµes (.env â€” aplica na hora, sem reiniciar)</h2>
+  <h2>Configurações (.env — aplica na hora, sem reiniciar)</h2>
   <form hx-post="/hx/settings" hx-swap="none">
     {% for grupo, campos in grupos_cfg.items() %}
     <h3 class="mini" style="margin:.9rem 0 .3rem; text-transform:uppercase; letter-spacing:.04em;">{{ grupo }}</h3>
@@ -134,10 +134,10 @@
         <textarea name="{{ c.chave }}" rows="2" style="width:100%;">{{ c.valor }}</textarea></div>
       {% else %}
       <div class="estreito" style="flex:1 1 14rem;" title="{{ c.rotulo | e }}">
-        <label>{{ c.chave }}{% if c.tipo == "secret" %} ðŸ”’{% endif %}</label>
+        <label>{{ c.chave }}{% if c.tipo == "secret" %} 🔒{% endif %}</label>
         {% if c.tipo == "secret" %}
         <input type="password" name="{{ c.chave }}" autocomplete="off"
-               placeholder="{{ 'â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢ definida â€” digite para trocar' if c.definido else 'nÃ£o definida' }}"
+               placeholder="{{ '•••••••• definida — digite para trocar' if c.definido else 'não definida' }}"
                style="width:100%;">
         {% elif c.tipo in ("int", "float") %}
         <input type="number" {% if c.tipo == "float" %}step="0.01"{% endif %} name="{{ c.chave }}" value="{{ c.valor }}" style="width:100%;">
@@ -151,14 +151,14 @@
     {% endfor %}
     <div style="margin-top:.7rem; display:flex; gap:.6rem; align-items:center;">
       <button class="primario" type="submit" id="btn-salvar-cfg">salvar</button>
-      <span class="mini" id="cfg-feedback">ðŸ”’ segredo definido aparece mascarado â€” vazio mantÃ©m o atual</span>
+      <span class="mini" id="cfg-feedback">🔒 segredo definido aparece mascarado — vazio mantém o atual</span>
     </div>
   </form>
   <script>
-    /* UX DO SALVAR (pedido do dono â€” "nada aconteceu"): estado no botÃ£o +
+    /* UX DO SALVAR (pedido do dono — "nada aconteceu"): estado no botão +
        TOAST de sucesso/erro. O endpoint responde redirect+HX-Refresh no
-       sucesso (a pÃ¡gina recarrega com os valores aplicados) e 422 JSON
-       quando um tipo Ã© invÃ¡lido â€” o toast mostra o detalhe SEM recarregar. */
+       sucesso (a página recarrega com os valores aplicados) e 422 JSON
+       quando um tipo é inválido — o toast mostra o detalhe SEM recarregar. */
     (function () {
       const form = document.querySelector('form[hx-post="/hx/settings"]');
       if (!form) return;
@@ -177,21 +177,21 @@
         toast._t = setTimeout(() => (toastEl.className = ""), 4200);
       };
       form.addEventListener("htmx:beforeRequest", () => {
-        btn.disabled = true; btn.textContent = "salvandoâ€¦"; fb.textContent = "â€¦";
+        btn.disabled = true; btn.textContent = "salvando…"; fb.textContent = "…";
       });
       form.addEventListener("htmx:afterRequest", async (ev) => {
         const xhr = ev.detail.xhr;
         btn.disabled = false; btn.textContent = "salvar";
         if (ev.detail.successful) {
-          toast("âœ“ configuraÃ§Ãµes salvas e aplicadas â€” recarregandoâ€¦", "ok");
+          toast("✓ configurações salvas e aplicadas — recarregando…", "ok");
           setTimeout(() => location.reload(), 700);
           return;
         }
         let detalhe = "HTTP " + xhr.status;
         try { detalhe = (await (new Response(xhr.response)).json()).detail || detalhe; }
         catch (_) {}
-        fb.textContent = "âš ï¸ " + detalhe;
-        toast("âš ï¸ " + detalhe, "erro");
+        fb.textContent = "⚠️ " + detalhe;
+        toast("⚠️ " + detalhe, "erro");
       });
     })();
   </script>
