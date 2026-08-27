@@ -1003,13 +1003,16 @@ def hx_chat(request: Request, question: str = Form(""), mode: str = Form("hibrid
             jid = payload["job"]
 
             def rodar():
+                # ⚠️ o PARÂMETRO `midia` (str do form) SOMBREIA o módulo no
+                # closure — import local com alias resolve
+                from core import midia as _midia
                 _query.log(jid, f"👁 análise multimodal de "
                                f"{Path(payload['referencia']).name}"
                                + (f" com {payload['modelo']}"
                                   if payload["modelo"] else " (local)"),
                            etapa="análise")
                 try:
-                    alvo = midia.ENTRADA / Path(payload["referencia"]).name
+                    alvo = _midia.ENTRADA / Path(payload["referencia"]).name
                     if not alvo.exists():
                         alvo = Path(payload["referencia"])
                     modelo = payload["modelo"]
@@ -1024,7 +1027,7 @@ def hx_chat(request: Request, question: str = Form(""), mode: str = Form("hibrid
                             timeout=420)
                         analise = r.get("descricao", "")
                     else:
-                        analise = midia.legendar_imagem(
+                        analise = _midia.legendar_imagem(
                             str(alvo), payload["pergunta"] or None,
                             modelo=modelo,
                             log=lambda m, g="": _query.log(
