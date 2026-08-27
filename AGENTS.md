@@ -1523,3 +1523,28 @@ operador) vive em AGENTS-historico.md — arquivo PRIVADO, fora do git.
   /api/midia/sessao/{id}`, owner conferido; confirma e recarrega).
   E2E `Temp\kilo\e2e_padrao.py` (fundo do botão IDÊNTICO
   rgb(15,98,254) nos dois, contagens, sem alça, apagar 6→5).
+
+- **🩺 VL LOCAL + largura + mobile + ⏱ (27/08, noite 5)**: pacote do
+  dono. **"Eu TENHO o modelo, por que não subiu?"** — CAUSA RAIZ (3
+  camadas): (a) `/api/midia/enviar` análise LOCAL com modelo NOMEADO
+  (value `qwen2.5-vl-7b`, não vazio) caía no caminho DIRETO no
+  container → `_subir_vl` no Linux com `D:\models` → "ausente" (o
+  mesmo bug do i2t do chat: **`EM_CONTAINER and ":" not in modelo` →
+  AGENTE**); (b) `_subir_vl` com nome FIXO → `_vl_arquivos()` GLOB
+  tolerante (`*[Vv][Ll]*.gguf` + mmproj — ⚠️ `**` no MEIO do padrão é
+  INVÁLIDO no pathlib: "can only be an entire path component"; mensagem
+  de erro agora LISTA o que achou); (c) marker `vl_off` persistente da
+  estação (dono desligou um dia) → `POST /api/vl/ligar` religa e
+  pré-aquece. PROVADO: análise local → **"O vermelho." · 27 s** pela
+  estação. **ERROR "does not support image input"** = chamada de imagem
+  num llama-server SEM mmproj (o fluxo caía no :8090 texto) — resolvido
+  pela (a). **Largura PROPORCIONAL base 1024**: chat e multimídia com
+  `clamp(64rem, 100vw, 90rem)` (1024–1440; 4k fica no teto; mobile
+  100%) — ⚠️ o `max-width:78rem` INLINE antigo do multimídia
+  desigualava (removido; medido IGUAL 1287=1287). **Sidebar do chat no
+  mobile EMPILHADA** no fluxo como a do multimídia — overlay e botão 💬
+  REMOVIDOS (`abrirDrawer` não existia mais = ReferenceError ao
+  clicar). **⏱ tempo de retorno**: multimídia grava `segundos` no
+  result (todos os tipos) e o item mostra "HH:MM · ⏱ Xs" (chat já
+  tinha no rodapé de métricas). ⚠️ AGENTE da estação = código LOCAL:
+  cada fix em modelos.py/agente_host.py exige restart do processo.
