@@ -1487,3 +1487,25 @@ operador) vive em AGENTS-historico.md — arquivo PRIVADO, fora do git.
   E2E `Temp\kilo\e2e_midia_conv.py` (Playwright). Nota: o Sistema
   mostra o modelo de CONVERSA (texto) — o multimodal/gerador em uso
   aparece por ITEM no multimídia (badge do modelo em cada envio).
+
+- **🔧 MULTIMÍDIA: ordem + guia de criação + ✨ + fullscreen (27/08,
+  noite 3)**: (1) **"texto indo depois da resposta"** — item refeito
+  com bolha `👤 você` (prompt+thumb) PRIMEIRO e saída depois; no ENVIO
+  a bolha do usuário entra na conversa ANTES do card processando e ao
+  concluir o card é TROCADO pelo item formatado NO LUGAR
+  (`GET /hx/midia/item/{job}?s=` — sem reload; autoscroll). (2) **GUIA
+  DE CRIAÇÃO** no composer (só p/ geradores): 22 chips — 🎨 estilo ·
+  🌍 cenário · 💡 luz&câmera · 🎥 movimento (vídeo só) que ANEXAM ao
+  campo + dica por modelo (Flux/Wan: cena única, sem texto na
+  imagem). (3) **✨ gerar prompt** reusa `/hx/prompt-melhorar`
+  (spec prompt_melhoria.md) com o tipo do modelo como dica — substitui
+  o campo. (4) **fullscreen**: `.midia-grid` (13,5rem + 1fr; mobile
+  empilha) + `.midia-coluna` (`height: calc(100dvh - 10,5rem)`,
+  conversa flex, composer no fim) — ⚠️ um `max-height:30rem` INLINE
+  antigo travava (CSS manda). (5) **nova sessão** via `HX-Redirect`
+  (com `hx-swap=none` o `<script>` inline NÃO roda). (6) **home do
+  flask sandbox com ROTAS CLICÁVEIS** (`<a href='{r.rule}'>`, métodos
+  != GET marcados — "só mostra a rota, não a aplicação"). ⚠️ PS 5.1
+  `Add-Content` grava ANSI — CSS regravado utf-8 via python. E2E
+  `Temp\kilo\e2e_midia3.py` (fullscreen 60vh, mobile 1 col, guia 22
+  chips, ✨, ordem 👤→🤖).
