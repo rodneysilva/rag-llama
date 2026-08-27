@@ -178,8 +178,8 @@
           return;
         }
         const url = res.tipo === "gif" ? "/api/midia/gif/" + encodeURIComponent(nome)
-          : res.tipo === "video" ? "/api/midia/videos/" + encodeURIComponent(nome)
-          : "/api/midia/imagens/" + encodeURIComponent(nome);
+          : res.tipo === "video" ? "/api/midia/video/" + encodeURIComponent(nome)
+          : "/api/midia/imagem/" + encodeURIComponent(nome);
         alvo.innerHTML = (res.tipo === "video"
           ? `<video controls style="max-width:100%; border-radius:.6rem;" src="${url}"></video>`
           : `<img style="max-width:100%; border-radius:.6rem;" src="${url}" alt="mídia gerada">`)
