@@ -1403,7 +1403,30 @@ da API**.
   via túneis llm/embed/agente.disroy.org; VPS = só aplicação; "se
   aparecer llama na VPS, está ERRADO") + item Infra reescrito (a linha
   antiga "na VPS SÓ o Qdrant" estava desatualizada) + README/Arquitetura
-  nota "a GPU é a estação do usuário; o servidor não hospeda modelos".
+  nota   "a GPU é a estação do usuário; o servidor não hospeda modelos".
+
+- **🎨 GERAÇÃO POR PROVEDORES + nomes REAIS da Z.AI (27/08, noite)**:
+  pedido do dono ("geração pode usar modelos de provedores; glm dá erro
+  400"). SONDA com a chave real contra a API: `glm-v5-turbo` **NÃO
+  EXISTE** ("modelCode: does not exist" — era nome INVENTADO do meu
+  fallback: removido); visão REAL = `glm-4.5v`/`glm-4.6v` (respondem
+  com `image_url` base64 — o 1214 da sonda era PNG 1×1 inválido);
+  GERADORES `glm-image`/`cogview-4-250304` EXISTEM no `/images/
+  generations` mas **429 "insufficient balance"** (fora do CODING PLAN
+  — saldo próprio). Implementado: (1) CONHECIDOS com `visao` REAL e
+  `gera` por casa (zai glm-image/cogview · openai gpt-image-1 ·
+  openrouter gemini-image) + fallback da casa também para imagem;
+  (2) `provedores.gerar_imagem(pid, modelo, prompt)` — POST
+  `/images/generations` (b64_json OU url), salva em saidas/imagens,
+  devolve formato do t2i; intercept no `POST /api/tarefas` (t2i com
+  `params.modelo` "prov:x" roda NA API, sem GPU); /midia lista geradores
+  ☁️ no select de gerar (t2i = local + externos; vídeo segue local);
+  (3) **erros externos com CORPO**: "400 …mozilla" agora vira a
+  mensagem REAL da API ("modelCode: does not exist", "Insufficient
+  balance…") — legendar_imagem e gerar_imagem capturam r.text.
+  ⚠️ status de TAREFA usa `error` (não `erro`) — scripts de E2E lerem
+  os dois. E2E `Temp\kilo\e2e_zai3.py` + sondas `sonda_zai*.py`
+  (rodar DENTRO do container: lê /app/.env).
 
 ## 6. Estado e decisões históricas
 
