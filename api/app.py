@@ -3833,12 +3833,16 @@ def midia_analisar(body: MidiaAnalisarIn, request: Request):
             _midia.log(jid, f"👁 análise multimodal de {payload['nome']}"
                            + (f" com {payload['modelo']}"
                               if payload["modelo"] else " (local Qwen2.5-VL)"),
-                       "análise")
+                       etapa="análise")
             try:
                 r = _m.legendar_imagem(payload["arquivo"],
                                        payload["pergunta"] or None,
                                        modelo=payload["modelo"],
-                                       log=lambda msg, g="": _midia.log(jid, msg, g))
+                                       # ⚠️ JobRegistry.log(jid, msg, **extra):
+                                       # grupo é KWARG (bug de 3 args posicional
+                                       # mandava o job pra DLQ na 1ª chamada)
+                                       log=lambda msg, g="": _midia.log(
+                                           jid, msg, **({"etapa": g} if g else {})))
                 _midia.concluir(jid, result={"analise": r,
                                              "arquivo": payload["nome"],
                                              "modelo": payload["modelo"] or "local"})
