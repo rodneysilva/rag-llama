@@ -4182,6 +4182,16 @@ def midia_nova(request: Request):
     return r
 
 
+@app.delete("/api/midia/sessao/{sid}")
+def midia_sessao_apagar(sid: str, request: Request):
+    """Apaga UMA sessão multimídia (owner conferido — padrão do chat)."""
+    from core import midia_sessoes
+    owner = _usuario(request)
+    if not midia_sessoes.apagar(sid, owner):
+        raise HTTPException(404, "sessão não encontrada (ou não é sua)")
+    return {"ok": True}
+
+
 @app.post("/api/limpeza")
 def rota_limpeza(body: HigienizarIn):
     """LIMPEZA COMPLETA da coleção em 2º plano — as duas etapas que antes

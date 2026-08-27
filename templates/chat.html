@@ -6,15 +6,15 @@
 
 <div class="chat-shell">
 
-  {# ═══ SIDEBAR de conversas (estilo Open WebUI: sempre visível em desktop,
-       drawer overlay no celular) — nova conversa no TOPO; a borda DIREITA
-       arrasta para redimensionar (alça) #}
+  {# ═══ SIDEBAR de conversas — PADRÃO ÚNICO com o Multimídia (pedido do
+       dono): cartão + botão PRIMÁRIO cheio no topo + itens título/contagem;
+       funcionalidades do chat seguem (apagar = job 2º plano com ⏳ auto-
+       polling, atual destacado, drawer overlay no celular) #}
   <aside class="drawer-conversas" id="drawer-conversas">
-    <button class="conv-nova" hx-post="/hx/conversa/nova" hx-target="#palco" hx-swap="innerHTML">
-      ＋ Nova conversa
+    <button class="primario conv-nova" hx-post="/hx/conversa/nova" hx-target="#palco" hx-swap="innerHTML">
+      &#10133; nova conversa
     </button>
     <div class="drawer-corpo" id="lista-conversas-slot" hx-get="/hx/conversas" hx-trigger="load" hx-swap="innerHTML"></div>
-    <div class="split-alca conv-alca" id="conv-alca" title="arraste para redimensionar"></div>
   </aside>
 
   {# ═══ COLUNA CENTRAL: palco rolável + composer ═══ #}
@@ -846,26 +846,11 @@ async function melhorarPrompt(btn) {
   setTimeout(() => (btn.textContent = o), 1400);
 }
 
-/* ═══════════ 5. CONVERSAS: alça redimensiona a coluna; clique atualiza
-   o DESTAQUE (antes: clicar na conversa JÁ ATUAL não movia o highlight —
-   parecia que o botão "não funcionava") ═══════════ */
+/* ═══════════ 5. CONVERSAS (alça de resize REMOVIDA — padrão único com o
+   Multimídia, largura fixa no CSS): clique atualiza o DESTAQUE (antes:
+   clicar na conversa JÁ ATUAL não movia o highlight — parecia que o
+   botão "não funcionava") ═══════════ */
 (function () {
-  const alca = document.getElementById("conv-alca");
-  const col = document.getElementById("drawer-conversas");
-  let arrastando = false;
-  if (alca) {
-    alca.addEventListener("pointerdown", (e) => {
-      arrastando = true; alca.setPointerCapture(e.pointerId);
-      document.body.style.cursor = "col-resize";
-    });
-    alca.addEventListener("pointermove", (e) => {
-      if (!arrastando) return;
-      col.style.width = Math.max(180, Math.min(e.clientX, window.innerWidth * 0.4)) + "px";
-    });
-    const fim = () => { arrastando = false; document.body.style.cursor = ""; };
-    alca.addEventListener("pointerup", fim);
-    alca.addEventListener("pointercancel", fim);
-  }
   // abrir conversa → lista re-carrega com o DESTAQUE certo (cookie mudou)
   document.addEventListener("htmx:afterRequest", (e) => {
     const b = e.target.closest?.(".conv-abrir, .conv-nova");

@@ -14,17 +14,25 @@
   voltou? o envio em curso retoma sozinho.</p>
 
 <div class="midia-grid">
-  {# ── sidebar de sessões ── #}
-  <section class="cartao" style="padding:.6rem;">
-    <button class="primario" style="width:100%;" hx-post="/hx/midia/nova" hx-swap="none">&#10133; nova sessão</button>
-    <div id="m-sessoes" class="log" style="margin-top:.6rem; max-height:26rem; overflow:auto;">
+  {# ── sidebar de sessões — PADRÃO ÚNICO com o chat do multimídia ── #}
+  <section class="cartao" style="padding:.6rem; display:flex; flex-direction:column; min-height:0;">
+    <button class="primario" style="width:100%; text-align:center;"
+            hx-post="/hx/midia/nova" hx-swap="none">&#10133; nova sessão</button>
+    <div id="m-sessoes" style="margin-top:.6rem; flex:1; min-height:0; max-height:26rem; overflow:auto; padding:.4rem;">
       {% for s in m_sessoes %}
-      <a href="/midia?s={{ s.id }}" class="conv-item{{ ' atual' if s.id == m_sessao.id }}"
-         style="display:block; padding:.45rem .5rem; border-radius:8px; text-decoration:none;">
-        <span class="conv-titulo" style="display:block; font-size:.8rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ s.titulo }}</span>
-        <span class="mini" style="opacity:.65;">{{ s.itens }} envio(s){{ ' · ⏳ em curso' if s.job_ativo }}</span>
-      </a>
+      <div class="conv-item{{ ' atual' if s.id == m_sessao.id }}">
+        <button class="conv-abrir" onclick="location.href='/midia?s={{ s.id }}'"
+                title="{{ s.titulo }}">
+          <span class="conv-titulo">{{ s.titulo }}</span>
+          <span class="conv-contagem">{{ s.itens }} envio(s){{ ' · ⏳ em curso' if s.job_ativo }}</span>
+        </button>
+        <button class="conv-x" title="apagar sessão"
+                onclick="mApagarSessao('{{ s.id }}', this)">✕</button>
+      </div>
       {% endfor %}
+      {% if not m_sessoes %}
+      <p class="mut" style="padding:.5rem .6rem; font-size:.78rem;">sem sessões ainda.</p>
+      {% endif %}
     </div>
   </section>
 
@@ -323,6 +331,19 @@
         }
       } catch (e) { /* engasgo de rede: próximo tick tenta de novo */ }
     }, 1800);
+  }
+
+  function mApagarSessao(sid, btn) {
+    if (!confirm("apagar esta sessão multimídia?")) return;
+    btn.textContent = "⏳"; btn.disabled = true;
+    fetch("/api/midia/sessao/" + sid, {method: "DELETE"})
+      .then(r => {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        if (sid === SESSAO) location.href = "/midia";
+        else location.reload();
+      })
+      .catch(e => { btn.textContent = "✕"; btn.disabled = false;
+                    alert("não consegui apagar: " + e.message); });
   }
 
   // RETOMADA: job ativo da sessão (anotado no SERVIDOR) → polling volta

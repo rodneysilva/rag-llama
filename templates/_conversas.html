@@ -1,9 +1,10 @@
-{# Sidebar de conversas (estilo Open WebUI): só título, hover revela apagar.
-   EXCLUSÃO É JOB EM 2º PLANO (executor async): o item entra em "⏳ apagando…"
-   e a lista AUTO-POLA (every 2s) enquanto houver exclusão em curso — quando
-   o job conclui, o item some e o polling para sozinho (o div novo nasce sem
-   atributos de polling). Falhou/engasgo 502 → o item volta ao normal no
-   próximo poll e o ✕ pode ser clicado de novo. #}
+{# Sidebar de conversas — PADRÃO ÚNICO com o Multimídia (pedido do dono):
+   título truncado + contagem "N mensagem(ns)"; ✕ apaga no hover.
+   EXCLUSÃO É JOB EM 2º PLANO (executor async): o item entra em "⏳
+   apagando…" e a lista AUTO-POLA (every 2s) enquanto houver exclusão em
+   curso — quando o job conclui, o item some e o polling para sozinho (o
+   div novo nasce sem atributos de polling). Falhou/engasgo 502 → o item
+   volta ao normal no próximo poll e o ✕ pode ser clicado de novo. #}
 <div id="lista-conversas"
      {% if apagando %}hx-get="/hx/conversas" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
   {% for c in conversas %}
@@ -12,13 +13,13 @@
     {% if apg %}
     <button class="conv-abrir" disabled title="exclusão em andamento…">
       <span class="conv-titulo">{{ c.titulo }}</span>
+      <span class="conv-contagem">⏳ apagando…</span>
     </button>
-    <span class="conv-x apg" title="apagando (job em 2º plano) — a lista atualiza sozinha">⏳</span>
     {% else %}
     <button class="conv-abrir" hx-post="/hx/conversa/{{ c.id }}/abrir" hx-target="#palco" hx-swap="innerHTML"
             title="{{ c.titulo }}">
       <span class="conv-titulo">{{ c.titulo }}</span>
-      {% if c.slug %}<span class="conv-slug" title="referência da conversa (slug)">{{ c.slug }}</span>{% endif %}
+      <span class="conv-contagem">{{ c.mensagens }} mensagem(ns){{ ' · ⏳ em curso' if c.job_ativo else '' }}</span>
     </button>
     <button class="conv-x" hx-delete="/hx/conversa/{{ c.id }}" hx-target="#lista-conversas"
             hx-swap="outerHTML" hx-confirm="apagar esta conversa?"

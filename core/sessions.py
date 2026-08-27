@@ -53,6 +53,7 @@ def list_sessions(owner: str = "") -> list[dict]:
                 "titulo": dados.get("titulo", "(sem título)"),
                 "atualizada": dados.get("atualizada", ""),
                 "mensagens": len(dados.get("messages", [])),
+                "job_ativo": bool(dados.get("job_ativo")),
                 "modo": dados.get("modo", ""),
                 "colecoes": dados.get("colecoes", []),
             })
