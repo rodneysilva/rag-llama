@@ -1098,6 +1098,23 @@ da API**.
   UA próprio `ragaroy/1.0`; (c) o chat :8090 da estação CAÍRA de novo
   (túnel 502 — "nenhum modelo listado" na UI era ISSO): restart do
   agente host reergue. E2E: `Temp\kilo\e2e_prov.py`.
+- **☁️ CONHECIDOS em 1 clique + METADADOS de modelo (27/08, manhã 2)**:
+  `provedores.CONHECIDOS` (zai=Z.AI Coding Plan, openai=ChatGPT,
+  anthropic=Claude, deepseek, openrouter, gemini, grok, groq, mistral —
+  nome/URL/dica/site) viram CARDS no Sistema que preenchem o form
+  (`usarProv` — falta só a chave); `GET /api/provedores/conhecidos`.
+  **Informações do modelo AUTOMÁTICAS**: `_modelos_do_endpoint` devolve
+  (nomes, meta) — meta quando a API entrega (OpenRouter:
+  context_length/description/pricing → "US$ x/M in"; input_modalities
+  vira `visao_api`); sem metadado → `_ctx_do_nome` heurística por regex
+  (glm-4.x 200k, gpt-5 400k, gpt-4.1 1M, claude-3/4 200k, deepseek
+  128k, gemini-2.5 1M, grok-4 256k, qwen2.5 32k, qwen3 256k, llama-3
+  128k — desconhecido → None, NUNCA inventar). `modelos()` =
+  [{nome, visao, ctx, info}]; chips do Sistema e options do chat
+  mostram "· 200k" com tooltip (info/preço). Provado: OpenRouter
+  público traz 417 modelos TODOS com ctx/descrição/preço; ESTACAO
+  qwen2.5-coder ctx 32768 pela heurística. ⚠️ OpenRouter /models é
+  público (sem chave) — dá pra VER o catálogo antes da chave.
 - **🧹 CS5001 COM CSPROJ + FASTAPI MUDO (26/08, noite 3)**: (1) conversa
   com `app.csproj` + classes SEM entry voltava `return` cedo no
   `_preparar_cs` — CS5001 na cara (bootstrap/placeholder só rodavam SEM
