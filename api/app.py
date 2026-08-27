@@ -986,9 +986,86 @@ def hx_chat(request: Request, question: str = Form(""), mode: str = Form("hibrid
                      "Multimídia — abra no menu (ou /midia): análise E "
                      "geração (🖼 Flux · 🎬 Wan · 🎞 gif) com log ao vivo"})
     if midia in ("i2t",):
-        return _iniciar_midia(request, question, midia, colecoes,
-                              referencia=referencia.strip(), modelo=_model_raw,
-                              duracao=duracao.strip())
+        # 👁 i2t é RESPOSTA DE CHAT (layout de mensagem + raciocínio — era
+        # card de TAREFA "✓ concluído · análise: …" cru; pedido do dono
+        # "por que o chat perdeu o layout?"): job no registry do CHAT com
+        # a análise como answer
+        if not referencia.strip():
+            return TEMPLATES.TemplateResponse(
+                request, "_job.html",
+                {"request": request, "kind": "erro", "job": "erro",
+                 "rotulo": "analisar imagem", "linhas": [], "running": False,
+                 "erro": "a análise precisa de uma imagem — clique em "
+                         "📎 subir imagem e tente de novo"})
+        job = _query.novo_id()
+
+        def _fab_i2t(payload: dict):
+            jid = payload["job"]
+
+            def rodar():
+                _query.log(jid, f"👁 análise multimodal de "
+                               f"{Path(payload['referencia']).name}"
+                               + (f" com {payload['modelo']}"
+                                  if payload["modelo"] else " (local)"),
+                           etapa="análise")
+                try:
+                    alvo = midia.ENTRADA / Path(payload["referencia"]).name
+                    if not alvo.exists():
+                        alvo = Path(payload["referencia"])
+                    modelo = payload["modelo"]
+                    if not modelo and config.EM_CONTAINER:
+                        import base64 as _b64
+                        with open(alvo, "rb") as f:
+                            img_b64 = _b64.b64encode(f.read()).decode()
+                        r = modelos._chamar_agente(
+                            "/visao", {"b64": img_b64,
+                                       "nome": Path(alvo).name,
+                                       "pergunta": payload["pergunta"]},
+                            timeout=420)
+                        analise = r.get("descricao", "")
+                    else:
+                        analise = midia.legendar_imagem(
+                            str(alvo), payload["pergunta"] or None,
+                            modelo=modelo,
+                            log=lambda m, g="": _query.log(
+                                jid, m, **({"etapa": g} if g else {})))
+                    _query.concluir(jid, result={
+                        "question": payload["pergunta"],
+                        "answer": analise or "(a análise não retornou texto)",
+                        "mode": "i2t", "docs": [], "cache": None,
+                        "model": None, "pensamentos": None,
+                        "tokens": {"entrada": 0, "saida": 0, "chamadas": 0}})
+                except Exception as e:
+                    _query.concluir(jid, error=str(e)[:400])
+            return rodar
+
+        _despachar(_fab_i2t, "i2t",
+                   {"referencia": referencia.strip(), "pergunta": question,
+                    "modelo": _model_raw.strip(), "job": job}, _query)
+        try:
+            anterior = sessions.get_session(sid) or {}
+            bruto = anterior.get("raw") or []
+            bruto.append({"role": "user", "content": question})
+            sessions.save_session(bruto, sid=sid,
+                                  owner=anterior.get("owner", ""),
+                                  titulo="", modo=mode, colecoes=colecoes,
+                                  aprovacoes=anterior.get("aprovacoes", {}),
+                                  raw=bruto,
+                                  job_ativo={"kind": "chat", "job": job})
+        except Exception:
+            pass
+        linhas = _query.status(job, 0, "")["lines"]
+        parcial = TEMPLATES.TemplateResponse(
+            request, "_chat_inicio.html",
+            {"request": request, "job": job, "linhas": linhas,
+             "running": True, "pergunta": question,
+             "otimista": request.headers.get("x-otimista") == "1"})
+        _sc = resp_stub.headers.get("set-cookie", "")
+        if _sc.startswith(SESSAO_COOKIE + "="):
+            _sid = _sc.split("=", 1)[1].split(";", 1)[0]
+            parcial.set_cookie(SESSAO_COOKIE, _sid, max_age=30 * 86400,
+                               httponly=True, samesite="lax")
+        return parcial
     try:
         r = query(corpo)
     except HTTPException as e:

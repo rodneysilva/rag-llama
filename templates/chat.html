@@ -102,14 +102,15 @@
             {% endif %}
             {% endfor %}
           </select>
-          {# 3º: MODO — como usar a base (só no TEXTO; no i2t sai da vista) #}
+          {# 3º: MODO — como usar a base (no i2t o PRÓPRIO select assume
+             "análise de imagem": nada de legenda solta — o modo não se
+             aplica e o layout do composer fica intacto) #}
           <select name="mode" id="sel-modo" title="modo de resposta (como a base entra)">
             <option value="hibrido">híbrido</option>
             <option value="rag">rag (só a base)</option>
             <option value="livre">livre</option>
             <option value="auto">auto</option>
           </select>
-          <span class="mini" id="modo-hint" hidden style="opacity:.7;">análise direta — o modo não se aplica</span>
           <button type="button" onclick="melhorarPrompt(this)" id="btn-prompt"
                   title="a ✨ reescreve o que você digitou na melhor forma — pergunta, pedido de código, instrução ou mídia (se o seletor estiver ativo)">✨ prompt</button>
           <button type="button" onclick="alternarPainel()" id="btn-painel"
@@ -727,15 +728,17 @@ function midiaMudou() {
   const tipo = SEL_MIDIA.value;
   const modo = document.getElementById("sel-modo");
   const btnAnexo = document.getElementById("btn-anexo");
-  // MODO só vale para TEXTO — no i2t (análise direta da imagem) o seletor
-  // SAI da vista com um hint (disabled sem modelos parecia "tudo quebrado"
-  // — relato do dono); o campo segue no form com o último valor (o i2t
-  // não usa a base)
+  // MODO só vale para TEXTO — no i2t o PRÓPRIO select assume a cara de
+  // "análise de imagem" (legenda solta parecia informação sem layout —
+  // pedido do dono); o valor salvo é restaurado ao voltar pro texto
   if (modo) {
-    modo.hidden = !!tipo;
-    modo.title = "modo de resposta (como a base entra)";
-    const hint = document.getElementById("modo-hint");
-    if (hint) hint.hidden = !tipo;
+    if (tipo && !modo.dataset.original) {
+      modo.dataset.original = modo.innerHTML;   // guarda hibrido/rag/livre/auto
+      modo.innerHTML = '<option value="">👁 análise de imagem</option>';
+    } else if (!tipo && modo.dataset.original) {
+      modo.innerHTML = modo.dataset.original;
+      delete modo.dataset.original;
+    }
   }
   // 📎 botão de subir imagem: SÓ na análise (i2t)
   if (btnAnexo) {
