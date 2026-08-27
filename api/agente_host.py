@@ -256,6 +256,7 @@ def visao(body: VisaoIn):
     não existe aqui); grava em saidas/entrada/ do host e analisa."""
     from core import midia
     import base64 as _b64
+    from pathlib import Path
     caminho = body.arquivo
     try:
         if body.b64:
