@@ -1115,6 +1115,19 @@ da API**.
   público traz 417 modelos TODOS com ctx/descrição/preço; ESTACAO
   qwen2.5-coder ctx 32768 pela heurística. ⚠️ OpenRouter /models é
   público (sem chave) — dá pra VER o catálogo antes da chave.
+- **🏷️ MODELOS por CATEGORIA + "para que serve" (27/08, manhã 3)**:
+  `provedores.categoria_do_modelo(nome)` → (cat, uso): EXCLUSÕES de
+  chat primeiro por regex — `imagem` (glm-image/cogview/dall-e/flux/
+  sora… "🎨 GERA imagens — não é chat"), `audio` (tts/whisper/voice),
+  `embed` (embedding/rerank) — depois `visao` via `e_multimodal`
+  (respeita falsos positivos; `glm-v\d` adicionado p/ família V da
+  Z.AI — "GLM-V5-Turbo" é multimodal), `programacao` (coder/codestral),
+  `raciocinio` (reasoner/thinking/r1/qwq), default `conversa`.
+  `modelos()` ganha `cat`/`uso`; `info` cai no uso quando a API não dá
+  descrição. **Chat**: optgroups `🌐 <prov> · <categoria>` (visão →
+  programação → raciocínio → conversa; imagem/áudio/embed FORA do
+  select — não servem chat). **Sistema**: chips agrupados por categoria
+  com o uso no header do grupo e tooltip com uso/ctx/preço.
 - **🧹 CS5001 COM CSPROJ + FASTAPI MUDO (26/08, noite 3)**: (1) conversa
   com `app.csproj` + classes SEM entry voltava `return` cedo no
   `_preparar_cs` — CS5001 na cara (bootstrap/placeholder só rodavam SEM
