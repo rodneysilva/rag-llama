@@ -1016,7 +1016,10 @@ def hx_chat(request: Request, question: str = Form(""), mode: str = Form("hibrid
                     if not alvo.exists():
                         alvo = Path(payload["referencia"])
                     modelo = payload["modelo"]
-                    if not modelo and config.EM_CONTAINER:
+                    # LOCAL (sem ":") em CONTAINER → AGENTE do host (a GPU e
+                      # o GGUF vivem na estação; direto aqui procura D:\models
+                      # no Linux e morre). EXTERNO "prov:nome" roda NA API.
+                    if config.EM_CONTAINER and ":" not in modelo:
                         import base64 as _b64
                         with open(alvo, "rb") as f:
                             img_b64 = _b64.b64encode(f.read()).decode()
