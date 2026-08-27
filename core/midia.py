@@ -544,14 +544,26 @@ def legendar_imagem(arquivo: str, pergunta: str | None = None,
                                 "estilo, cores.")
         r = httpx.post(f"{prov_ext['base_url']}/chat/completions",
                        headers={"Authorization":
-                                f"Bearer {prov_ext['api_key']}"},
+                                f"Bearer {prov_ext['api_key']}",
+                                "User-Agent": "ragaroy/1.0"},
                        json={"model": prov_ext["model"],
                              "messages": [{"role": "user", "content": [
                                  {"type": "image_url",
                                   "image_url": {"url": f"data:image/{ext};base64,{b64}"}},
                                  {"type": "text", "text": pergunta}]}]},
                        timeout=300)
-        r.raise_for_status()
+        if r.status_code != 200:
+            # CORPO do erro na cara: "modelCode: does not exist" da z.ai diz
+            # TUDO; sem isto o usuário via só "400 Bad Request … mozilla"
+            detalhe = ""
+            try:
+                detalhe = str((r.json().get("error") or {}).get("message")
+                              or r.text)[:200]
+            except Exception:
+                detalhe = r.text[:200]
+            raise RuntimeError(
+                f"visão externa {prov_ext['model']} → HTTP {r.status_code}"
+                + (f": {detalhe}" if detalhe else ""))
         texto = r.json()["choices"][0]["message"]["content"].strip()
         try:
             from . import telemetria as _tel

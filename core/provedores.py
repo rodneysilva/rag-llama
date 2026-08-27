@@ -53,17 +53,22 @@ _SUGESTOES = {
 
 # ☁️ PROVEDORES PRINCIPAIS (catálogo p/ o cadastro em 1 clique — falta SÓ a
 # chave; "zai coding plan" é o plano de API da Z.AI, mesmo endpoint GLM).
-# `visao` = multimodais TÍPICOS da casa — aparecem no módulo Multimídia
-# mesmos SEM cadastro (marcados 🔑 requer chave) para o dono ver o que tem.
+# `visao` = multimodais REAIS da casa (sondado 27/08 contra a API: glm-v5-
+# turbo NÃO existe — "modelCode: does not exist"; glm-4.5v/4.6v respondem
+# com image_url base64). `gera` = GERADORES de imagem (endpoint
+# /images/generations — na Z.AI existem mas FORA do coding plan: 429
+# "insufficient balance" sem saldo próprio).
 CONHECIDOS = {
     "zai": {"nome": "Z.AI Coding Plan (GLM)",
             "base_url": "https://api.z.ai/api/paas/v4",
             "site": "z.ai", "dica": "glm-4.6 · glm-4.5 · glm-4.5v (plano coding)",
-            "visao": ["glm-4.5v", "glm-v5-turbo", "glm-4.6v"]},
+            "visao": ["glm-4.5v", "glm-4.6v"],
+            "gera": ["glm-image", "cogview-4-250304"]},
     "openai": {"nome": "ChatGPT / OpenAI",
                "base_url": "https://api.openai.com/v1",
                "site": "platform.openai.com", "dica": "gpt-5 · gpt-5-mini · o3",
-               "visao": ["gpt-5", "gpt-4o", "o3"]},
+               "visao": ["gpt-5", "gpt-4o", "o3"],
+               "gera": ["gpt-image-1"]},
     "anthropic": {"nome": "Claude / Anthropic",
                   "base_url": "https://api.anthropic.com/v1",
                   "site": "console.anthropic.com",
@@ -77,7 +82,8 @@ CONHECIDOS = {
                    "site": "openrouter.ai",
                    "dica": "1 chave, modelos de TODAS as casas (com preço)",
                    "visao": ["anthropic/claude-sonnet-4.5",
-                             "google/gemini-2.5-pro"]},
+                             "google/gemini-2.5-pro"],
+                   "gera": ["google/gemini-2.5-flash-image-preview"]},
     "gemini": {"nome": "Google Gemini",
                "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
                "site": "aistudio.google.com", "dica": "gemini-2.5-pro · flash",
@@ -248,6 +254,57 @@ def _modelos_do_endpoint(base: str, chave: str):
         return None, {}
 
 
+def gerar_imagem(pid: str, modelo: str, prompt: str,
+                 tamanho: str = "1024x1024", log=print) -> dict:
+    """Geração de IMAGEM por provedor cloud (POST {base}/images/
+    generations — padrão OpenAI Images: b64_json OU url). Devolve o dict
+    no formato do t2i local ({arquivo, pasta, tipo, modelo, segundos}).
+    Sem GPU local envolvida — a z.ai responde 429 claro se o plano não
+    cobre geração (coding plan é texto/visão)."""
+    import time as _t
+    from core import midia as _midia
+    t0 = _t.time()
+    base, chave = _cfg(pid, "BASE_URL"), _cfg(pid, "API_KEY")
+    if not base:
+        raise RuntimeError(f"provedor {pid.upper()} sem PROV_{pid.upper()}_"
+                           "BASE_URL — cadastre a chave no Sistema (☁️)")
+    log(f"🎨 geração EXTERNA [{pid}] {modelo} — GPU local intocada…", "gerar")
+    r = httpx.post(f"{base.rstrip('/')}/images/generations",
+                   headers={"Authorization": f"Bearer {chave}",
+                            "Content-Type": "application/json",
+                            "User-Agent": "ragaroy/1.0"},
+                   json={"model": modelo, "prompt": prompt, "size": tamanho},
+                   timeout=240)
+    if r.status_code != 200:
+        detalhe = ""
+        try:
+            detalhe = str((r.json().get("error") or {}).get("message")
+                          or r.text)[:200]
+        except Exception:
+            detalhe = r.text[:200]
+        raise RuntimeError(f"geração externa {modelo} → HTTP {r.status_code}"
+                           + (f": {detalhe}" if detalhe else ""))
+    item = ((r.json().get("data") or [{}])[0])
+    _midia.SAIDAS["imagem"].mkdir(parents=True, exist_ok=True)
+    alvo = _midia.SAIDAS["imagem"] / f"{pid}_{modelo.replace('/', '_')}_{int(t0)}.png"
+    if item.get("b64_json"):
+        import base64 as _b64
+        alvo.write_bytes(_b64.b64decode(item["b64_json"]))
+    elif item.get("url"):
+        img = httpx.get(item["url"], timeout=120,
+                        headers={"User-Agent": "ragaroy/1.0"})
+        img.raise_for_status()
+        alvo.write_bytes(img.content)
+    else:
+        raise RuntimeError("provedor respondeu 200 sem b64_json nem url")
+    kb = round(alvo.stat().st_size / 1024)
+    log(f"✅ imagem externa salva ({kb} KB)", "salvar")
+    return {"arquivo": alvo.name, "pasta": str(_midia.SAIDAS["imagem"]),
+            "prompt": prompt, "modelo": f"{pid}:{modelo}", "tipo": "imagem",
+            "kb": kb, "segundos": round(_t.time() - t0),
+            "vram_mi": None}
+
+
 def modelos(pid: str, force: bool = False) -> list[dict]:
     """[{nome, visao, ctx, info}] do provedor — /models → manual →
     sugestões. `ctx` = janela de contexto (metadado da API quando existe
@@ -290,6 +347,18 @@ def modelos(pid: str, force: bool = False) -> list[dict]:
                                    "listagem da API — se indisponível, o "
                                    "erro aparece ao usar)",
                           "cat": "visao", "uso": uso})
+    # 🎨 idem para GERADORES de imagem (a listagem do coding plan não traz
+    # glm-image/cogview — existem no endpoint /images/generations)
+    if not any(x["cat"] == "imagem" for x in lista):
+        for nome in CONHECIDOS.get(pid, {}).get("gera", []):
+            if any(x["nome"] == nome for x in lista):
+                continue
+            lista.append({"nome": nome, "visao": False, "ctx": None,
+                          "info": "🎨 GERA imagens via API do provedor — "
+                                  "fora do coding plan da Z.AI (saldo "
+                                  "próprio); o erro 429 avisa se não tiver",
+                          "cat": "imagem",
+                          "uso": "🎨 gera imagens (API do provedor)"})
     with _LOCK:
         _CACHE[pid] = (time.time(), lista)
     return lista

@@ -4040,8 +4040,8 @@ def midia_pagina(request: Request):
         pass
     ctx["grupos_visao"] = [g for g in grupos
                            if g["modelos"] or "cadastrados" in g["rotulo"]]
-    # 🎨🎬 GERAÇÃO local (Flux/Wan da estação — pedido do dono: "cadê meus
-    # modelos locais de geração?"): categorias imagem/video do modelos.listar
+    # 🎨🎬 GERAÇÃO local (Flux/Wan da estação) + ☁️ GERADORES de provedores
+    # (glm-image/gpt-image-1… via /images/generations — pedido do dono)
     try:
         ger = {"imagem": [], "video": []}
         for m in modelos.listar():
@@ -4051,8 +4051,19 @@ def midia_pagina(request: Request):
                      "gb": m.get("gb"),
                      "info": "pausa as LLMs durante a geração (8 GB de VRAM)"})
         ctx["geracao"] = ger
+        from core import provedores as _prov
+        ext = []
+        for p in _prov.listar():
+            for m in p.get("modelos", []):
+                if m.get("cat") == "imagem":
+                    ext.append({"nome": f"{p['id']}:{m['nome']}",
+                                "gb": None,
+                                "info": m.get("info", "") or
+                                        f"geração via API {p['nome']}"})
+        ctx["geracao_externa"] = ext
     except Exception:
         ctx["geracao"] = {"imagem": [], "video": []}
+        ctx["geracao_externa"] = []
     return TEMPLATES.TemplateResponse(request, "midia.html", ctx)
 
 
@@ -4966,6 +4977,42 @@ def criar_tarefa(body: TarefaIn, request: Request):
     (log ao vivo, progresso, ETA) em /api/tarefas/status/{id}?cursor=N."""
     _checar_gpu_modo(mod=body.modalidade)  # política antes do guard de host:
     # o 403 "somente LLMs" é mais útil que o 400 de container
+    # 🎨 t2i com GERADOR EXTERNO (zai:glm-image, openai:gpt-image-1…): roda
+    # NA PRÓPRIA API (POST /images/generations do provedor) — sem GPU/agente
+    # (pedido do dono: "geração pode usar modelos de provedores também")
+    if (body.modalidade == "t2i"
+            and ":" in str(body.params.get("modelo") or "")):
+        _modelo = str(body.params.get("modelo"))
+        pid, nome = _modelo.split(":", 1)
+        from core import provedores as _prov
+        if not _prov.resolver(pid.strip(), nome.strip()):
+            raise HTTPException(status_code=400,
+                                detail=f"provedor '{pid}' não configurado no "
+                                       ".env (Sistema → ☁️ cadastre a chave)")
+        if not body.sessao:
+            body.sessao = sessoes.principal(_usuario(request))
+        try:
+            tid = tarefas.criar("t2i", trava_vram=False, sessao=body.sessao)
+        except RuntimeError as e:
+            raise HTTPException(status_code=423, detail=str(e))
+
+        def _t2i_ext(tid=tid, body=body, modelo=_modelo):
+            from core import provedores as _prov
+            try:
+                r = _prov.gerar_imagem(
+                    modelo.split(":", 1)[0], modelo.split(":", 1)[1],
+                    body.texto,
+                    log=lambda m, e=None: tarefas.log(tid, m, e))
+                tarefas.concluir(tid, resultado=r)
+            except Exception as e:
+                tarefas.concluir(tid, erro=str(e)[:400])
+
+        threading.Thread(target=_t2i_ext, daemon=True,
+                         name=f"t2i-ext-{tid}").start()
+        return {"tarefa": tid, "modalidade": "t2i",
+                "rotulo": f"gerar imagem (externo {modelo})",
+                "estimativa_s": 30, "etapas": ["gerar"],
+                "status": f"/api/tarefas/status/{tid}"}
     # 👁 i2t com MULTIMODAL EXTERNO (openai:gpt-4o…): roda NA PRÓRIA API —
     # não toca a GPU nem o agente do host (a análise é uma chamada HTTP)
     if (body.modalidade == "i2t"

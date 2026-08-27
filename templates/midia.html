@@ -56,7 +56,8 @@
 
   <section class="cartao">
     <h2>🎨🎬 Gerar mídia (GPU local)</h2>
-    <div id="gen-dados" data-geracao='{{ geracao | tojson }}' hidden></div>
+    <div id="gen-dados" data-geracao='{{ geracao | tojson }}'
+         data-geracao-ext='{{ geracao_externa | tojson }}' hidden></div>
     <p class="mini" style="margin-top:-.4rem;">seus GERADORES da estação —
       Flux (imagem) e Wan (vídeo/gif). A geração pausa as LLMs enquanto
       usa a VRAM e devolve tudo sozinho ao terminar (8 GB).</p>
@@ -94,13 +95,15 @@
 </div>
 
 <script>
-  // dados de geração via data-attribute (jinja NÃO pode viver no JS cru —
-  // o teste de sintaxe roda node --check no bloco)
+  // dados de geração via data-attribute (jinja NUNCA no JS cru)
   const GERACAO = JSON.parse(
     document.getElementById("gen-dados").dataset.geracao || "{}");
+  const GERACAO_EXT = JSON.parse(
+    document.getElementById("gen-dados").dataset.geracaoExt || "[]");
 
   function genModelos(tipo) {
-    if (tipo === "t2i") return GERACAO.imagem || [];
+    if (tipo === "t2i")
+      return (GERACAO.imagem || []).concat(GERACAO_EXT || []);
     return GERACAO.video || [];
   }
   function genTipoMudou() {
@@ -108,8 +111,9 @@
     const sel = document.getElementById("gen-modelo");
     const modelos = genModelos(tipo);
     sel.innerHTML = modelos.map(m =>
-      `<option value="${m.nome}" title="${m.info || ''}">${m.nome}`
-      + (m.gb ? ` · ${m.gb}GB` : "") + `</option>`).join("")
+      `<option value="${m.nome}" title="${m.info || ''}">`
+      + (String(m.nome).includes(":") ? "☁️ " : "")
+      + m.nome + (m.gb ? ` · ${m.gb}GB` : "") + `</option>`).join("")
       || "<option value='' disabled>— nenhum modelo local de "
          + (tipo === "t2i" ? "imagem" : "vídeo") + " —</option>";
     document.getElementById("gen-dur-linha").style.display =
