@@ -271,6 +271,25 @@ def modelos(pid: str, force: bool = False) -> list[dict]:
                       "ctx": m.get("ctx") or _ctx_do_nome(n),
                       "info": m.get("info", "") or uso,
                       "cat": cat, "uso": uso})
+    # 👁 FALLBACK DA CASA: endpoints de CODING PLAN (ex.: api.z.ai/api/
+    # coding/paas/v4) listam SÓ os de conversa — os multimodais EXISTEM na
+    # API mas não vêm no /models. Sem isto o módulo Multimídia ficava sem
+    # 👁 nenhum do provedor cadastrado (bug real do dono). Apensamos os
+    # TÍPICOS do CONHECIDOS que não vieram na listagem (se um deles não
+    # existir de verdade, o erro da API é claro na hora do uso).
+    if not any(x["cat"] == "visao" for x in lista):
+        for nome in CONHECIDOS.get(pid, {}).get("visao", []):
+            if any(x["nome"] == nome for x in lista):
+                continue
+            cat, uso = categoria_do_modelo(nome)
+            if cat != "visao":
+                continue
+            lista.append({"nome": nome, "visao": True,
+                          "ctx": _ctx_do_nome(nome),
+                          "info": uso + " · modelo da casa (não veio na "
+                                   "listagem da API — se indisponível, o "
+                                   "erro aparece ao usar)",
+                          "cat": "visao", "uso": uso})
     with _LOCK:
         _CACHE[pid] = (time.time(), lista)
     return lista

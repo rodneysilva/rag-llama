@@ -2044,11 +2044,14 @@ def pagina_sistema(request: Request):
     # 🧠 ATIVOS pela FONTE ÚNICA (`modelos_ativos`): o cabeçalho mostra o
     # que está SERVINDO agora (chat/visão/difusores) — nunca o .env velho.
     ctx["ativos"] = modelos_ativos()
-    # 🌐 provedores externos p/ o retrato do Motor (Sistema): nome + contagem
+    # 🌐 provedores CADASTRADOS (retrato no cartão ☁️ do Sistema — feedback
+    # de que a chave gravou: nome + nº de modelos e de 👁 multimodais)
     try:
         from core import provedores as _prov
         ctx["provedores_externos"] = [
-            {"id": p["id"], "nome": p["nome"], "n_modelos": len(p["modelos"])}
+            {"id": p["id"], "nome": p["nome"],
+             "n_modelos": len(p["modelos"]),
+             "n_visao": sum(1 for m in p["modelos"] if m.get("cat") == "visao")}
             for p in _prov.listar() if p["externo"]]
         ctx["prov_conhecidos"] = [{"id": k, **v} for k, v in
                                   _prov.CONHECIDOS.items()]

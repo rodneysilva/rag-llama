@@ -1,97 +1,106 @@
 {% extends "base.html" %}
-{% block titulo %}Sistema â€” RagAroy{% endblock %}
+{% block titulo %}Sistema — RagAroy{% endblock %}
 {% block conteudo %}
 <div class="pagina-conteudo">
 
 <h1>Sistema</h1>
-<p class="descricao">o que estÃ¡ RODANDO, os provedores cloud e as
-  configuraÃ§Ãµes â€” cada cartÃ£o Ã© um objeto: <b>ðŸ§  Motor</b> (GPU da estaÃ§Ã£o),
-  <b>â˜ï¸ Provedores</b> (cadastro cloud), <b>ðŸ”Œ ServiÃ§os</b> (infra) e
-  <b>âš™ï¸ ConfiguraÃ§Ãµes</b> (.env).</p>
+<p class="descricao">o que está RODANDO, os provedores cloud e as
+  configurações — cada cartão é um objeto: <b>🧠 Motor</b> (GPU da estação),
+  <b>☁️ Provedores</b> (cadastro cloud), <b>🔌 Serviços</b> (infra) e
+  <b>⚙️ Configurações</b> (.env).</p>
 
-{# â•â•â• OBJETO 1: MOTOR â€” onde a conversa roda AGORA â•â•â• â•â•â• â•â•â• â•â•â• â•â•â• â•â•â• #}
+{# ═══ OBJETO 1: MOTOR — onde a conversa roda AGORA ═══ ═══ ═══ ═══ ═══ ═══ #}
 <section class="cartao">
-  <h2>ðŸ§  Motor LLM â€” quem estÃ¡ servindo</h2>
+  <h2>🧠 Motor LLM — quem está servindo</h2>
   <div class="grade">
     <div class="kpi">
-      <div class="rotulo">ðŸ’¬ chat Â· :8090</div>
+      <div class="rotulo">💬 chat (conversa) · :8090</div>
       <div class="valor" style="font-size:1rem; word-break:break-all;">
-        {% if motor.chat %}{{ motor.chat }}{% elif motor.rodando %}ðŸŽ¨ geraÃ§Ã£o em curso{% else %}â€” desligado â€”{% endif %}
+        {% if motor.chat %}{{ motor.chat }}{% elif motor.rodando %}🎨 geração em curso{% else %}— desligado —{% endif %}
       </div>
       <div class="sub">
-        {% if motor.chat %}<span style="color:var(--ok)">â— servindo</span>
-        {% elif motor.rodando %}<span style="color:var(--aviso)">â¸ï¸ pausado â€” a GPU estÃ¡ com:</span>
-          {% for r in motor.rodando[:3] %}<br><span class="mini">ðŸŽ¨ {{ r.rotulo }}</span>{% endfor %}
-        {% else %}<span style="color:var(--erro)">â—‹ fora</span>{% endif %}
+        {% if motor.chat %}<span style="color:var(--ok)">● servindo o TEXTO do chat</span>
+        {% elif motor.rodando %}<span style="color:var(--aviso)">⏸️ pausado — a GPU está com:</span>
+          {% for r in motor.rodando[:3] %}<br><span class="mini">🎨 {{ r.rotulo }}</span>{% endfor %}
+        {% else %}<span style="color:var(--erro)">○ fora</span>{% endif %}
       </div>
     </div>
     <div class="kpi">
-      <div class="rotulo">ðŸ§¬ embedding Â· :8081</div>
+      <div class="rotulo">🧬 embedding · :8081</div>
       <div class="valor" style="font-size:1rem;">bge-m3</div>
       <div class="sub">
-        {% if motor.embed %}<span style="color:var(--ok)">â— sempre no ar</span>
-        {% else %}<span style="color:var(--erro)">â—‹ fora</span>{% endif %}
+        {% if motor.embed %}<span style="color:var(--ok)">● sempre no ar</span>
+        {% else %}<span style="color:var(--erro)">○ fora</span>{% endif %}
       </div>
     </div>
     <div class="kpi">
-      <div class="rotulo">ðŸ–¼ï¸ visÃ£o Â· :8082 / ðŸŒ</div>
+      <div class="rotulo">🖼️ visão (multimodal) · :8082 / 🌐</div>
       <div class="valor" style="font-size:1rem; word-break:break-all;">
-        {% if ativos.visao %}{{ ativos.visao }}{% elif ativos.visao_externa %}{{ ativos.visao_externa[0] }}{% else %}â€” sobe quando pedida â€”{% endif %}
+        {% if ativos.visao %}{{ ativos.visao }}{% elif ativos.visao_externa %}{{ ativos.visao_externa[0] }}{% else %}— sobe quando pedida —{% endif %}
       </div>
       <div class="sub">
-        {% if ativos.visao %}<span style="color:var(--ok)">â— local</span>
-        {% elif ativos.visao_externa %}<span style="color:var(--ok)">â— via API externa</span>
-        {% else %}<span style="color:var(--suave)">â—‹ mÃ³dulo ðŸ‘ MultimÃ­dia</span>{% endif %}
-        {% if ativos.difusores %} Â· ðŸŽ¨ {{ ativos.difusores | length }} difusor(es){% endif %}
+        {% if ativos.visao %}<span style="color:var(--ok)">● local no ar (análise i2t)</span>
+        {% elif ativos.visao_externa %}<span style="color:var(--ok)">● via API externa</span>
+        {% else %}<span style="color:var(--suave)">○ escolha um 👁 no chat/Multimídia que ele sobe</span>{% endif %}
+        {% if ativos.difusores %} · 🎨 {{ ativos.difusores | length }} difusor(es){% endif %}
       </div>
     </div>
     <div class="kpi">
-      <div class="rotulo">ðŸŽ® VRAM</div>
-      <div class="valor">{{ motor.vram_mi if motor.vram_mi is not none else "â€”" }}<small style="font-size:.6em; color:var(--suave);"> MiB</small></div>
+      <div class="rotulo">🎮 VRAM</div>
+      <div class="valor">{{ motor.vram_mi if motor.vram_mi is not none else "—" }}<small style="font-size:.6em; color:var(--suave);"> MiB</small></div>
       <div class="sub">{% if motor.agente is sameas true %}via agente (:8010)
-        {% elif motor.agente %}âš ï¸ {{ motor.agente }}{% else %}leitura local{% endif %}</div>
+        {% elif motor.agente %}⚠️ {{ motor.agente }}{% else %}leitura local{% endif %}</div>
     </div>
   </div>
 
-  {#Diretriz do dono: seleÃ§Ã£o de modelo vive no CHAT/MULTIMÃDIA â€” aqui Ã©
-    SÃ“ estado da GPU e cadastro de chave (nada de listar modelos de novo)#}
+  {#Diretriz do dono: seleção de modelo vive no CHAT/MULTIMÍDIA — aqui é
+    SÓ estado da GPU e cadastro de chave (nada de listar modelos de novo)#}
 
-  {# manutenÃ§Ã£o: aÃ§Ãµes RARAS de GPU fora do caminho (OOUX: nÃ­veis) #}
+  {# manutenção: ações RARAS de GPU fora do caminho (OOUX: níveis) #}
   <details style="margin-top:.8rem;">
-    <summary class="mini" style="cursor:pointer;">ðŸ”§ manutenÃ§Ã£o da GPU
+    <summary class="mini" style="cursor:pointer;">🔧 manutenção da GPU
       (ligar/desligar servidores)</summary>
     <div style="display:flex; gap:.6rem; flex-wrap:wrap; margin-top:.5rem;">
-      <button hx-post="/api/llm/ligar" hx-swap="none" hx-confirm="subir o llama-server do chat (LLM_MODEL do .env)?">ðŸ§  ligar chat</button>
-      <button hx-post="/api/llm/desligar" hx-swap="none" hx-confirm="derrubar o chat e TRAVAR a religaÃ§Ã£o automÃ¡tica?">â¸ï¸ desligar chat</button>
-      <button hx-post="/api/embed/ligar" hx-swap="none">ðŸ§¬ religar embedding</button>
-      <button hx-post="/api/vl/ligar" hx-swap="none">ðŸ–¼ï¸ subir visÃ£o</button>
-      <button hx-post="/api/vl/desligar" hx-swap="none">ðŸ–¼ï¸ derrubar visÃ£o</button>
+      <button hx-post="/api/llm/ligar" hx-swap="none" hx-confirm="subir o llama-server do chat (LLM_MODEL do .env)?">🧠 ligar chat</button>
+      <button hx-post="/api/llm/desligar" hx-swap="none" hx-confirm="derrubar o chat e TRAVAR a religação automática?">⏸️ desligar chat</button>
+      <button hx-post="/api/embed/ligar" hx-swap="none">🧬 religar embedding</button>
+      <button hx-post="/api/vl/ligar" hx-swap="none">🖼️ subir visão</button>
+      <button hx-post="/api/vl/desligar" hx-swap="none">🖼️ derrubar visão</button>
     </div>
   </details>
 </section>
 
-{# â•â•â• OBJETO 2: PROVEDORES CLOUD â€” cadastro e estado â•â•â• â•â•â• â•â•â• â•â•â• â•â•â• â•â• #}
+{# ═══ OBJETO 2: PROVEDORES CLOUD — cadastro e estado ═══ ═══ ═══ ═══ ═══ ══ #}
 <section class="cartao">
-  <h2>â˜ï¸ Provedores cloud</h2>
+  <h2>☁️ Provedores cloud</h2>
   <div id="prov-dados" data-conhecidos='{{ prov_conhecidos | tojson }}' hidden></div>
-  <p class="mini" style="margin-top:-.4rem;">APIs OpenAI-compatible â€” os
-    <b>principais</b> em 1 clique (falta sÃ³ a chave). Modelos e informaÃ§Ãµes
-    (contexto, descriÃ§Ã£o/preÃ§o quando a API entrega) sÃ£o lidos
-    automaticamente; a chave vai para o .env mascarada e o grupo ðŸŒ entra no
-    seletor do chat na hora.</p>
+  {% if provedores_externos %}
+  <div style="display:flex; gap:.4rem; flex-wrap:wrap; margin:.2rem 0 .7rem;">
+    {% for p in provedores_externos %}
+    <span class="chip-prompt" title="cadastrado — modelos no seletor do chat e no módulo 👁 Multimídia">
+      ✅ {{ p.nome }} <span class="mini">· {{ p.n_modelos }} modelo(s){% if p.n_visao %} · {{ p.n_visao }} 👁{% endif %}</span>
+    </span>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <p class="mini" style="margin-top:-.3rem;">APIs OpenAI-compatible — os
+    <b>principais</b> em 1 clique (falta só a chave). Modelos e informações
+    (contexto, descrição/preço quando a API entrega) são lidos
+    automaticamente; a seleção deles acontece no <b>chat</b> e no módulo
+    <b>👁 Multimídia</b> — aqui é só a chave.</p>
   <div style="display:flex; gap:.4rem; flex-wrap:wrap; margin:.4rem 0 .8rem;">
     {% for c in prov_conhecidos %}
     <button type="button" class="chip-prompt" style="cursor:pointer;"
-            title="{{ c.dica }} Â· {{ c.site }}"
+            title="{{ c.dica }} · {{ c.site }}"
             onclick="usarProv('{{ c.id }}', '{{ c.nome }}', '{{ c.base_url }}')">
-      â˜ï¸ {{ c.nome }}</button>
+      ☁️ {{ c.nome }}</button>
     {% endfor %}
   </div>
   <form id="form-prov" onsubmit="cadastrarProv(this); return false;"
         style="display:grid; gap:.5rem; grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));">
     <div><label>id (slug)</label>
       <input type="text" name="pid" required placeholder="zai" maxlength="12" style="text-transform:uppercase; width:100%;"></div>
-    <div><label>nome (rÃ³tulo)</label>
+    <div><label>nome (rótulo)</label>
       <input type="text" name="pnome" placeholder="Z.AI Coding Plan" style="width:100%;"></div>
     <div style="grid-column:1/-1;"><label>base URL da API</label>
       <input type="text" name="purl" required list="prov-presets" placeholder="https://api.z.ai/api/paas/v4" style="width:100%;">
@@ -99,22 +108,22 @@
         {% for c in prov_conhecidos %}
         <option value="{{ c.base_url }}">{{ c.nome }}</option>
         {% endfor %}
-        <option value="https://open.bigmodel.cn/api/paas/v4">Zhipu bigmodel â€” GLM (China)</option>
+        <option value="https://open.bigmodel.cn/api/paas/v4">Zhipu bigmodel — GLM (China)</option>
       </datalist></div>
-    <div><label>chave da API ðŸ”’</label>
-      <input name="pkey" type="password" autocomplete="off" placeholder="sk-â€¦" style="width:100%;"></div>
-    <div style="grid-column:1/-1;"><label>modelos (opcional â€” manual, vÃ­rgula)</label>
-      <input type="text" name="pmodelos" placeholder="glm-4.6, glm-4.5-air (sÃ³ se a API nÃ£o listar)" style="width:100%;"></div>
-    <div style="grid-column:1/-1;"><button type="submit">â˜ï¸ cadastrar provedor</button></div>
+    <div><label>chave da API 🔒</label>
+      <input name="pkey" type="password" autocomplete="off" placeholder="sk-…" style="width:100%;"></div>
+    <div style="grid-column:1/-1;"><label>modelos (opcional — manual, vírgula)</label>
+      <input type="text" name="pmodelos" placeholder="glm-4.6, glm-4.5-air (só se a API não listar)" style="width:100%;"></div>
+    <div style="grid-column:1/-1;"><button type="submit">☁️ cadastrar provedor</button></div>
   </form>
   <p id="prov-res" class="mini" style="margin:.5rem 0 0;"></p>
 </section>
 
-{# â•â•â• OBJETO 3: SERVIÃ‡OS â€” infraestrutura â•â•â• â•â•â• â•â•â• â•â•â• â•â•â• â•â•â• â•â•â• â•â•â• â• #}
+{# ═══ OBJETO 3: SERVIÇOS — infraestrutura ═══ ═══ ═══ ═══ ═══ ═══ ═══ ═══ ═ #}
 <section class="cartao">
-  <h2>ðŸ”Œ ServiÃ§os</h2>
+  <h2>🔌 Serviços</h2>
   <table>
-    <thead><tr><th>serviÃ§o</th><th>estado</th><th>detalhe</th></tr></thead>
+    <thead><tr><th>serviço</th><th>estado</th><th>detalhe</th></tr></thead>
     <tbody>
       {% for id, s in servicos.items() %}
       <tr>
@@ -126,15 +135,15 @@
     </tbody>
   </table>
   <div style="margin-top:.7rem;">
-    <button hx-post="/hx/parar-tudo" hx-confirm="parar TUDO (jobs + motores de GPU)?">â¹ parar tudo</button>
+    <button hx-post="/hx/parar-tudo" hx-confirm="parar TUDO (jobs + motores de GPU)?">⏹ parar tudo</button>
   </div>
 </section>
 
-{# â•â•â• OBJETO 4: CONFIGURAÃ‡Ã•ES â€” .env â•â•â• â•â•â• â•â•â• â•â•â• â•â•â• â•â•â• â•â•â• â•â•â• â•â•â• â•â• #}
+{# ═══ OBJETO 4: CONFIGURAÇÕES — .env ═══ ═══ ═══ ═══ ═══ ═══ ═══ ═══ ═══ ══ #}
 <section class="cartao">
-  <h2>âš™ï¸ ConfiguraÃ§Ãµes (.env)</h2>
-  <p class="mini" style="margin-top:-.4rem;">aplica na hora, sem reiniciar â€”
-    segredo definido fica mascarado; vazio mantÃ©m o atual.</p>
+  <h2>⚙️ Configurações (.env)</h2>
+  <p class="mini" style="margin-top:-.4rem;">aplica na hora, sem reiniciar —
+    segredo definido fica mascarado; vazio mantém o atual.</p>
   <form hx-post="/hx/settings" hx-swap="none">
     {% for grupo, campos in grupos_cfg.items() %}
     <h3 class="mini" style="margin:.9rem 0 .3rem; text-transform:uppercase; letter-spacing:.04em;">{{ grupo }}</h3>
@@ -145,10 +154,10 @@
         <textarea name="{{ c.chave }}" rows="2" style="width:100%;">{{ c.valor }}</textarea></div>
       {% else %}
       <div class="estreito" style="flex:1 1 14rem;" title="{{ c.rotulo | e }}">
-        <label>{{ c.chave }}{% if c.tipo == "secret" %} ðŸ”’{% endif %}</label>
+        <label>{{ c.chave }}{% if c.tipo == "secret" %} 🔒{% endif %}</label>
         {% if c.tipo == "secret" %}
         <input type="password" name="{{ c.chave }}" autocomplete="off"
-               placeholder="{{ 'â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢ definida â€” digite para trocar' if c.definido else 'nÃ£o definida' }}"
+               placeholder="{{ '•••••••• definida — digite para trocar' if c.definido else 'não definida' }}"
                style="width:100%;">
         {% elif c.tipo in ("int", "float") %}
         <input type="number" {% if c.tipo == "float" %}step="0.01"{% endif %} name="{{ c.chave }}" value="{{ c.valor }}" style="width:100%;">
@@ -166,7 +175,7 @@
     </div>
   </form>
   <script>
-    /* UX DO SALVAR: estado no botÃ£o + TOAST de sucesso/erro (endpoint
+    /* UX DO SALVAR: estado no botão + TOAST de sucesso/erro (endpoint
        responde redirect+HX-Refresh no sucesso; 422 JSON mostra o detalhe
        SEM recarregar). */
     (function () {
@@ -187,34 +196,34 @@
         toastEl._t = setTimeout(() => (toastEl.className = ""), 4200);
       };
       form.addEventListener("htmx:beforeRequest", () => {
-        btn.disabled = true; btn.textContent = "salvandoâ€¦"; fb.textContent = "â€¦";
+        btn.disabled = true; btn.textContent = "salvando…"; fb.textContent = "…";
       });
       form.addEventListener("htmx:afterRequest", async (ev) => {
         const xhr = ev.detail.xhr;
         btn.disabled = false; btn.textContent = "salvar";
         if (ev.detail.successful) {
-          toast("âœ“ configuraÃ§Ãµes salvas e aplicadas â€” recarregandoâ€¦", "ok");
+          toast("✓ configurações salvas e aplicadas — recarregando…", "ok");
           setTimeout(() => location.reload(), 700);
           return;
         }
         let detalhe = "HTTP " + xhr.status;
         try { detalhe = (await (new Response(xhr.response)).json()).detail || detalhe; }
         catch (_) {}
-        fb.textContent = "âš ï¸ " + detalhe;
-        toast("âš ï¸ " + detalhe, "erro");
+        fb.textContent = "⚠️ " + detalhe;
+        toast("⚠️ " + detalhe, "erro");
       });
     })();
-    // â˜ï¸ cadastro em 1 CLIQUE: card do provedor conhecido preenche o form
+    // ☁️ cadastro em 1 CLIQUE: card do provedor conhecido preenche o form
     function usarProv(id, nome, url) {
       const f = document.getElementById("form-prov");
       f.pid.value = id; f.pnome.value = nome; f.purl.value = url;
       f.pkey.focus();
       document.getElementById("prov-res").textContent =
-        "preenchido â€” cole a chave da API e clique em cadastrar";
+        "preenchido — cole a chave da API e clique em cadastrar";
     }
-    // chegou por ?prov=<id> (atalho do mÃ³dulo MultimÃ­dia): prÃ©-preenche e
-    // a pessoa SÃ“ cola a apikey (diretriz do dono: "em sistema eu sÃ³
-    // incluo a apikey") â€” dados via data-attribute (jinja NUNCA no JS cru)
+    // chegou por ?prov=<id> (atalho do módulo Multimídia): pré-preenche e
+    // a pessoa SÓ cola a apikey (diretriz do dono: "em sistema eu só
+    // incluo a apikey") — dados via data-attribute (jinja NUNCA no JS cru)
     (function () {
       const q = new URLSearchParams(location.search).get("prov");
       if (!q) return;
@@ -226,10 +235,10 @@
         document.getElementById("form-prov").scrollIntoView({block: "center"});
       }
     })();
-    // â˜ï¸ CADASTRO: grava no .env na hora e devolve os modelos da prÃ³pria API
+    // ☁️ CADASTRO: grava no .env na hora e devolve os modelos da própria API
     async function cadastrarProv(f) {
       const res = document.getElementById("prov-res");
-      res.textContent = "cadastrando e consultando a APIâ€¦";
+      res.textContent = "cadastrando e consultando a API…";
       try {
         const r = await fetch("/api/provedores/cadastrar", {
           method: "POST",
@@ -240,13 +249,13 @@
             modelos: f.pmodelos.value})
         });
         const d = await r.json();
-        if (!r.ok) { res.textContent = "âš ï¸ " + (d.detail || "erro"); return; }
+        if (!r.ok) { res.textContent = "⚠️ " + (d.detail || "erro"); return; }
         const n = (d.modelos || []).length;
-        res.textContent = "âœ… " + d.id + " cadastrado â€” " + n + " modelo(s): "
+        res.textContent = "✅ " + d.id + " cadastrado — " + n + " modelo(s): "
           + (d.modelos || []).map(m => m.nome).slice(0, 8).join(", ")
-          + ((d.modelos || []).length > 8 ? "â€¦" : "") + ". " + d.dica;
+          + ((d.modelos || []).length > 8 ? "…" : "") + ". " + d.dica;
         setTimeout(() => location.reload(), 2600);
-      } catch (e) { res.textContent = "âš ï¸ " + e; }
+      } catch (e) { res.textContent = "⚠️ " + e; }
       return false;
     }
   </script>
