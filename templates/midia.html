@@ -191,12 +191,16 @@
 
   let _arquivo = null, _job = null, _poll = null, _analise = "";
 
-  // info do modelo selecionado (aviso 🔑 de cadastro na cara, não escondido)
+  // info do modelo selecionado (aviso 🔑 de cadastro NA CARA com atalho)
   const selModelo = document.getElementById("mid-modelo");
   const infoModelo = document.getElementById("mid-modelo-info");
   function mostrarInfo() {
     const o = selModelo.selectedOptions[0];
-    infoModelo.textContent = o ? (o.title || "") : "";
+    const id = selModelo.value || "";
+    const prov = id.includes(":") ? id.split(":")[0] : "";
+    infoModelo.innerHTML = (o && o.title ? o.title : "")
+      + (prov && o && /requer/i.test(o.title || "")
+         ? ' — <a href="/sistema?prov=' + prov + '">cadastrar a chave →</a>' : "");
   }
   selModelo.addEventListener("change", mostrarInfo);
   mostrarInfo();

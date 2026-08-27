@@ -53,16 +53,8 @@
     </div>
   </div>
 
-  {# provedores CADASTRADOS: chips resumidos (o detalhe por categoria vive no
-     chat/cadastro — aqui é o retrato do que existe) #}
-  {% if provedores_externos %}
-  <div style="display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.7rem;">
-    {% for p in provedores_externos %}
-    <span class="chip-prompt" title="modelos no seletor do chat (grupo 🌐 {{ p.nome }})">
-      🌐 {{ p.nome }}{% if p.n_modelos %} <span class="mini">· {{ p.n_modelos }} modelo(s)</span>{% endif %}</span>
-    {% endfor %}
-  </div>
-  {% endif %}
+  {#Diretriz do dono: seleção de modelo vive no CHAT/MULTIMÍDIA — aqui é
+    SÓ estado da GPU e cadastro de chave (nada de listar modelos de novo)#}
 
   {# manutenção: ações RARAS de GPU fora do caminho (OOUX: níveis) #}
   <details style="margin-top:.8rem;">
@@ -81,6 +73,7 @@
 {# ═══ OBJETO 2: PROVEDORES CLOUD — cadastro e estado ═══ ═══ ═══ ═══ ═══ ══ #}
 <section class="cartao">
   <h2>☁️ Provedores cloud</h2>
+  <div id="prov-dados" data-conhecidos='{{ prov_conhecidos | tojson }}' hidden></div>
   <p class="mini" style="margin-top:-.4rem;">APIs OpenAI-compatible — os
     <b>principais</b> em 1 clique (falta só a chave). Modelos e informações
     (contexto, descrição/preço quando a API entrega) são lidos
@@ -97,11 +90,11 @@
   <form id="form-prov" onsubmit="cadastrarProv(this); return false;"
         style="display:grid; gap:.5rem; grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));">
     <div><label>id (slug)</label>
-      <input name="pid" required placeholder="zai" maxlength="12" style="text-transform:uppercase;"></div>
+      <input name="pid" required placeholder="zai" maxlength="12" style="text-transform:uppercase; width:100%;"></div>
     <div><label>nome (rótulo)</label>
-      <input name="pnome" placeholder="Z.AI Coding Plan"></div>
+      <input name="pnome" placeholder="Z.AI Coding Plan" style="width:100%;"></div>
     <div style="grid-column:1/-1;"><label>base URL da API</label>
-      <input name="purl" required list="prov-presets" placeholder="https://api.z.ai/api/paas/v4">
+      <input name="purl" required list="prov-presets" placeholder="https://api.z.ai/api/paas/v4" style="width:100%;">
       <datalist id="prov-presets">
         {% for c in prov_conhecidos %}
         <option value="{{ c.base_url }}">{{ c.nome }}</option>
@@ -109,9 +102,9 @@
         <option value="https://open.bigmodel.cn/api/paas/v4">Zhipu bigmodel — GLM (China)</option>
       </datalist></div>
     <div><label>chave da API 🔒</label>
-      <input name="pkey" type="password" autocomplete="off" placeholder="sk-…"></div>
+      <input name="pkey" type="password" autocomplete="off" placeholder="sk-…" style="width:100%;"></div>
     <div style="grid-column:1/-1;"><label>modelos (opcional — manual, vírgula)</label>
-      <input name="pmodelos" placeholder="glm-4.6, glm-4.5-air (só se a API não listar)"></div>
+      <input name="pmodelos" placeholder="glm-4.6, glm-4.5-air (só se a API não listar)" style="width:100%;"></div>
     <div style="grid-column:1/-1;"><button type="submit">☁️ cadastrar provedor</button></div>
   </form>
   <p id="prov-res" class="mini" style="margin:.5rem 0 0;"></p>
@@ -219,6 +212,20 @@
       document.getElementById("prov-res").textContent =
         "preenchido — cole a chave da API e clique em cadastrar";
     }
+    // chegou por ?prov=<id> (atalho do módulo Multimídia): pré-preenche e
+    // a pessoa SÓ cola a apikey (diretriz do dono: "em sistema eu só
+    // incluo a apikey") — dados via data-attribute (jinja NUNCA no JS cru)
+    (function () {
+      const q = new URLSearchParams(location.search).get("prov");
+      if (!q) return;
+      const CONH = JSON.parse(
+        document.getElementById("prov-dados").dataset.conhecidos || "[]");
+      const c = CONH.find(x => x.id === q.toLowerCase());
+      if (c) {
+        usarProv(c.id, c.nome, c.base_url);
+        document.getElementById("form-prov").scrollIntoView({block: "center"});
+      }
+    })();
     // ☁️ CADASTRO: grava no .env na hora e devolve os modelos da própria API
     async function cadastrarProv(f) {
       const res = document.getElementById("prov-res");

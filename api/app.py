@@ -832,6 +832,18 @@ def pagina_chat(request: Request):
         ctx["modelos_chat_grupos"] = [
             {"rotulo": "programação", "modelos": _grupos["programacao"]},
             {"rotulo": "conversa", "modelos": _grupos["conversa"]}]
+        # 👁 VISÃO LOCAL: GGUFs categoria visao da estação — sem este grupo
+        # o i2t do chat ficava SEM modelo algum quando não há provedor 👁
+        # cloud cadastrado (o multimodal local morava no optgrp de geração
+        # que saiu do composer — bug real do dono: "seleciono imagem→texto
+        # e não aparece nenhum modelo")
+        _visao = [{"nome": m["nome"], "gb": m.get("gb"), "ativo": False,
+                   "visao": True, "ctx": None,
+                   "info": "multimodal local (GPU da estação)"}
+                  for m in modelos.listar() if m.get("categoria") == "visao"]
+        if _visao:
+            ctx["modelos_chat_grupos"].append(
+                {"rotulo": "👁 visão local", "modelos": _visao})
     except Exception:
         ctx["modelos_chat"] = []
         ctx["modelos_chat_grupos"] = []
