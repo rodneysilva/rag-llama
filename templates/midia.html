@@ -56,6 +56,7 @@
 
   <section class="cartao">
     <h2>🎨🎬 Gerar mídia (GPU local)</h2>
+    <div id="gen-dados" data-geracao='{{ geracao | tojson }}' hidden></div>
     <p class="mini" style="margin-top:-.4rem;">seus GERADORES da estação —
       Flux (imagem) e Wan (vídeo/gif). A geração pausa as LLMs enquanto
       usa a VRAM e devolve tudo sozinho ao terminar (8 GB).</p>
@@ -93,8 +94,10 @@
 </div>
 
 <script>
-  // dados de geração injetados pelo servidor
-  const GERACAO = {{ geracao | tojson }};
+  // dados de geração via data-attribute (jinja NÃO pode viver no JS cru —
+  // o teste de sintaxe roda node --check no bloco)
+  const GERACAO = JSON.parse(
+    document.getElementById("gen-dados").dataset.geracao || "{}");
 
   function genModelos(tipo) {
     if (tipo === "t2i") return GERACAO.imagem || [];
