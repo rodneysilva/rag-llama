@@ -238,6 +238,10 @@ def llm(temperature=None):
         # slots do llama-server ocupados (fila em vez de erro) — 15 min cobre
         # as respostas mais longas com contexto grande
         timeout=900,
+        # UA próprio: o WAF da borda bloqueia UA de Python (OpenAI/Python,
+        # python-httpx) com 403 — provadores externos via domínio próprio
+        # (ex.: túnel da estação) morriam na mão do Cloudflare
+        default_headers={"User-Agent": "ragaroy/1.0"},
     )
 
 

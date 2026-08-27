@@ -88,6 +88,11 @@ def _modelos_do_endpoint(base: str, chave: str) -> list[str] | None:
     llama-server ({models:[{name}]}) — qualquer OpenAI-compatible serve."""
     try:
         cabe = {"Authorization": f"Bearer {chave}"} if chave else {}
+        # ⚠️ UA PRÓPRIO: o WAF da borda (Cloudflare) BLOQUEIA os
+        # User-Agents padrão de Python ("python-httpx", "Python-urllib")
+        # com 403 sem body — bug real: o container listava 0 modelos do
+        # túnel da própria estação por causa disto
+        cabe["User-Agent"] = "ragaroy/1.0"
         r = httpx.get(f"{base.rstrip('/')}/models", headers=cabe, timeout=12)
         if r.status_code != 200:
             return None
