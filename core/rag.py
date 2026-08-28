@@ -273,6 +273,20 @@ def _system_text(nome_spec: str) -> str:
              "Toda referência a 'hoje', 'agora', "
              "'ontem', 'este ano' ou datas correntes usa ESTA data — nunca "
              "uma data do treinamento." + "\n\n" + spec(nome_spec))
+    # ⏱ MODELO EXTERNO: provedores cloud desaceleram gerações longas
+    # (medido na prática: zai flash 370→46 tok/s em ~3,5 k tokens, com
+    # corte de stream) — densidade máxima, teto curto, salvo pedido
+    # explícito de texto longo.
+    try:
+        if _override():
+            texto += ("\n\n⏱ LIMITE DE SAÍDA: você roda num provedor "
+                      "externo que DESACELERA respostas longas. Seja "
+                      "maximamente DENSO: tabela/bullets, sem introdução "
+                      "nem conclusão repetida, no máximo ~400 palavras — "
+                      "exceto se o usuário pedir explicitamente um texto "
+                      "longo.")
+    except Exception:
+        pass
     if config.PROMPT_SYSTEM.strip():  # instruções extras opcionais do operador
         texto += "\n\nInstruções adicionais do operador:\n" + config.PROMPT_SYSTEM
     return texto
