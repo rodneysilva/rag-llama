@@ -22,6 +22,22 @@ LOTE = 10  # chunks julgados por chamada
 BACKUP_DIR = Path(__file__).resolve().parent.parent / "logs" / "varredura_backup"
 
 
+def _sem_cabecalho(texto: str) -> str:
+    """Remove o cabeçalho contextual '[título · seção]' da 1ª linha do chunk.
+
+    A LLM de varredura lia o cabeçalho como 'migalhas/navegação' e marcava
+    conteúdo valioso como lixo (incidente 28/08: erros_comuns 26→0,
+    restaurado do snapshot). Com o strip, o julgamento recai SÓ no conteúdo
+    — determinístico, não depende de obediência a instrução negativa.
+    """
+    t = (texto or "").lstrip()
+    if t.startswith("[") and "\n" in t:
+        primeira, resto = t.split("\n", 1)
+        if "]" in primeira and len(primeira) <= 220:
+            return resto.strip()
+    return t
+
+
 def _julgar_lote(colecao: str, descricao: str, lote: list) -> list[dict]:
     """Pede à LLM os índices que são lixo claro; devolve [{id, motivo}]."""
     partes = []
@@ -30,7 +46,7 @@ def _julgar_lote(colecao: str, descricao: str, lote: list) -> list[dict]:
         md = payload.get("metadata") or {}
         fonte = md.get("source") or md.get("arquivo") or "?"
         partes.append(f"[{n}] ({str(fonte)[-60:]}) "
-                      f"{str(payload.get('page_content', ''))[:600]}")
+                      f"{_sem_cabecalho(str(payload.get('page_content', '')))[:600]}")
     conteudo = (f"Coleção: {colecao}\n"
                 f"Definição (catálogo): {descricao or '—'}\n\n"
                 + "\n---\n".join(partes)
