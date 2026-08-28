@@ -1688,3 +1688,21 @@ operador) vive em AGENTS-historico.md — arquivo PRIVADO, fora do git.
   KPIs 11→12,5px, cards de altura uniforme (grid-auto-rows 1fr). E2E
   `Temp\kilo\e2e_pack3.py` + `val_final.py` (glm revalidou: sem
   desalinhamento).
+
+- **⚡ ROTEADOR PULADO sem coleções + ✨ com FALLBACK externo (28/08,
+  manhã)**: (1) dono: "✨ no multimídia ficou só carregando…" — a rota
+  `/hx/prompt-melhorar` usava SÓ a LLM local (off na estação) e o fetch
+  pendurava sem timeout. Agora: `modelos.servido(CHAT_PORTA)` vazio → o
+  PRIMEIRO modelo de conversa/raciocínio/programacao dos PROVEDORES
+  CADASTRADOS assume via `rag.set_override` (thread-local, finally
+  limpa); sem nenhum → **503 claro** ("religue 🧠 ou cadastre ☁️").
+  Provado: ✨ devolveu storytelling real em 41 s pela zai com a local
+  fora. (2) dono: "por que demora p/ chamar a API se não precisa da LLM
+  local?" — o `grafo.rotear` (classificação) rodava SEMPRE: ~4,3 s +
+  ~986 tokens de ida-e-volta à API do provedor ANTES da resposta, sem
+  utilidade com seleção VAZIA (sem base não há rota a decidir). Agora:
+  `not colecoes` → rota fixa "fluxo" + log "🧭 roteador PULADO — direto
+  ao modelo" (saudação trivial segue pelo heurístico sem LLM). Provado:
+  job sem coleções sem NENHUMA linha [roteador]; geração foi a única
+  chamada (16,3 s). A latência restante é da API do provedor (rede).
+  E2E `Temp\kilo\e2e_pack4.py`.
