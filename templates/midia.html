@@ -121,7 +121,7 @@
   // dados via data-attribute (jinja NUNCA no JS cru — o teste de sintaxe
   // roda node --check no bloco)
   const DADOS = document.getElementById("m-dados").dataset;
-  const SESSAO = DADOS.sessao;
+  let SESSAO = DADOS.sessao || "";   // let: 1º envio pode CRIAR a sessão
   function _jobKey() { return "ragaroy.midiaJob." + SESSAO; }
 
   const selM = document.getElementById("m-modelo");
@@ -270,6 +270,12 @@
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.detail || ("HTTP " + r.status));
+      // 🔄 sessão NASCEU neste envio (virtual → real): adota em tudo
+      if (d.sessao && d.sessao !== SESSAO) {
+        try { localStorage.removeItem(_jobKey()); } catch (e) {}
+        SESSAO = d.sessao;
+        document.getElementById("m-dados").dataset.sessao = SESSAO;
+      }
       localStorage.setItem(_jobKey(), d.job);
       // 📍 URI acompanha o envio (regra do slug): o fetch NÃO dispara
       // htmx:afterRequest — a promoção acontece AQUI, no ato do POST ok

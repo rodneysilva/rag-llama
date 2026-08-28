@@ -62,6 +62,10 @@ def listar(owner: str, limit: int = 40) -> list[dict]:
             continue
         if owner and (d.get("owner") or "") != owner:
             continue
+        # MESMO CICLO DO CHAT (28/08): sessão só EXISTE na lista quando tem
+        # conteúdo — vazia sem job em curso é rascunho morto, não aparece.
+        if not (d.get("itens") or []) and not d.get("job_ativo"):
+            continue
         saida.append({"id": d["id"], "titulo": d.get("titulo") or "(sem título)",
                       "itens": len(d.get("itens") or []),
                       "job_ativo": bool(d.get("job_ativo")),

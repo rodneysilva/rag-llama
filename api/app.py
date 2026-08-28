@@ -4049,18 +4049,13 @@ def _midia_pagina_base(request: Request, s: str):
                 if _cand:
                     sessao = _cand
                     break
-        # REGRA DO DONO (28/08): SEM slug na URI = sessão NOVA — não abre a
-        # última por cookie/chute. Reusa uma RASCUNHO vazia (não acumula
-        # lixo na lista) e o 1º envio promove a URI para /midia/{sid}.
+        # REGRA DO DONO (28/08, SOLID — MESMO CICLO do chat): SEM slug e
+        # sem job = sessão VIRTUAL (id vazio, NADA no disco — igual ao "/"
+        # do chat): a sessão só NASCE no 1º envio (midia_enviar cria);
+        # rascunhos vazias antigas não aparecem na lista (listar filtra).
         if sessao is None:
-            for _x in ctx["m_sessoes"]:
-                _cand = midia_sessoes.abrir(_x["id"], owner)
-                if _cand and not _cand.get("itens"):
-                    sessao = _cand
-                    break
-            if sessao is None:
-                sessao = midia_sessoes.criar(owner)
-                ctx["m_sessoes"] = midia_sessoes.listar(owner)
+            sessao = {"id": "", "titulo": "", "itens": [],
+                      "job_ativo": None, "owner": owner}
     ctx["m_sessao"] = sessao
     # TODOS os modelos num select só, agrupados por CAPACIDADE — o dono
     # alterna livremente entre as mensagens
@@ -4200,9 +4195,15 @@ def midia_enviar(body: MidiaEnviarIn, request: Request):
     from core import midia as _m
     from core import midia_sessoes
     owner = _usuario(request)
-    sessao = midia_sessoes.abrir(body.sessao, owner)
+    # 🔄 CICLO DO CHAT (28/08): 1º envio numa sessão VIRTUAL ("/midia" do
+    # zero) CRIA a sessão agora — nada existia no disco antes disso.
+    sid_uso = (body.sessao or "").strip()
+    if not sid_uso:
+        sid_uso = midia_sessoes.criar(owner)["id"]
+    sessao = midia_sessoes.abrir(sid_uso, owner)
     if sessao is None:
         raise HTTPException(404, "sessão multimídia não encontrada")
+    body.sessao = sid_uso
     prompt = (body.prompt or "").strip()
     if not prompt:
         raise HTTPException(422, "escreva o que quer (pergunta ou prompt)")
@@ -4405,7 +4406,7 @@ def midia_enviar(body: MidiaEnviarIn, request: Request):
                 "nome_ref": nome_ref, "tipo": tipo,
                 "duracao": body.duracao, "gif": body.gif, "job": job},
                _midia)
-    return {"job": job, "tipo": tipo}
+    return {"job": job, "tipo": tipo, "sessao": body.sessao}
 
 
 @app.post("/api/midia/cancel/{job}")
