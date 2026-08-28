@@ -1706,3 +1706,22 @@ operador) vive em AGENTS-historico.md — arquivo PRIVADO, fora do git.
   job sem coleções sem NENHUMA linha [roteador]; geração foi a única
   chamada (16,3 s). A latência restante é da API do provedor (rede).
   E2E `Temp\kilo\e2e_pack4.py`.
+
+- **🔁 RETOMADA MULTIMÍDIA = CHAT (28/08, tarde)**: dono: "fiz a solicitação,
+  mudei de módulo, quando voltei PERDI — comportamento do chat e multimídia
+  devem ser os mesmos". 3 fixes: (1) `/midia` SEM slug agora abre a sessão
+  com JOB EM CURSO primeiro (prioridade sobre a rascunho nova — o
+  `midia_sessoes.listar` traz `job_ativo` bool; o card + polling voltam
+  sozinhos via `retomar()` e o executor NUNCA parou); (2) a promoção da
+  URI acontece NO ATO do envio (`mEnviar` é FETCH — `htmx:afterRequest`
+  nunca dispara p/ fetch!) e no LOAD quando há job (`data-job` →
+  replaceState `/midia/{sid}`); (3) a "perda" do dono tinha 2ª causa: o
+  AGENTE DA ESTAÇÃO estava MORTO (502 na borda) — job local morria na
+  hora, `anexar_item` limpava `job_ativo` e o `/midia` caía na rascunho
+  nova. **Agente é `background_process` PERSISTENTE — conferir
+  `agente.disroy.org/health` (401 = no ar; 502 = morto) quando "job não
+  cria"**. ⚠️ E2E: `let _ref` do <script> NÃO é `window._ref` (let
+  top-level não vira propriedade de window — injetar anexo no teste só
+  via `set_input_files('#m-arquivo')` pelo CAMINHO REAL. Provado: enviei
+  (VL local, job LENTO), fui ao dashboard, voltei → MESMA sessão com
+  data-job + URI `/midia/{sid}`. E2E `Temp\kilo\e2e_ret_lento.py`.
