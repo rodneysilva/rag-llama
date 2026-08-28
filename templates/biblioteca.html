@@ -339,15 +339,16 @@
     }
   </script>
 
-  {# MODAL nativo de detalhes do documento (acessível, fecha com ESC) #}
-  <dialog id="doc-modal" class="doc-modal">
-    <div class="doc-modal-cab">
+  {# MODAL de detalhes do documento — PADRÃO GLOBAL (dialog nativo: ESC
+     fecha pelo base.html; classes .modal-* do app.css) #}
+  <dialog id="doc-modal" class="modal-caixa" style="border:none; padding:0;">
+    <div class="modal-cab">
       <b>documento</b>
-      <div style="flex:1"></div>
-      <button type="button" class="acao-btn" onclick="document.getElementById('doc-modal').close()"
-              title="fechar">✕ fechar</button>
+      <button type="button" class="acao-btn" data-fechar
+              onclick="document.getElementById('doc-modal').close()"
+              title="fechar (Esc)">✕ fechar</button>
     </div>
-    <div class="doc-modal-corpo" id="doc-modal-corpo"></div>
+    <div class="modal-corpo" id="doc-modal-corpo"></div>
   </dialog>
   <script>
     // filtro ao vivo: digita → esconde as linhas que não casam

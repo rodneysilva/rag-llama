@@ -7,6 +7,17 @@
   <meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#101418" media="(prefers-color-scheme: dark)">
   <title>{% block titulo %}RagAroy{% endblock %}</title>
+  <script>
+    // 🎨 TEMA ANTES DO CSS (sem flash): a escolha manual (localStorage
+    // "ragaroy.tema" = claro|escuro) vence o automático do sistema
+    (function () {
+      try {
+        const t = localStorage.getItem("ragaroy.tema");
+        if (t === "claro" || t === "escuro")
+          document.documentElement.setAttribute("data-tema", t);
+      } catch (e) {}
+    })();
+  </script>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v={{ v_fav }}">
   <link rel="stylesheet" href="/static/app.css?v={{ v_css }}">
   {# 🎨 TAILWIND (runtime local, sem build/Node): utilitários para EVOLUIR a
@@ -48,6 +59,10 @@
   <span class="direita">
     <span hx-get="/hx/contagem" hx-trigger="load, every 5s" hx-swap="outerHTML"
           class="tok-live-slot"></span>
+    {# 🎨 TEMA claro/escuro clicável (pedido do dono): alterna, persiste no
+       localStorage e vence o automático do sistema (boot sem flash no <head>) #}
+    <button type="button" id="btn-tema" class="mini-btn" title="alternar tema claro/escuro"
+            onclick="alternarTema()">🌙</button>
     <span>{{ usuario }}</span>
     <a href="/sair">sair</a>
   </span>
@@ -58,6 +73,53 @@
 {% block conteudo %}{% endblock %}
 </main>
 <script>
+  // 🎨 TEMA MANUAL (pedido do dono: "incluir o tema claro para ser clicado
+  // no topo"): alterna claro/escuro, persiste e VENCE o sistema. O ícone
+  // mostra o tema ATUAL; o boot (no <head>) aplica antes do CSS p/ não
+  // piscar.
+  window.alternarTema = function () {
+    const html = document.documentElement;
+    const escuroAg = matchMedia("(prefers-color-scheme: dark)").matches;
+    const atualEsc = html.getAttribute("data-tema") === "escuro"
+        || (html.getAttribute("data-tema") !== "claro" && escuroAg);
+    const novo = atualEsc ? "claro" : "escuro";
+    html.setAttribute("data-tema", novo);
+    try { localStorage.setItem("ragaroy.tema", novo); } catch (e) {}
+    _iconTema();
+  };
+  function _iconTema() {
+    const b = document.getElementById("btn-tema");
+    if (!b) return;
+    const html = document.documentElement;
+    const escuroAg = matchMedia("(prefers-color-scheme: dark)").matches;
+    const atualEsc = html.getAttribute("data-tema") === "escuro"
+        || (html.getAttribute("data-tema") !== "claro" && escuroAg);
+    b.textContent = atualEsc ? "🌙" : "☀️";
+    b.title = atualEsc ? "tema escuro — clique para o claro"
+                       : "tema claro — clique para o escuro";
+  }
+  document.addEventListener("DOMContentLoaded", _iconTema);
+
+  // ⎋ ESC FECHA MODAIS — GLOBAL (pedido do dono: "deixar o esc para sair
+  // de modals", padronizado): na ordem, fecha o de cima —
+  // dialog nativo → lightbox → .modal-fundo (classe global) → details.modal.
+  // Um ESC por camada (ESC de novo fecha o próximo).
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    const dlg = document.querySelector("dialog[open]");
+    if (dlg) { dlg.close(); return; }
+    const lb = document.querySelector(".lightbox");
+    if (lb) { lb.remove(); return; }
+    const fundo = document.querySelector(".modal-fundo:not([hidden])");
+    if (fundo) {
+      const fecha = fundo.querySelector("[data-fechar]") || fundo;
+      fecha.click();
+      return;
+    }
+    const d = document.querySelector("details.modal[open]");
+    if (d) { d.open = false; return; }
+  });
+
   // SCROLL DOS LOGS PRESERVADO entre swaps do polling: o card é recriado a
   // cada 1,5 s (outerHTML) e o .log novo nascia com scrollTop=0 — o log
   // "subia sozinho" o tempo todo. Capturamos as posições ANTES do swap e
