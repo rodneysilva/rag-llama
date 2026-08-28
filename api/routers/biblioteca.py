@@ -199,7 +199,7 @@ def hx_colecao_docs(nome: str, request: Request):
                               check_compatibility=False)
         for pts in _scroll_todos(client, nome, limite=800):
             for p in pts:
-                md = p.payload or {}
+                md = _md_ponto(p)
                 chave = str(md.get("arquivo") or md.get("source")
                             or md.get("titulo") or f"ponto {p.id}")
                 titulo = str(md.get("titulo") or "").strip()
