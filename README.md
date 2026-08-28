@@ -153,6 +153,22 @@ PROV_ANTHROPIC_API_KEY=sk-ant-...
 
 </details>
 
+## Ambientes (gitflow: develop → main)
+
+| | produção | desenvolvimento |
+|---|---|---|
+| URL | `raga.disroy.org` | `dev.disroy.org` |
+| branch | `main` | `develop` |
+| deploy | automático a cada push (CI/CD → VPS) | automático a cada push (job `cd-dev`) |
+| stack | `~/apps/rag-llama` · containers `ragaroy-*` | `~/apps/rag-llama-dev` · containers `ragaroy-dev-*` |
+| estado | volumes próprios (qdrant/sessions/logs) | volumes próprios e independentes |
+| GPU/LLM | túneis `llm/embed/agente.disroy.org` (estação do usuário) | idem — a GPU nunca reside no servidor |
+| reranker | ativo (cross-encoder) | desativado (`RERANKER=0`) — preserva a CPU compartilhada |
+
+Ambos coexistem na mesma VPS com isolamento total de estado; o fluxo de
+trabalho é: desenvolver e validar em `develop` (dev.disroy.org), e o avanço
+`develop → main` publica em produção.
+
 ## Arquitetura
 
 <a href="https://github.com/rodneysilva/rag-llama/raw/main/docs/arquitetura.svg">
@@ -160,12 +176,14 @@ PROV_ANTHROPIC_API_KEY=sk-ant-...
 </a>
 
 ```
-┌─ estação com GPU (opcional) ─────────────┐   ┌─ servidor (docker compose) ─────────┐
-│ llama-server  chat :8090 · embed :8081   │⇄⇄│ api :8000  FastAPI + webui (HTMX)   │
-│ llama-server  visão :8082 (on-demand)    │tú│ · executor async de jobs (in-proc)  │
-│ agente :8010   troca de modelo · GPU     │nel│ qdrant    vetores + full-text       │
-│ sd-cli  Flux · Wan2.1/2.2 · whisper      │   │ sandbox   execução isolada + sites │
-└───────────────────────────────────────────┘   └─────────────────────────────────────┘
+┌─ estação com GPU (opcional) ─────────────┐   ┌─ servidor (docker compose) ──────────┐
+│ llama-server  chat :8090 · embed :8081   │⇄⇄│ api :8000   FastAPI + webui (HTMX)   │
+│ llama-server  visão :8082 (on-demand)    │tú│ · executor async de jobs (in-proc)   │
+│ agente :8010   troca de modelo · GPU     │nel│ qdrant     vetores + full-text      │
+│ sd-cli  Flux · Wan2.1/2.2 · whisper      │   │ sandbox    execução isolada + sites │
+└───────────────────────────────────────────┘   │ dev: mesma stack, containers        │
+                                                │ ragaroy-dev-* (dev.disroy.org)      │
+                                                └──────────────────────────────────────┘
 ```
 
 - **Toda tarefa longa é um job no executor async** (in-process, fila serial,

@@ -1,152 +1,193 @@
-# Arquitetura do RagAroy — contrato SOLID / DDD / Clean Architecture
+# Arquitetura do RagAroy — Contrato Técnico
 
-> **Este documento é REQUISITO, não sugestão.** Exigido desde a definição do
-> projeto. Qualquer código que o viole é bug de arquitetura — tratar com a
-> mesma seriedade de um bug funcional. "Funciona" não substitui "está no
-> lugar certo".
+> **Natureza deste documento.** Requisito normativo do projeto, não sugestão.
+> A adoção de SOLID, DDD e Clean Architecture foi estabelecida na definição
+> do produto; qualquer código que viole este contrato constitui defeito de
+> arquitetura e deve ser tratado com a mesma severidade de um defeito
+> funcional. A aderência funcional de uma alteração não a legitima se a
+> estrutura estiver em desacordo.
 
-## 0. Princípio inegociável
+## 1. Visão geral
 
-O RagAroy é um **monólito modular com camadas** — não microserviços. As
-camadas protegem o DOMÍNIO (RAG, jobs, mídia, sessões) das bordas
-(HTTP, Jinja, .env, binários do host). A regra de dependência aponta SEMPRE
-para dentro:
+O RagAroy é um **monólito modular em camadas** com fronteira HTTP única.
+As camadas protegem o domínio — recuperação augmentada (RAG), execução de
+jobs, mídia, sessões — das bordas tecnológicas (HTTP, Jinja2, variáveis de
+ambiente, binários do hospedeiro). O vetor da dependência é unidirecional
+e aponta sempre para o interior:
 
 ```
-api/ (borda HTTP)  →  core/ (domínio)  →  (nada além de stdlib+pura)
-        ↑ NUNCA o contrário: core/ NÃO importa api/
+api/ (borda HTTP)  →  core/ (domínio)  →  (stdlib + bibliotecas puras)
 ```
 
-## 1. Camadas (estado real, pós-split 28/08)
-
-| Camada | Onde | Responsabilidade | PROIBIDO |
-|---|---|---|---|
-| **Composição** | `api/app.py` (~90 linhas) | cria `FastAPI`, CORS, `/static`, middleware, `include_router` | conter lógica de rota/domínio |
-| **Interface/HTTP** | `api/routers/*.py` (11 routers) | uma rota = uma função fina; validar entrada, chamar domínio, formatar resposta | lógica de negócio, SQL/Qdrant direto, acesso a .env |
-| **Infra compartilhada** | `api/base.py` | helpers de templates, auth de borda, Pydantic models, registries de job INSTANCIADOS | — (é código de BORDA aceito no estágio atual; migra para domínio na Fase 2) |
-| **Domínio** | `core/*.py` (~55 módulos) | regras: rag, jobs (core/jobs.py), midia, sessions, modelos, provedores | importar fastapi/api, conhecer Jinja, ler request |
-| **Especificações** | `core/specs/*.md` | comportamento da LLM (ver §4) | código com instrução de prompt hardcoded |
-
-Verificação rápida da regra de dependência:
+A inversão desta direção — `core` importando `api` — é a violação mais
+grave possível do contrato. Verificação automatizada do invariantes:
 
 ```bash
-grep -rn "from api\|import api" core/ --include="*.py"   # deve ser VAZIO
-wc -l api/app.py                                          # deve ficar < ~150
+grep -rn "from api\|import api" core/ --include="*.py"   # deve devolver vazio
+wc -l api/app.py                                         # deve permanecer < 150
 ```
-*Exceção documentada (débito Fase 1): `core/jobs.py` importa `HTTPException`
-do FastAPI por paridade — ver §5.*
 
+*Exceção documentada (dívida da Fase 1): `core/jobs.py` importa
+`HTTPException` por exigência de paridade comportamental; a Fase 2 a
+substitui por exceção de domínio convertida em HTTP 404 na borda.*
 
-### Routers e seus domínios
+## 2. Composição das camadas
 
-| Router | Rotas | Domínio de negócio |
-|---|---|---|
-| `auth` | 4 | login/register/logout/me |
-| `chat` | 18 | conversa, jobs de query, visão/anexo |
-| `paginas` | 11 | `/`, `/c/{sid}`, biblioteca, dashboard, sistema, midia |
-| `sandbox` | 8 | testar código, apps vivos |
-| `biblioteca` | 34 | ingestão, coleções, pesquisa, revisão |
-| `sistema` | 19 | settings, modelos, LLM/embed/VL, GPU |
-| `midia` | 22 | multimídia conversacional, tarefas, upload, zip |
-| `telemetria` | 6 | contadores, histórico, logs |
+| Camada | Localidade | Responsabilidade | Restrições |
+|---|---|---|---|
+| Composição | `api/app.py` (~90 linhas) | Instancia `FastAPI`, CORS, `/static`, registro de middleware e handlers de ciclo de vida, inclusão dos routers | Não conter lógica de rota ou domínio |
+| Interface HTTP | `api/routers/*.py` (12 routers) | Uma rota por função enxuta: validar entrada, delegar ao domínio, formatar resposta | Proibido lógica de negócio, acesso direto a Qdrant ou leitura de `.env` |
+| Infraestrutura compartilhada | `api/base.py` | Helpers de template, modelos Pydantic, instâncias de registro de jobs, `_despachar` | Código de borda aceito no estágio atual; migração para o domínio prevista na Fase 2 |
+| Domínio | `core/*.py` (~55 módulos) | Regras de negócio: `rag`, `jobs`, `midia`, `sessions`, `modelos`, `provedores`, `ingest`, `limpeza` | Proibido importar FastAPI ou `api`, conhecer Jinja2 ou manipular `Request` |
+| Especificações | `core/specs/*.md` | Comportamento dos modelos de linguagem | Código não embute instruções de prompt |
+
+### 2.1 Routers e limites de domínio
+
+| Router | Rotas | Contexto delimitado |
+|---|---:|---|
+| `auth` | 4 | Autenticação e sessão de identidade |
+| `chat` | 18 | Conversa, jobs de consulta, visão e anexos |
+| `paginas` | 11 | Renderização de páginas (`/`, `/c/{sid}`, biblioteca, dashboard, sistema, midia) |
+| `sandbox` | 8 | Execução de código e aplicativos temporários |
+| `biblioteca` | 34 | Aquisição, coleções, pesquisa, revisão e curadoria |
+| `sistema` | 19 | Configurações, modelos, LLM/embedding/visão, GPU |
+| `midia` | 22 | Multimídia conversacional, tarefas, upload, empacotamento |
+| `telemetria` | 6 | Contadores, histórico, logs |
 | `voz` | 3 | STT/TTS |
-| `provedores` | 3 | provedores cloud |
-| `agentico` | 11 | sessões MCP |
-| `jobs` | 12 | rotas de status `_rota_status` |
+| `provedores` | 3 | provedores em nuvem |
+| `agentico` | 11 | Sessões MCP |
+| `jobs` | 12 | Rotas de status das famílias de job (`_rota_status`) |
 
-**Ordem de include é CONTRATO** (rotas ambíguas resolvem pela primeira
-declarada): `jobs` primeiro (paths literais `/api/*/status/{job}` vencem os
-paramétricos), depois auth, chat, paginas, sandbox, biblioteca, sistema,
-midia, telemetria, voz, provedores, agentico. Não reordenar sem rodar
-`Temp/checa_paridade.py` (a prova de 168 combinações method×path).
+**A ordem de inclusão dos routers é parte do contrato.** Rotas ambíguas
+resolvem pela primeira declarada: `jobs` precede os demais para que
+`/api/*/status/{job}` prevaleça sobre os padrões paramétricos (caso
+concreto: `/api/midia/status/{job}` contra `/api/midia/{pasta}/{nome}`).
+Reordenação sem execução prévia de `scripts/split/checa_paridade.py`
+constitui violação procedural.
 
+## 3. Ambientes e implantação
 
-## 2. SOLID aplicado a este código
+Dois ambientes completos coexistem na VPS sob isolamento total de estado:
 
-- **S — Single Responsibility**: 1 rota = 1 propósito HTTP; 1 módulo core = 1
-  domínio. `JobRegistry` cuida de jobs; `rerank` de re-scoring; `bussola`
-  de cache semântico. Não adicionar responsabilidade a módulo que já tem nome.
-- **O — Open/Closed**: nova família de job = registrar em `TODOS_JOBS`
-  (core/jobs.py) — não editar o ⏹ nem o `/api/status`. Novo provedor cloud =
-  entry em `CONHECIDOS` — não tocar o chat.
-- **L** (substituição): os "gateways padronizados" (chamadas a binários do
-  host) mantêm a MESMA assinatura `log(msg, grupo="")` — lambdas de job
-  assinam igual (`docs/licoes-de-campo.md` §1).
-- **I — Interface Segregation**: a webui conversa com ~30 endpoints REST
-  pequenos, não com um mega-endpoint. Manter assim.
-- **D — Dependency Inversion**: a API depende das ABSTRAÇßes do core
-  (`modelos.servido()`, `executor.despachar`), nunca de caminho de binário
-  ou porta hardcoded — endpoints vêm do .env/compose (o container NUNCA
-  testa a si mesmo: `EM_CONTAINER and ":" not in modelo → AGENTE`).
+| Atributo | Produção | Desenvolvimento |
+|---|---|---|
+| Domínio | `raga.disroy.org` | `dev.disroy.org` |
+| Branch | `main` | `develop` |
+| Diretório | `~/apps/rag-llama` | `~/apps/rag-llama-dev` |
+| Containers | `ragaroy-*` | `ragaroy-dev-*` |
+| Gatilho de deploy | push em `main` (job `cd`) | push em `develop` (job `cd-dev`) |
+| Reranker | Ativo | Inativo (`RERANKER=0`) |
 
+A GPU — inferência de chat, embedding, visão e difusão — reside
+exclusivamente na estação do usuário, exposta pelos túneis
+`llm`, `embed` e `agente` (`.disroy.org`). O servidor jamais hospeda
+modelos; a ausência de GPU local é coberta pelos provedores em nuvem,
+mantendo a base vetorial no Qdrant do servidor.
 
-## 3. DDD — linguagem e fronteiras
+## 4. Pipeline de dados e qualidade
 
-Bounded Contexts existem de fato no código; use os nomes:
-- **Conversa** (chat): sessions, bussola, jobs de query, visão/anexo
-- **Aquisição** (biblioteca): ingest, seed, pesquisa, revisão, hf, varredura
-- **Mídia** (estúdio/multimídia): midia, midia_sessoes, tarefas, conjuntos,
-  fluxos
-- **Motor** (sistema): modelos, provedores, conjuntos, contadores, telemetria
-- **Sandbox**: sandbox, apps vivos
+O pipeline de ingestão aplica, em ordem: extração → limpeza textual
+(`core/limpeza.limpar_texto`) → particionamento semântico com cabeçalho
+contextualizado → **gate de qualidade** → embedding (bge-m3, 1024 d) →
+persistência no Qdrant com metadados de proveniência (`arquivo`,
+`titulo`, `secao`, `url`, `i`, `n`) → catalogação.
 
-Regras DDD:
-- Nomes de código segem o ubíqua: "job", "sessão", "coleção", "provider",
-  "tarefa" — não traduções criativas.
-- Um módulo core NÃO consulta o outro por dentro (acoplamento horizontal);
-  quem orquestra é a ROTA (borda) — exceto orquestrações explícitas
-  documentadas (ex.: `_processar_query` chama rag/bussola/rerank).
-- Estado de domínio persiste no formato do domínio (Qdrant/jsonl/sessions/),
-  nunca em variável de template.
+O **gate de qualidade** (`core/limpeza.score_chunk`) atribui nota 0–1 a
+cada chunk segundo fatores consolidados pela prática da comunidade:
+densidade de links, razão de tokens únicos, comprimento mínimo (15
+palavras), razão alfanumérica, presença de JSON embutido, tabelas
+markdown e listas de nomes sem estrutura sentencial. Chunks abaixo de
+`SCORE_CHUNK_MIN` (`.env`, padrão 0,55) são rejeitados com registro do
+motivo. A camada de código (`camada=codigo`) é isenta do gate —
+heurísticas de prosa não se aplicam a código.
 
+A recuperação (`core/rag.search`) combina busca densa (k×3 candidatos)
+e busca lexical full-text, fundidas por Reciprocal Rank Fusion, com
+diversificação (máx. 2 chunks por documento), deduplicação global por
+hash de conteúdo e corte por `SCORE_MIN`. Um reranker cross-encoder
+(`bge-reranker-base`, CPU) reordena o top-8 quando habilitado.
 
-## 4. Specs são a fonte do comportamento (regra de ouro)
+## 5. SOLID aplicado
 
-"Toda comunicação com a LLM é via RAG": comportamento/formato vivem em
-`core/specs/*.md` ou no Qdrant; o código monta o envelope. **Mudou
-comportamento → editar spec + `POST /api/specs/reload` (ou restart)** —
-`lru_cache` não vê edição no disco sozinha.
+- **Responsabilidade única.** Uma rota, um propósito HTTP; um módulo
+  `core`, um domínio. `JobRegistry` gerencia jobs; `rerank`, re-scoring;
+  `bussola`, cache semântico. Não adicionar responsabilidade a módulo
+  cujo nome já declara a sua.
+- **Aberto/fechado.** Nova família de job: registrar em `TODOS_JOBS`
+  (`core/jobs.py`) — o ⏹ e `/api/status` absorvem sem alteração. Novo
+  provedor em nuvem: entrada em `CONHECIDOS` — o seletor do chat absorve.
+- **Substituição de Liskov.** Os gateways de binários do hospedeiro
+  mantêm assinatura uniforme `log(msg, grupo="")`; lambdas de job
+  assinam de forma idêntica (`docs/licoes-de-campo.md`).
+- **Segregação de interface.** A webui consome ~30 endpoints REST
+  pequenos, nunca um mega-endpoint.
+- **Inversão de dependência.** A API depende de abstrações do core
+  (`modelos.servido()`, `executor.despachar`); caminhos de binários e
+  portas vêm de configuração, nunca hardcoded — em container, a regra
+  `EM_CONTAINER and ":" not in modelo → AGENTE` impede auto-referência.
 
-## 5. Débitos conhecidos (Fase 2 — não bloqueiam, mas são cobrados)
+## 6. Linguagem ubíqua e contextos delimitados
 
-1. `core/jobs.py` importa `HTTPException` (fastapi) — trocar por exceção de
+- **Conversa**: `sessions`, `bussola`, jobs de consulta, visão/anexos.
+- **Aquisição**: `ingest`, `seed`, `pesquisa`, revisão, `hf`, `varredura`.
+- **Mídia**: `midia`, `midia_sessoes`, `tarefas`, `conjuntos`, `fluxos`.
+- **Motor**: `modelos`, `provedores`, `conjuntos`, `contadores`, `telemetria`.
+- **Sandbox**: `sandbox`, aplicativos temporários.
+
+Módulos de domínio não consultam uns aos outros horizontalmente; a
+orquestração pertence à rota, exceto nos fluxos documentados
+(`_processar_query` coordena `rag`, `bussola` e `rerank`). Estado de
+domínio persiste no formato do domínio — Qdrant, JSONL, `sessions/` —
+nunca em variáveis de template.
+
+## 7. Especificações como fonte de comportamento
+
+Toda comunicação com os modelos de linguagem é mediada por RAG: o
+comportamento vive em `core/specs/*.md` ou no conteúdo do Qdrant; o
+código apenas monta o envelope (dados + `ETAPA: x`). Alteração de
+comportamento exige editar a spec e recarregar (`POST /api/specs/reload`
+ou reinício — o cache `lru_cache` não observa o disco).
+
+## 8. Dívidas registradas (Fase 2)
+
+1. `core/jobs.py` importa `HTTPException` — substituir por exceção de
    domínio (`JobNaoEncontrado`) convertida em 404 na borda.
-2. `api/base.py` concentra 3.041 linhas de infra mista (helpers Jinja +
-   Pydantic models + registries de job + middlewares). Fase 2: partir em
-   `api/infra/` (templates/auth de borda) + mover models Pydantic para
-   `core/*/schemas` e registries para domínio puro.
-3. Rotas ainda chamam funções de OUTRO router como função (`status()`,
-   `collections()`, `query()` — costuras `# noqa: F401 cross-router`): no
-   monólito era namespace global; o destino é extrair a função para o DOMÍNIO
-   e ambas as rotas chamarem o domínio.
-4. `core/auto.py` exporta `_web_aprofundado` (underscore) — sinal de que a
-   função é de domínio público dentro do módulo.
-5. `tests_manual/` (não versionado) guarda E2E críticos — migrar os vivos
-   para `tests/` versionado (roadmap).
-6. Ordem de rotas sensível (sandbox fallback, `/hx/conva/copy` duplicada):
-   permanente por design do original — `checa_paridade.py` é o guardião.
+2. `api/base.py` concentra 3.000+ linhas de infraestrutura heterogênea —
+   particionar em `api/infra/` e migrar modelos Pydantic para
+   `core/*/schemas`.
+3. Rotas invocam funções de outros routers como funções (`status()`,
+   `collections()`, `query()` — costuras `# noqa: F401 cross-router`);
+   o destino é extrair a operação para o domínio.
+4. `core/auto.py` exporta `_web_aprofundado` — promover a nome público.
+5. E2E críticos vivem em `tests_manual/` (não versionado) — migrar para
+   `tests/`.
+6. Ordens de rota sensíveis (fallback do sandbox, `/hx/conversa/copy`
+   duplicada) são permanentes por herança do monólito original —
+   `scripts/split/checa_paridade.py` é o guardião.
 
-## 6. Como evoluir sem quebrar (checklist do agente de codificação)
+## 9. Procedimento obrigatório de alteração
 
-1. **Nova rota** → router do domínio certo; função fina; lógica no core.
-   Nova família de job → `JobRegistry` + `TODOS_JOBS`.
-2. **Mudança de comportamento de LLM** → spec, nunca código.
-3. **Antes de publicar refactor** → rodar paridade (`Temp/checa_paridade.py`)
-   + `pytest tests/` + smoke uvicorn em porta de teste.
-4. **Nunca** commitar `core` importando `api` (a regra §0).
-5. Split adicional? Só com prova de paridade idêntica a esta.
-6. Depois de cada rodada que muda arquitetura: atualizar ESTE arquivo +
-   `AGENTS.md` (§3 mapa de módulos) no MESMO commit.
+1. Nova rota → router do domínio competente; função enxuta; lógica no
+   core. Nova família de job → `JobRegistry` + `TODOS_JOBS`.
+2. Alteração de comportamento de LLM → spec, nunca código.
+3. Refatoração estrutural → prova de paridade prévia
+   (`scripts/split/checa_paridade.py`) + `pytest` + smoke uvicorn em
+   porta de teste.
+4. Vedações: `core` importando `api`; commit de segredos; reordenação
+   de routers sem prova.
+5. Rodadas que alterem arquitetura atualizam este documento e o
+   `AGENTS.md` no mesmo commit.
 
-## 7. Prova da Fase 1 (28/08/2026)
+## 10. Registros de validação
 
-Split mecânico por AST (`Temp/extract_split.py`) do monólito `api/app.py`
-(7.062 linhas) em composição + base + 12 routers + `core/jobs.py`, com:
-- **168/168 combinações (method,path)** resolvendo para o MESMO endpoint
-  antes e depois (`Temp/checa_paridade.py`);
-- pytest: 55 passed / 6 skipped / 1 error PRÉ-EXISTENTE (igual ao baseline);
-- smoke uvicorn: login, `/`, `/biblioteca`, `/dashboard`, `/sistema`,
-  `/midia` 200; openapi autenticado 140 paths, nenhuma faltando;
-- comportamento de auth (303→/entrar sem token) preservado;
-- 503 do `/api/collections` = Qdrant fora do ar no momento do teste
-  (ambiente, não código).
+- **Fase 1 (28/08/2026)** — partição do monólito `api/app.py` (7.062
+  linhas) em composição + `api/base.py` + 12 routers + `core/jobs.py`,
+  com 168/168 combinações método×caminho resolvendo para o mesmo
+  endpoint antes e depois; `pytest` 55 aprovados / 1 erro pré-existente
+  (idêntico ao baseline); smoke uvicorn com login e páginas 200.
+- **Ambiente dev (28/08/2026)** — stack `ragaroy-dev-*` em
+  `dev.disroy.org`, deploy automático por push em `develop`, isolamento
+  de volumes, reranker inativo.
+- **Gate de qualidade (28/08/2026)** — `score_chunk` calibrado: prosa
+  0,95+; código 0,95; tabela wiki 0,15; JSON de e-commerce 0,05;
+  limiar `SCORE_CHUNK_MIN` configurável.
