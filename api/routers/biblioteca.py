@@ -234,14 +234,84 @@ def hx_colecao_doc(nome: str, request: Request, chave: str):
         return HTMLResponse(f"<p class='erro-texto'>falha: {str(e)[:140]}</p>")
     if not achado:
         return HTMLResponse("<p class='mut'>documento não encontrado.</p>")
+    # DOCUMENTO COMPLETO: scroll por filtro (arquivo|source) traz TODOS os
+    # chunks do documento — ordenados por i/n do metadata (pedido do dono
+    # 28/08: o modal mostra o documento inteiro legível/editável, não só
+    # os 4-6 primeiros)
+    _campo = ("arquivo" if (achado[0].payload or {}).get("arquivo")
+              else "source")
+    todos = list(_scroll_todos(
+        client, nome, limite=4000,
+        filtro=Filter(must=[FieldCondition(
+            key=_campo, match=MatchValue(value=chave))])))
+    todos.sort(key=lambda p: (p.payload or {}).get("i", 0))
     md0 = achado[0].payload or {}
     titulo = str(md0.get("titulo") or chave.replace("\\", "/")
                  .rsplit("/", 1)[-1] or "?")
-    chunks = [str(p.payload.get("page_content", ""))[:4000] for p in achado]
+    chunks = [str(p.payload.get("page_content", "")) for p in todos]
+    texto_completo = "\n\n".join(chunks)
     return TEMPLATES.TemplateResponse(
         request, "_colecao_doc.html",
         {"request": request, "nome": nome, "titulo": titulo, "chave": chave,
-         "total": total, "chunks": chunks})
+         "total": len(chunks), "chunks": chunks,
+         "texto_completo": texto_completo})
+
+
+@router.post("/hx/colecao/{nome}/editar")
+def hx_colecao_editar(nome: str, request: Request,
+                      chave: str = Form(...), texto: str = Form(...)):
+    """EDITA o documento INTEIRO (pedido do dono): apaga TODOS os chunks
+    daquele `arquivo`/`source` na coleção e REINGERE o texto editado pelo
+    MESMO pipeline (limpeza → split semântico → re-embed → dedupe) com o
+    mesmo `arquivo` de origem — o documento continua uma unidade na
+    Biblioteca, agora com o conteúdo corrigido. Snapshot automático antes
+    de apagar (reversível).
+    """
+    _exigir_admin(request)
+    if not re.fullmatch(r"[A-Za-z0-9_\\-]{1,64}", nome):
+        return HTMLResponse("<p class='erro-texto'>nome inválido</p>")
+    texto = (texto or "").strip()
+    if not texto:
+        return HTMLResponse("<p class='erro-texto'>texto vazio — nada a "
+                            "reingestar</p>")
+    from qdrant_client.models import FieldCondition, Filter, MatchValue
+    try:
+        client = QdrantClient(url=config.QDRANT_URL, timeout=30,
+                              check_compatibility=False)
+        # acha o campo real (arquivo | source) usado pela coleção
+        filtro = None
+        total = 0
+        for campo in ("arquivo", "source"):
+            filtro = Filter(must=[FieldCondition(
+                key=campo, match=MatchValue(value=chave))])
+            total = client.count(nome, exact=True,
+                                 count_filter=filtro).count
+            if total:
+                break
+        if not total:
+            return HTMLResponse("<p class='erro-texto'>documento não "
+                                "encontrado</p>")
+        # snapshot ANTES de apagar (reversível)
+        try:
+            from core import snapshot as _snap
+            _snap.criar(client, nome, motivo=f"edição {chave[:60]}")
+        except Exception:
+            pass
+        client.delete(collection_name=nome, points_selector=filtro)
+        # reingere PELO PIPELINE (mesma limpeza/split/embed da ingestão)
+        from langchain_core.documents import Document as _Doc
+        titulo = Path(chave).name
+        doc = _Doc(page_content=texto, metadata={
+            "arquivo": chave, "source": chave, "titulo": titulo})
+        from core.ingest import ingest_docs
+        resumo = ingest_docs([doc], collection=nome, rapido=True,
+                             log=lambda *a, **k: None)
+        return HTMLResponse(
+            f"<p class='mini'>✓ reingerido: {total} chunk(s) antigo(s) "
+            f"apagado(s); novo documento com {resumo.get('pontos', '?')} "
+            f"ponto(s). Snapshot de segurança gravado.</p>")
+    except Exception as e:
+        return HTMLResponse(f"<p class='erro-texto'>falha: {str(e)[:160]}</p>")
 
 
 @router.post("/hx/colecao/{nome}/nomear")

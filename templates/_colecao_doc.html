@@ -1,13 +1,29 @@
 {# CONTEÚDO do documento para o MODAL LARGO da Biblioteca: título no
-   cabeçalho (o JS extrai), corpo em blocos de leitura. #}
-<div class="doc-blocos">
+   cabeçalho (o JS extrai), documento COMPLETO em bloco de leitura +
+   MODO EDIÇÃO (pedido do dono 28/08): textarea com o texto inteiro —
+   salvar apaga os chunks do doc e REINGERA pelo pipeline. #}
+<div class="doc-blocos" id="doc-blocos">
   {% for c in chunks %}
   <section class="doc-bloco">
     <div class="mini" style="opacity:.6; margin-bottom:.2rem;">trecho {{ loop.index }}/{{ total }}</div>
     <div class="doc-texto">{{ c }}</div>
   </section>
   {% endfor %}
-  {% if total > chunks|length %}
-  <p class="mini" style="opacity:.7;">… e mais {{ total - chunks|length }} trecho(s) na base.</p>
+  {% if not chunks %}
+  <p class="mut">documento vazio.</p>
   {% endif %}
+</div>
+
+{# ── MODO EDIÇÃO ── textarea com o texto completo; salvar POSTA em
+   /hx/colecao/{nome}/editar (admin) — snapshot automático antes. #}
+<div id="doc-editar" hidden>
+  <textarea id="doc-editar-texto" class="doc-editar-texto"
+            spellcheck="false">{{ texto_completo }}</textarea>
+  <div style="display:flex; gap:.5rem; margin-top:.6rem; align-items:center;">
+    <button type="button" class="primario" id="doc-editar-salvar"
+      onclick="salvarDocEdicao('{{ nome | e }}', {{ chave | tojson | e }})">
+      ✓ salvar e reingestar</button>
+    <button type="button" class="acao-btn" onclick="toggleDocEdicao(false)">✕ cancelar</button>
+    <span class="mini" id="doc-editar-status"></span>
+  </div>
 </div>

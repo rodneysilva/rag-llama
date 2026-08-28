@@ -1368,15 +1368,20 @@ def _linhas_visual(lines: list) -> list:
     return saida
 
 
-def _scroll_todos(client, colecao: str, limite: int):
-    """Scroll paginado da coleção (gerador de lotes de Record)."""
+def _scroll_todos(client, colecao: str, limite: int, filtro=None):
+    """Scroll paginado da coleção (gerador de lotes de Record).
+
+    `filtro` (opcional): Filter do qdrant-client — o modal da Biblioteca
+    usa para trazer TODOS os chunks de um documento (arquivo|source).
+    """
     from qdrant_client.models import FieldCondition, Filter, MatchValue
     offset = None
     while limite > 0:
         lote, offset = client.scroll(collection_name=colecao,
                                      limit=min(100, limite),
                                      offset=offset, with_payload=True,
-                                     with_vectors=False)
+                                     with_vectors=False,
+                                     scroll_filter=filtro)
         yield lote
         limite -= len(lote)
         if offset is None or not lote:

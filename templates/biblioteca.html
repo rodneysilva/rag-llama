@@ -349,6 +349,47 @@
         corpo.innerHTML = '<p class="erro-texto">falha: ' + e.message + "</p>";
       }
     }
+
+    // EDICAO do documento (pedido do dono 28/08): alterna leitura e
+    // textarea com o texto COMPLETO; salvar apaga os chunks e REINGERA
+    // pelo pipeline (snapshot automatico antes de apagar).
+    function toggleDocEdicao(on) {
+      const leitura = document.getElementById("doc-blocos");
+      const editar = document.getElementById("doc-editar");
+      if (!leitura || !editar) return;
+      leitura.hidden = !!on;
+      editar.hidden = !on;
+      if (on) {
+        const ta = document.getElementById("doc-editar-texto");
+        if (ta) { ta.style.height = Math.min(ta.scrollHeight + 24, 600) + "px"; ta.focus(); }
+      }
+    }
+
+    async function salvarDocEdicao(nome, chave) {
+      const ta = document.getElementById("doc-editar-texto");
+      const st = document.getElementById("doc-editar-status");
+      const btn = document.getElementById("doc-editar-salvar");
+      if (!ta || !ta.value.trim()) { if (st) st.textContent = "texto vazio"; return; }
+      if (!confirm("Salvar substitui TODOS os chunks deste documento pelo texto editado (snapshot de seguranca e gravado antes). Continuar?")) return;
+      if (btn) btn.disabled = true;
+      if (st) st.textContent = "salvando e reingestando...";
+      try {
+        const fd = new URLSearchParams();
+        fd.set("chave", chave);
+        fd.set("texto", ta.value);
+        const r = await fetch("/hx/colecao/" + encodeURIComponent(nome) + "/editar", {
+          method: "POST", body: fd });
+        const txt = await r.text();
+        if (st) {
+          st.innerHTML = txt;
+          if (!r.ok) st.classList.add("erro-texto");
+        }
+      } catch (e) {
+        if (st) st.textContent = "falha: " + e.message;
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
   </script>
 
   {# MODAL de documento — GRANDE (leitura), padrão global: dialog nativo
@@ -356,9 +397,13 @@
   <dialog id="doc-modal" class="modal-caixa larga" style="border:none; padding:0;">
     <div class="modal-cab">
       <b>documento</b>
-      <button type="button" class="acao-btn" data-fechar
-              onclick="document.getElementById('doc-modal').close()"
-              title="fechar (Esc)">✕ fechar</button>
+      <span style="display:flex; gap:.5rem;">
+        <button type="button" class="acao-btn" onclick="toggleDocEdicao(true)"
+                title="editar o texto completo deste documento (salvar reingera)">✎ editar</button>
+        <button type="button" class="acao-btn" data-fechar
+                onclick="document.getElementById('doc-modal').close()"
+                title="fechar (Esc)">✕ fechar</button>
+      </span>
     </div>
     <div class="modal-corpo" id="doc-modal-corpo"></div>
   </dialog>
@@ -375,3 +420,20 @@
 </section>
 </div>
 {% endblock %}
+
+/* EDICAO de documento (Biblioteca): textarea com o texto completo */
+.doc-editar-texto {
+  width: 100%;
+  min-height: 18rem;
+  max-height: 37rem;
+  overflow-y: auto;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: .82rem;
+  line-height: 1.5;
+  padding: .8rem;
+  border-radius: .6rem;
+  border: 1px solid var(--borda, #8884);
+  background: var(--fundo-alto, transparent);
+  color: inherit;
+  white-space: pre-wrap;
+}
