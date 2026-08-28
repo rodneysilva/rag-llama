@@ -2997,7 +2997,8 @@ class JobRegistry:
                 raise HTTPException(status_code=404, detail=msg404)
             return {"running": j["running"], "total": len(j["lines"]),
                     "lines": j["lines"][cursor:], "result": j["result"],
-                    "error": j["error"]}
+                    "error": j["error"],
+                    "parcial": j.get("parcial") or ""}
 
 
 def _rota_status(caminho: str, reg: "JobRegistry", msg404: str) -> None:
