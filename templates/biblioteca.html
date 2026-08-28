@@ -9,6 +9,7 @@
 
 <section class="cartao">
   <form hx-post="/hx/aquisicao" hx-target="#executando" hx-swap="afterbegin"
+        hx-on::before-request="document.querySelectorAll('details[data-painel][open]').forEach(d => d.open = false); const ex = document.getElementById('executando'); ex && ex.scrollIntoView({behavior:'smooth', block:'start'})"
         hx-encoding="multipart/form-data">
     <div class="linha">
       <div>
@@ -146,7 +147,7 @@
   </script>
 </section>
 
-<details class="cartao detalhe-cab">
+<details class="cartao detalhe-cab" data-painel="sim">
   <summary class="link-suave">&#128218; ensinar o assistente — registrar problema &#8594; solu&#231;&#227;o</summary>
   <p class="mini" style="margin:.5rem 0 .2rem;">
     Registre um problema que você <b>resolveu</b>: ele vira conhecimento pesquisável
@@ -169,7 +170,7 @@
   </form>
 </details>
 
-<details class="cartao detalhe-cab" id="mcp-cartao">
+<details class="cartao detalhe-cab" data-painel="sim" id="mcp-cartao" data-painel="sim">
   <summary class="link-suave">🔌 servidores MCP — ferramentas para o chat</summary>
   <p class="mini" style="margin:.5rem 0 .2rem;">
     MCP = ferramentas externas que o assistente do chat pode USAR ao responder

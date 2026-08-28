@@ -36,6 +36,33 @@ MAX_DOCS_CLAIMS = 5    # documentos que passam por extração de claims
 MIN_TEXTO = 500        # abaixo disto a página não vira documento (igual seed)
 TIMEOUT = 20
 
+# ---------- RETRY de LLM (fix A — 502 transitório do túnel não mata o job) ----------
+
+_LLM_TENTATIVAS = 3    # 1 + 2 retries com backoff (2s, 6s)
+
+def _llm_retries(fn, log=print, o_que: str = "LLM"):
+    """Executa fn() com retry p/ erros TRANSITÓRIOS (502/503/504/timeout/
+    connection) — o túnel da estação tem janelas de recarga; sem isto o
+    job morria no meio e o card ficava '0 linha(s)' para sempre (caso
+    real: planner 502 → 120s presos → claims nunca rodaram)."""
+    import time as _t
+    ult = None
+    for i in range(_LLM_TENTATIVAS):
+        try:
+            return fn()
+        except Exception as e:
+            ult = e
+            txt = str(e).lower()
+            transitivo = any(t in txt for t in ("502", "503", "504", "timeout",
+                                                "connection", "timed out",
+                                                "temporarily", "unavailable"))
+            if not transitivo or i == _LLM_TENTATIVAS - 1:
+                raise
+            _t.sleep(2 * (i + 1) * (i + 1) // 2)   # 2s, 6s
+            log(f"   ⏳ {o_que}: erro transitório ({str(e)[:60]}) — "
+                f"tentativa {i + 2}/{_LLM_TENTATIVAS}…")
+    raise ult
+
 
 # ---------- 1) PLANNER ----------
 
@@ -50,9 +77,11 @@ def _plano(assunto: str, log=print) -> dict:
         "frescor": "historico",
     }
     try:
-        plano = rag._ask_json("pesquisa_planner", assunto)
+        plano = _llm_retries(lambda: rag._ask_json("pesquisa_planner", assunto),
+                             log, "planner")
     except Exception as e:
-        log(f"   ⚠️ planner indisponível ({e}) — usando plano padrão")
+        log(f"   ⚠️ planner indisponível após retries ({str(e)[:70]}) — "
+            "usando plano padrão (a pesquisa SEGUE)")
         return fallback
     consultas = [str(q)[:120] for q in plano.get("consultas") or []
                  if str(q).strip()][:MAX_CONSULTAS]
@@ -285,7 +314,8 @@ def _claims(doc: Document, log=print) -> list[dict]:
     conteudo = (f"Fonte: {doc.metadata.get('titulo')} — "
                 f"{doc.metadata.get('url')}\n\n{doc.page_content[:6000]}")
     try:
-        r = rag._ask_json("evidencia", conteudo)
+        r = _llm_retries(lambda: rag._ask_json("evidencia", conteudo),
+                         log, f"claims de '{doc.metadata.get('titulo', '?')[:30]}'")
     except Exception as e:
         log(f"   ⚠️ claims de {doc.metadata.get('titulo', '?')[:40]}: {e}")
         return []
@@ -320,8 +350,10 @@ def _sintese(assunto: str, docs: list[Document],
         partes.append("\n")
     prompt = ChatPromptTemplate.from_messages([("system", "{spec}"),
                                               ("human", "{conteudo}")])
-    return (prompt | rag.llm() | StrOutputParser()).invoke(
-        {"spec": rag.spec("sintese"), "conteudo": "".join(partes)})
+    return _llm_retries(
+        lambda: (prompt | rag.llm() | StrOutputParser()).invoke(
+            {"spec": rag.spec("sintese"), "conteudo": "".join(partes)}),
+        log, "síntese")
 
 
 # ---------- pipeline completo ----------
@@ -464,6 +496,10 @@ def pesquisar(assunto: str, fontes: int = 8, log=print,
 
     log("✍️ SINTETIZANDO o documento consolidado (citações [Fn] + conflitos)…")
     sintese = _sintese(assunto, docs, claims_por_doc, log, conflitos=conflitos)
+    if not sintese:
+        log("   ⚠️ síntese indisponível (LLM fora após retries) — as FONTES "
+            "seguem para a Revisão; rode a pesquisa de novo depois para "
+            "gerar o documento consolidado")
     if sintese:
         docs.append(Document(
             page_content=sintese,
