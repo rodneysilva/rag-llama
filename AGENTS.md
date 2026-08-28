@@ -1775,3 +1775,17 @@ operador) vive em AGENTS-historico.md — arquivo PRIVADO, fora do git.
   "pensando" externo é o TTFB da NUVEM deles (benchmark: 14–50 s — não
   há correção local). Ajustes anteriores (reranker borderline, roteador
   pulado, fila visível) valem para o caminho local.
+
+- **📜 AUTO-SCROLL + diagnóstico zai em resposta LONGA (28/08, tarde 5)**:
+  (1) pedido do dono ("painel do chat descer/subir com o scroll"):
+  conversa acompanha o texto crescendo (beforeSwap mede `perto do fim`
+  <120px; afterSwap rola só se estava no fim — quem SOBE para reler não é
+  arrastado de volta). Chat (swaps htmx) E multimídia (dentro do mPoll).
+  (2) "por que 76 s / 47,8 tok/s na cloud?": medido com a chave do dono —
+  respostas CURTAS: 370–390 tok/s (a velocidade existe); resposta LONGA
+  (~3,5 k tokens): cai p/ ~46 tok/s e a 1ª tentativa do benchmark teve a
+  CONEXÃO CORTADA pela zai no meio do stream ("peer closed connection
+  without complete body") — throttle/limite do CODING PLAN p/ gerações
+  longas, não do RagAroy (o 7B local faz ~25 tok/s constante; flash curto
+  é ~15×; flash longo aproxima do local). Bench: `Temp\kilo\bench_zai.py`
+  (curto) e `bench_longo2.py` (longo/corte).
