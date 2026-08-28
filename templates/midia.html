@@ -271,6 +271,10 @@
       const d = await r.json();
       if (!r.ok) throw new Error(d.detail || ("HTTP " + r.status));
       localStorage.setItem(_jobKey(), d.job);
+      // 📍 URI acompanha o envio (regra do slug): o fetch NÃO dispara
+      // htmx:afterRequest — a promoção acontece AQUI, no ato do POST ok
+      if (location.pathname === "/midia")
+        history.replaceState({}, "", "/midia/" + SESSAO);
       mPoll(d.job, d.tipo, card);
     } catch (e) {
       card.innerHTML = "<div class='rodape'>⚠️ " + String(e.message).replace(/</g,"&lt;") + "</div>";
