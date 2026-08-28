@@ -2,16 +2,11 @@
   {% block titulo %}Multimídia{% endblock %}
 {% block classe %}pagina-midia{% endblock %}
 {% block conteudo %}
-<div class="pagina-conteudo">
+{# MESMO contrato do CHAT (pedido do dono 28/08: "multimídia com a mesma
+   largura E ALTURA que o chat"): sem h1/descrição — o grid vai DIRETO ao
+   main do .app-shell e estica a viewport inteira menos o topbar. #}
 <div id="m-dados" data-sessao='{{ m_sessao.id }}'
      data-job='{{ (m_sessao.job_ativo or None) | tojson }}' hidden></div>
-
-<h1>👁 Multimídia</h1>
-<p class="descricao">conversa única de mídia: cada envio escolhe o modelo —
-  👁 <b>análise</b> de imagem (local ou provedor), 🎨 <b>gerar/melhorar</b>
-  imagem (Flux local — com anexo vira i2i — ou provedor) e 🎬
-  <b>vídeo/gif</b> (Wan local). O histórico fica na sessão; mudou de página?
-  voltou? o envio em curso retoma sozinho.</p>
 
 <div class="midia-grid">
   {# ── sidebar de sessões — PADRÃO ÚNICO com o chat do multimídia ── #}
@@ -120,8 +115,6 @@
       </div>
     </form>
   </section>
-</div>
-
 </div>
 
 <script>
