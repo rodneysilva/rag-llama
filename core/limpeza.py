@@ -282,10 +282,21 @@ _PESOS = {"links": 0.30, "unicos": 0.30, "palavras": 0.25, "alfa": 0.15}
 
 
 def _parece_json(texto: str) -> bool:
-    """Bloco com estrutura JSON embutida (payload de e-commerce, API crua)."""
+    """Bloco com estrutura JSON REAL embutida (payload de e-commerce, API).
+
+    Exige chaves/colchetes BALANCEADOS e o par "chave": valor — aspas de
+    CITAÇÃO no meio da prosa ("relationship...") não contam (falso
+    positivo real: [Brazilian_Portuguese] com citação de linguista).
+    """
     t = texto.strip()
-    marcadores = t.count("{") + t.count("[")
-    return marcadores >= 2 and ('":' in t or "':" in t)
+    abre = t.count("{") + t.count("[")
+    fecha = t.count("}") + t.count("]")
+    if abre < 2 or abre != fecha:
+        return False
+    import re as _re
+    # pelo menos 2 pares "chave":valor/'chave':valor com chaves curtas
+    pares = _re.findall(r"[{,]\s*[\"']?[A-Za-z_][\w\-]*[\"']?\s*:\s*[\"'\[\{\d]", t)
+    return len(pares) >= 2
 
 
 def _razao_nomes(palavras: list[str]) -> float:
