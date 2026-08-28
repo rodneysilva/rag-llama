@@ -1799,3 +1799,18 @@ operador) vive em AGENTS-historico.md — arquivo PRIVADO, fora do git.
   longas). PROVADO (mesma pergunta Nietzsche×Schopenhauer, zai flash):
   🔺3.532→1.864 tokens · 76,2→47,3 s · resposta em TABELA densa de 345
   palavras. Especificação é lru_cache — deploy já recarrega (restart).
+
+- **🔄 SESSÕES MULTIMÍDIA NO CICLO DO CHAT (28/08, tarde 7 — SOLID por
+  pedido do dono)**: "reaproveitar as coisas que funcionam no chat para o
+  Multimídia". `/midia` do zero = sessão VIRTUAL (`{"id": "", …}` — NADA
+  no disco); a sessão NASCE no 1º ENVIO (`midia_enviar` cria e devolve
+  `sessao`; o JS adota: `let SESSAO`, dataset, `_jobKey`, URI) e a
+  sidebar ganha a sessão ao concluir (reload em `/midia/{sid}`).
+  `listar()` FILTRA vazias sem job (rascunhos mortos somem). 💀 CAUSA RAIZ
+  do "não está criando novas sessões": `job_ativo` de job MORTO (restart
+  da API derruba jobs em memória) ficava pendurado para SEMPRE — o
+  `/midia` reabria a sessão fantasma toda vez. Agora o ramo de retomada
+  confere o job no registry (`_midia.status`): vivo = retoma; morto =
+  `limpar_job` e segue virtual. Scroll do chat validado: `#palco`
+  overflow auto, body NÃO rola (medido). E2E `Temp\kilo\e2e_pack13.py`
+  (virtual → envio cria → URI promove → lista +1).
