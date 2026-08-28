@@ -4028,17 +4028,29 @@ def _midia_pagina_base(request: Request, s: str):
     if s:
         sessao = midia_sessoes.abrir(s, owner)
     if sessao is None:
+        # 🔁 RETOMADA PRIMEIRO (pedido do dono 28/08: "fiz a solicitação,
+        # mudei de módulo, quando voltei PERDI — comportamento do chat e
+        # multimídia devem ser os MESMOS"): sessão com JOB EM CURSO tem
+        # prioridade sobre a nova — o envio em andamento volta ABERTO
+        # (card + polling; o executor nunca parou).
+        for _x in ctx["m_sessoes"]:
+            if _x.get("job_ativo"):
+                _cand = midia_sessoes.abrir(_x["id"], owner)
+                if _cand:
+                    sessao = _cand
+                    break
         # REGRA DO DONO (28/08): SEM slug na URI = sessão NOVA — não abre a
         # última por cookie/chute. Reusa uma RASCUNHO vazia (não acumula
         # lixo na lista) e o 1º envio promove a URI para /midia/{sid}.
-        for _x in ctx["m_sessoes"]:
-            _cand = midia_sessoes.abrir(_x["id"], owner)
-            if _cand and not _cand.get("itens"):
-                sessao = _cand
-                break
         if sessao is None:
-            sessao = midia_sessoes.criar(owner)
-            ctx["m_sessoes"] = midia_sessoes.listar(owner)
+            for _x in ctx["m_sessoes"]:
+                _cand = midia_sessoes.abrir(_x["id"], owner)
+                if _cand and not _cand.get("itens"):
+                    sessao = _cand
+                    break
+            if sessao is None:
+                sessao = midia_sessoes.criar(owner)
+                ctx["m_sessoes"] = midia_sessoes.listar(owner)
     ctx["m_sessao"] = sessao
     # TODOS os modelos num select só, agrupados por CAPACIDADE — o dono
     # alterna livremente entre as mensagens

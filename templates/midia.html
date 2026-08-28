@@ -360,6 +360,14 @@
    (rascunho vazio); o 1º envio promove a barra para /midia/{sid} — F5 dali
    volta na MESMA sessão. ═══ */
 (function () {
+  // 🔁 voltou ao módulo com envio EM CURSO: a página abriu a sessão do
+  // job (backend) — a barra de endereço acompanha (F5 volta nela).
+  try {
+    const sid = document.getElementById("m-dados")?.dataset.sessao || "";
+    const ja = JSON.parse(document.getElementById("m-dados")?.dataset.job || "null");
+    if (sid && ja && ja.job && location.pathname === "/midia")
+      history.replaceState({}, "", "/midia/" + sid);
+  } catch (e) {}
   document.addEventListener("htmx:afterRequest", (e) => {
     const f = e.target.closest?.('#m-form, form[hx-post="/api/midia/enviar"]');
     if (f && e.detail.successful) {
