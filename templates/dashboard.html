@@ -85,11 +85,6 @@
   /* ═══ Dashboard: grid de cards por modelo + tabelas legíveis (técnicas
      conhecidas, zero framework): grid auto-fit, tabular-nums, zebra.
      LARGURA: infra+fila lado a lado ≥70rem; KPIs densos (9rem) ═══ */
-  .dash-2col { display: grid; grid-template-columns: 1fr; gap: 0; }
-  @media (min-width: 70rem) {
-    .dash-2col { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 1rem; }
-    .dash-2col section.cartao { margin-bottom: 1rem; }
-  }
   .pagina-conteudo .grade { grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr)); }
   .grade-modelos { display: grid; grid-template-columns: repeat(auto-fill,
     minmax(min(13rem, 100%), 1fr)); gap: .6rem; }
