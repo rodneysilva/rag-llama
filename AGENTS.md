@@ -1725,3 +1725,23 @@ operador) vive em AGENTS-historico.md — arquivo PRIVADO, fora do git.
   via `set_input_files('#m-arquivo')` pelo CAMINHO REAL. Provado: enviei
   (VL local, job LENTO), fui ao dashboard, voltei → MESMA sessão com
   data-job + URI `/midia/{sid}`. E2E `Temp\kilo\e2e_ret_lento.py`.
+
+- **🌐 WEB POR INTENÇÃO + 🎬 GERAÇÃO LOCAL VIA AGENTE (28/08, tarde 2)**:
+  (1) dono: "pode pesquisar na internet" → o modelo respondia "não
+  consigo pesquisar" (a busca nativa dependia do MCP marcado no composer).
+  `_pede_web` (regex verbo+internet/web/google/online na MESMA frase)
+  injeta `MCP_WEB` no `body.mcps` automaticamente com log claro — provado:
+  DuckDuckGo 6 resultados → 3 páginas inteiras no contexto. (2) dono:
+  vídeo local no multimídia dava "modelos de vídeo ausentes em
+  D:\models\video" COM os arquivos lá — o branch local do
+  `/api/midia/enviar` rodava DIRETO NO CONTAINER (Linux, /models vazio);
+  i2t tinha guard de agente, imagem/vídeo NÃO. Agora `_midia_local_agente`
+  (t2i/t2v com anexo em b64, params.init p/ melhoria i2i força 0.65 —
+  agente_host ganhou `imagem_inicial` no t2i) + POLLING do status no
+  agente repassando as linhas ao card em tempo real; arquivo serve pela
+  VPS com pull-back na rota /api/midia. Provado: job mostra "🖥️ GPU na
+  estação — tarefa enviada ao AGENTE" + "🧵 tarefa t1 na estação".
+  (3) fila visível: despache com jobs na frente loga "⏳ fila: N job(s)
+  na frente (serial pela GPU)" no card (o "E em 2022?" preso do dono era
+  o job VL de teste na frente; 80 s da resposta longa = 3,7 k tokens a
+  46 tok/s da própria API zai). E2E `Temp\kilo\e2e_pack7.py`.
