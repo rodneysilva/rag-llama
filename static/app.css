@@ -174,9 +174,7 @@ body.pagina-chat #conversa {
 
 /* ═══════════ CHAT-SHELL: drawer conversas | coluna | split docs ═══════════
    Altura NATURAL: as colunas crescem com o conteúdo (a página rola). */
-.chat-shell { display: flex; align-items: flex-start; gap: .7rem;
-  width: 100%; margin-inline: auto;
-  max-width: clamp(64rem, 100vw, 90rem); }   /* base 1024 · teto 1440 */
+.chat-shell { display: flex; align-items: flex-start; gap: .7rem; }
 .chat-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 /* composer no FLUXO do documento e COLADO NO RODAPÉ (pedido do dono): a
    página rola livre e o campo de pergunta fica SEMPRE visível embaixo —
@@ -812,9 +810,7 @@ figure.cod code { background: none; padding: 0; border: 0;
   display: grid;
   gap: 1rem;
   grid-template-columns: 13.5rem minmax(0, 1fr);
-  align-items: stretch;
-  width: 100%; margin-inline: auto;
-  max-width: clamp(64rem, 100vw, 90rem); }   /* base 1024 · teto 1440 */
+  align-items: stretch; }
 @media (max-width: 55rem) {
   .midia-grid { grid-template-columns: 1fr; }
 }

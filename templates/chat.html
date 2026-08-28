@@ -851,9 +851,21 @@ async function melhorarPrompt(btn) {
    botão "não funcionava") ═══════════ */
 (function () {
   // abrir conversa → lista re-carrega com o DESTAQUE certo (cookie mudou)
+  // + SLUG na URI (pedido do dono): a URL vira /c/{sid} sem recarregar
   document.addEventListener("htmx:afterRequest", (e) => {
-    const b = e.target.closest?.(".conv-abrir, .conv-nova");
-    if (b && e.detail.successful) {
+    const abrir = e.target.closest?.(".conv-abrir");
+    if (abrir && e.detail.successful) {
+      const m = (abrir.getAttribute("hx-post") || "").match(/conversa\/([\w-]+)\/abrir/);
+      if (m) history.pushState({}, "", "/c/" + m[1]);
+    }
+    const nova = e.target.closest?.(".conv-nova");
+    if (nova && e.detail.successful) {
+      history.replaceState({}, "", "/");
+      setTimeout(() => htmx.ajax("GET", "/hx/conversas",
+                                 "#lista-conversas-slot"), 60);
+      return;
+    }
+    if ((abrir || nova) && e.detail.successful) {
       setTimeout(() => htmx.ajax("GET", "/hx/conversas",
                                  "#lista-conversas-slot"), 60);
     }

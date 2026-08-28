@@ -494,10 +494,12 @@ def _injetar_home_flask(escrever: dict, principal: str, textos: str,
             f"        if r.rule == \"/\" or r.rule.startswith(\"/static\"):\n"
             f"            continue\n"
             f"        metodos = sorted(m for m in r.methods if m in (\"GET\", \"POST\", \"PUT\", \"DELETE\"))\n"
-            f"        marca = (\" <i style='opacity:.55;font-size:.8em;'>[\" \n"
-            f"                  + \"/\".join(metodos) + \"]</i>\") if metodos != [\"GET\"] else \"\"\n"
-            f"        itens.append(f\"<li><a href='{{r.rule}}'>{{r.rule}}</a>{{marca}}</li>\")\n"
-            f"    return (\"<h2>app no ar</h2><p>rotas (clique para abrir):</p><ul>\"\n"
+            f"        if metodos == [\"GET\"]:\n"
+            f"            itens.append(f\"<li><a href='{{r.rule}}'>{{r.rule}}</a></li>\")\n"
+            f"        else:\n"
+            f"            marca = \" /\".join(metodos)\n"
+            f"            itens.append(f\"<li>{{r.rule}} <i style='opacity:.55;font-size:.8em;'>[{{marca}} — chame via fetch/curl]</i></li>\")\n"
+            f"    return (\"<h2>app no ar</h2><p>rotas:</p><ul>\"\n"
             f"            + \"\".join(sorted(itens)) + \"</ul>\")\n"
             "\n")
         pos = (re.search(r"^if __name__\s*==", c, re.MULTILINE)
@@ -615,10 +617,12 @@ def _podar_apps() -> None:
 
 
 def testar(arquivos: list[dict], principal: str, timeout: int = 300,
-           log=print) -> dict:
+           log=print, slug_sessao: str = "") -> dict:
     """Escreve TODOS os arquivos (contexto completo) e roda `principal`.
     Devolve {ok, comando, saida, segundos}; HTML devolve {preview, url}.
-    `log` narra as etapas (o teste é JOB — as linhas aparecem no modal)."""
+    `log` narra as etapas (o teste é JOB — as linhas aparecem no modal).
+    `slug_sessao`: id da conversa de origem — entra na URI do app vivo
+    (pedido do dono: slug da sessão na geração do sandbox)."""
     if not arquivos or not principal:
         raise ValueError("informe o arquivo principal e o contexto (arquivos)")
     escrever = {str(a.get("nome") or "").strip(): str(a.get("conteudo") or "")
@@ -765,13 +769,18 @@ def testar(arquivos: list[dict], principal: str, timeout: int = 300,
         chave, exp = chave_app(porta_app)
         APPS_VIVOS[porta_app] = {"exp": exp, "principal": principal,
                                  "fw": site_fw, "dir": subdir}
+        # SLUG da SESSÃO na URI (pedido do dono): /sandbox/app/{sid}/{chave}/
+        # — a chave é a autoridade; o slug diz de qual conversa o app veio
+        import re as _re
+        slug = _re.sub(r"[^\w\-]", "", (slug_sessao or "").strip())
+        base = f"/sandbox/app/{slug}/{chave}/" if slug else f"/sandbox/app/{chave}/"
         log(f"🔗 app no ar por {APP_TTL_S // 60} min (porta {porta_app}) — "
             "preview público temporário disponível", "sandbox")
         return {"ok": out.get("code") == 0, "comando": " ".join(cmd),
                 "saida": out.get("saida", ""), "segundos": out.get("segundos"),
                 "preview": f"aplicativo {site_fw} (porta {porta_app}) — no ar "
                            f"~{APP_TTL_S // 60} min",
-                "url": f"/sandbox/app/{chave}/",
-                "url_publica": f"https://sandbox.disroy.org/sandbox/app/{chave}/"}
+                "url": base,
+                "url_publica": f"https://sandbox.disroy.org{base}"}
     return {"ok": out.get("code") == 0, "comando": " ".join(cmd),
             "saida": out.get("saida", ""), "segundos": out.get("segundos")}

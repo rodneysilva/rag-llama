@@ -225,7 +225,8 @@ async def _auth_middleware(request: Request, call_next):
     #    válido, o pedido vai PARA O APP (o navegador está "dentro" dele).
     if resposta.status_code == 404:
         ref = request.headers.get("referer", "")
-        m = re.search(r"/sandbox/app/([\w.\-]+)", ref)
+        # aceita COM e SEM slug de sessão: /sandbox/app/{sid}/{chave}/…
+        m = re.search(r"/sandbox/app/(?:[\w\-]+/)?(\d+\.\d+\.[0-9a-f]+)", ref)
         if m:
             from core import sandbox as _sb
             porta = _sb.chave_app_ok(m.group(1))
@@ -755,12 +756,14 @@ def hx_conversa_copy(request: Request):
 
 
 @app.get("/")
-def pagina_chat(request: Request):
-    """Home = conversa (mensagens da sessão do cookie + composer)."""
+def pagina_chat(request: Request, _sid: str | None = None):
+    """Home = conversa (mensagens da sessão do cookie + composer). O
+    `_sid` é o override da rota /c/{sid} (conversa por slug na URI)."""
+    sid_uso = _sid or request.cookies.get(SESSAO_COOKIE)
     ctx = _paginas_ctx(request, "chat")
-    ctx["mensagens"] = _msgs_da_sessao(request.cookies.get(SESSAO_COOKIE), ctx["usuario"])
+    ctx["mensagens"] = _msgs_da_sessao(sid_uso, ctx["usuario"])
     # job EM CURSO da sessão: o polling volta renderizado (refresh não perde)
-    ctx.update(_job_ativo_ctx(request.cookies.get(SESSAO_COOKIE)))
+    ctx.update(_job_ativo_ctx(sid_uso))
     try:
         ctx["colecoes"] = collections() or []
     except Exception:
@@ -859,6 +862,24 @@ def pagina_chat(request: Request):
     except Exception:
         ctx["mcps"] = []
     return TEMPLATES.TemplateResponse(request, "chat.html", ctx)
+
+
+@app.get("/c/{sid}")
+def pagina_chat_sid(sid: str, request: Request):
+    """CONVERSA POR SLUG (pedido do dono: "incluir como slug o id da
+    sessão na uri tanto do chat…"): /c/{sid} abre a conversa NA URL —
+    valida o dono, assume a sessão (cookie) e renderiza a home do chat."""
+    import re as _re
+    if not _re.match(r"^[\w\-]{6,64}$", sid or ""):
+        raise HTTPException(404, "conversa não encontrada")
+    usuario = _usuario(request)
+    d = sessions.get_session(sid) or {}
+    if not d or (d.get("owner") or "") != usuario:
+        raise HTTPException(404, "conversa não encontrada")
+    resp = pagina_chat(request, _sid=sid)
+    resp.set_cookie(SESSAO_COOKIE, sid, max_age=30 * 86400,
+                    httponly=True, samesite="lax")
+    return resp
 
 
 @app.post("/hx/chat")
@@ -1361,6 +1382,8 @@ def sandbox_testar(body: SandboxIn, request: Request):
     principal = (body.principal or "").strip() or \
         sandbox.escolher_principal(body.arquivos)
     body.principal = principal
+    # SLUG da sessão do CHAT de origem (cookie) — entra na URI do app vivo
+    _slug_sessao = request.cookies.get(SESSAO_COOKIE, "")
 
     def _fabricar(payload: dict):
         jid = payload["job"]
@@ -1373,7 +1396,8 @@ def sandbox_testar(body: SandboxIn, request: Request):
                 r = sandbox.testar(payload.get("arquivos", []),
                                    payload["principal"],
                                    payload.get("timeout", 300),
-                                   log=lambda m, g="": _sbx.log(jid, m))
+                                   log=lambda m, g="": _sbx.log(jid, m),
+                                   slug_sessao=payload.get("slug", ""))
                 _sbx.concluir(jid, result=r)
             except Exception as e:
                 _sbx.concluir(jid, error=str(e)[:400])
@@ -1382,7 +1406,8 @@ def sandbox_testar(body: SandboxIn, request: Request):
     job = _sbx.novo_id()
     _despachar(_fabricar, "sandbox",
                {"principal": principal, "arquivos": body.arquivos,
-                "timeout": body.timeout, "job": job}, _sbx)
+                "timeout": body.timeout, "slug": _slug_sessao,
+                "job": job}, _sbx)
     return {"job": job}
 
 
@@ -1541,6 +1566,30 @@ async def sandbox_app(chave: str, path: str, request: Request):
     if not porta:
         return _pag_fora(request, "expirou")
     return await _proxy_app_api(porta, request, "/" + (path or ""), chave=chave)
+
+
+# ═══ variante COM SLUG da sessão (pedido do dono 27/08: "incluir como slug
+# o id da sessão na uri… também na geração do sandbox"): a URL nasce
+# /sandbox/app/{sid}/{chave}/… — a chave continua sendo a autoridade; o
+# slug identifica de QUAL conversa o app veio. Compat: formato antigo
+# (sem slug) segue valendo. ═══
+_RE_CHAVE_APP = __import__("re").compile(r"^\d+\.\d+\.[0-9a-f]+$")
+
+
+@app.api_route("/sandbox/app/{p1}/{p2}/{path:path}",
+               methods=["GET", "POST", "HEAD"])
+async def sandbox_app_slug(p1: str, p2: str, path: str, request: Request):
+    from core import sandbox as _sb
+    chave = p2 if _RE_CHAVE_APP.match(p2) else p1
+    porta = _sb.chave_app_ok(chave)
+    if not porta:
+        return _pag_fora(request, "expirou")
+    return await _proxy_app_api(porta, request, "/" + (path or ""), chave=chave)
+
+
+@app.api_route("/sandbox/app/{p1}/{p2}", methods=["GET", "POST", "HEAD"])
+async def sandbox_app_slug_raiz(p1: str, p2: str, request: Request):
+    return await sandbox_app_slug(p1, p2, "", request)
 
 
 @app.post("/api/sandbox/limpar")
@@ -3877,6 +3926,16 @@ def midia_analisar(body: MidiaAnalisarIn, request: Request):
 
 @app.get("/midia")
 def midia_pagina(request: Request, s: str = ""):
+    return _midia_pagina_base(request, s)
+
+
+@app.get("/midia/{sid}")
+def midia_pagina_slug(sid: str, request: Request):
+    """Sessão multimídia por SLUG na URI (pedido do dono — /midia/{id})."""
+    return _midia_pagina_base(request, sid)
+
+
+def _midia_pagina_base(request: Request, s: str):
     """👁 MÓDULO MULTIMÍDIA como CONVERSA ÚNICA (pedido do dono 27/08:
     "manter histórico de sessões" + "ser apenas um chat único onde posso
     alternar os modelos"): sidebar de sessões + composer com TODOS os
@@ -4196,13 +4255,12 @@ def hx_midia_item(job: str, request: Request, s: str = ""):
 
 @app.post("/hx/midia/nova")
 def midia_nova(request: Request):
-    """Nova sessão multimídia — HX-Redirect (com hx-swap=none o <script>
-    inline NÃO roda; o header é o jeito htmx de navegar)."""
+    """Nova sessão multimídia — HX-Redirect para a URI COM SLUG."""
     from core import midia_sessoes
     owner = _usuario(request)
     d = midia_sessoes.criar(owner)
     r = HTMLResponse("", status_code=200)
-    r.headers["HX-Redirect"] = f"/midia?s={d['id']}"
+    r.headers["HX-Redirect"] = f"/midia/{d['id']}"
     return r
 
 

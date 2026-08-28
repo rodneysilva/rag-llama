@@ -21,7 +21,7 @@
     <div id="m-sessoes" style="margin-top:.6rem; flex:1; min-height:0; max-height:26rem; overflow:auto; padding:.4rem;">
       {% for s in m_sessoes %}
       <div class="conv-item{{ ' atual' if s.id == m_sessao.id }}">
-        <button class="conv-abrir" onclick="location.href='/midia?s={{ s.id }}'"
+        <button class="conv-abrir" onclick="location.href='/midia/{{ s.id }}'"
                 title="{{ s.titulo }}">
           <span class="conv-titulo">{{ s.titulo }}</span>
           <span class="conv-contagem">{{ s.itens }} envio(s){{ ' · ⏳ em curso' if s.job_ativo }}</span>
