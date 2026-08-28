@@ -974,3 +974,8 @@ body.pagina-midia .midia-coluna { height: auto; align-self: stretch; }
 .grade, .qdrant-grid, .dash .grade-cards { grid-auto-rows: 1fr; }
 .modelo-card { display: flex; flex-direction: column; }
 .modelo-card .mc-linha { margin-top: auto; }
+
+/* centro do estado vazio no PALCO inteiro: palco em flex-column e a
+   conversa estica (com mensagens o comportamento de rolagem segue igual) */
+body.pagina-chat #palco { display: flex; flex-direction: column; }
+body.pagina-chat #conversa { flex: 1 1 auto; }
