@@ -195,13 +195,7 @@ body.pagina-midia .midia-coluna { height: auto; flex: 1; }
    a página inteira rola como qualquer outra; nada de viewport travado
    (100dvh/overflow:hidden), palco com scroll próprio ou composer fixo.
    As mensagens APARECEM; quem rola é o usuário. ═══ */
-body.pagina-chat main {
-  display: block;
-  padding: .8rem 1rem 1.2rem;
-  /* FULLSCREEN TOTAL: o chat NÃO tem coluna de leitura — ocupa a
-     tela inteira (as outras páginas mantêm os 60rem de leitura) */
-  max-width: none; width: 100%;
-}
+/* (main antigo do chat → .app-shell no topo cuida) */
 /* conversa centrada PROPORCIONAL: larga em tela larga, sem limite duro —
    em 1080p ~ 62rem, em 4K cresce junto (clamp), nunca coluna apertada */
 body.pagina-chat #conversa {
