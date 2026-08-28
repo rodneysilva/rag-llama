@@ -591,6 +591,17 @@ def legendar_imagem(arquivo: str, pergunta: str | None = None,
                 f"visão externa {prov_ext['model']} → HTTP {r.status_code}"
                 + (f": {detalhe}" if detalhe else ""))
         texto = r.json()["choices"][0]["message"]["content"].strip()
+        # 🛡️ GUARD: alguns modelos devolvem o ERRO de leitura como se
+        # fosse a análise ("ERROR: Cannot read … does not support image
+        # input. Inform the user.") — vira orientação clara, nunca texto
+        # na conversa (mesma regra do caminho local).
+        _baixo = texto.lower()
+        if ("does not support image input" in _baixo
+                or ("cannot read" in _baixo and "image" in _baixo)):
+            raise RuntimeError(
+                f"o modelo {prov_ext['model']} não conseguiu ler a imagem "
+                "(não aceita este tipo de entrada) — escolha um modelo de "
+                "visão 👁 (glm-4.6v do provedor ou Qwen2.5-VL local)")
         try:
             from . import telemetria as _tel
             u = (r.json().get("usage") or {})

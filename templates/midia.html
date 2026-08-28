@@ -58,7 +58,7 @@
     {# job em curso vive DENTRO da conversa (depois da bolha do usuário) #}
 
     {# ── composer ÚNICO ── #}
-    <form id="m-form" onsubmit="return mEnviar(event)" style="margin-top:.9rem;
+    <form id="m-composer" onsubmit="return mEnviar(event)" style="margin-top:.9rem;
           display:grid; gap:.5rem; grid-template-columns:1fr;">
       <div>
         <input type="file" id="m-arquivo" accept="image/*" hidden onchange="mSubir(this)">
@@ -413,7 +413,7 @@
       history.replaceState({}, "", "/midia/" + sid);
   } catch (e) {}
   document.addEventListener("htmx:afterRequest", (e) => {
-    const f = e.target.closest?.('#m-form, form[hx-post="/api/midia/enviar"]');
+    const f = e.target.closest?.('#m-composer');
     if (f && e.detail.successful) {
       const sid = document.getElementById("m-dados")?.dataset.sessao || "";
       if (sid && location.pathname === "/midia")

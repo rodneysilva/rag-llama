@@ -1696,10 +1696,7 @@ function exemploPergunta(btn) {
     if (!e.target.closest || !e.target.closest("#palco")) return;
     const el = palco();
     if (el && pertoDoFim) el.scrollTop = el.scrollHeight;
-    // 📜 INTERNO: a resposta em stream rola DENTRO da própria bolha
-    // (max-height próprio — sem isto o texto novo fica escondido embaixo)
-    const vivos = document.querySelectorAll(".stream-ao-vivo .resposta");
-    vivos.forEach((r) => { r.scrollTop = r.scrollHeight; });
+    // (scroll de TODAS as respostas vive no #palco — sem caixa interna)
   });
 })();
 </script>

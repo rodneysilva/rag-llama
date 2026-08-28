@@ -222,46 +222,6 @@
     setTimeout(() => (_netTravado = false), 12000);
   });
 </script>
-<button type="button" class="chat-fab" id="chat-fab" title="abrir o chat flutuante (disponível em qualquer módulo)">💬</button>
-<div class="chat-widget" id="chat-widget" hidden>
-  <div class="cw-cab"><b>💬 chat</b>
-    <button type="button" class="mini-btn" title="abrir em tela cheia" onclick="window.open('/', '_blank')">⤢</button>
-    <button type="button" class="mini-btn" onclick="document.getElementById('chat-widget').hidden = true">✕ fechar</button>
-  </div>
-  <iframe id="chat-frame" title="chat"></iframe>
-</div>
-<script>
-/* 💬 chat flutuante: primeira abertura carrega o iframe (cookie já
-   autentica); fica fixo na tela — a página rola por baixo. */
-(function () {
-  const fab = document.getElementById("chat-fab");
-  const w = document.getElementById("chat-widget");
-  const fr = document.getElementById("chat-frame");
-  fab.addEventListener("click", () => {
-    const abrir = w.hidden;
-    w.hidden = !abrir;
-    if (abrir && !fr.src) fr.src = "/";
-  });
-})();
 
-/* ⤢ LER GRANDE (padrão do dono): abre o conteúdo da resposta no MODAL
-   centrado — popup no meio da tela, ESC fecha (handler global). */
-function abrirLeituraModal(origem) {
-  let m = document.getElementById("leitura-modal");
-  if (!m) {
-    m = document.createElement("div");
-    m.id = "leitura-modal"; m.className = "modal-fundo"; m.hidden = true;
-    m.innerHTML = '<div class="modal-caixa larga"><div class="modal-cab">'
-      + '<b>leitura</b><button type="button" class="mini-btn" data-fechar>'
-      + '✕ fechar</button></div><div class="modal-corpo leitura-corpo"></div></div>';
-    m.addEventListener("click", (e) => {
-      if (e.target === m || e.target.closest("[data-fechar]")) m.hidden = true;
-    });
-    document.body.appendChild(m);
-  }
-  m.querySelector(".leitura-corpo").innerHTML = origem.innerHTML;
-  m.hidden = false;
-}
-</script>
 </body>
 </html>
