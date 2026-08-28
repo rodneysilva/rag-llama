@@ -21,7 +21,7 @@
             spellcheck="false">{{ texto_completo }}</textarea>
   <div style="display:flex; gap:.5rem; margin-top:.6rem; align-items:center;">
     <button type="button" class="primario" id="doc-editar-salvar"
-      onclick="salvarDocEdicao('{{ nome | e }}', {{ chave | tojson | e }})">
+      data-colecao="{{ nome | e }}" data-chave="{{ chave | e }}">
       ✓ salvar e reingestar</button>
     <button type="button" class="acao-btn" onclick="toggleDocEdicao(false)">✕ cancelar</button>
     <span class="mini" id="doc-editar-status"></span>

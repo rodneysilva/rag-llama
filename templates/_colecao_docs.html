@@ -4,7 +4,7 @@
    global (clique na linha abre). #}
 <div class="doc-lista">
   {% for d in docs %}
-  <button type="button" class="doc-linha" onclick="abrirDocModal('{{ nome | e }}', {{ d.chave | tojson | e }})"
+  <button type="button" class="doc-linha" data-colecao="{{ nome | e }}" data-chave="{{ d.chave | e }}"
           title="abrir o documento completo">
     <b class="doc-linha-titulo">{{ d.titulo[:110] }}</b>
     <span class="doc-col">{{ d.chunks }} pedaço(s)</span>
