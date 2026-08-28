@@ -270,10 +270,12 @@
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.detail || ("HTTP " + r.status));
-      // 🔄 sessão NASCEU neste envio (virtual → real): adota em tudo
+      // 🔄 sessão NASCEU neste envio (virtual → real): adota em tudo e a
+      // LISTA ganha a sessão ao concluir (recarrega em /midia/{sid})
       if (d.sessao && d.sessao !== SESSAO) {
         try { localStorage.removeItem(_jobKey()); } catch (e) {}
         SESSAO = d.sessao;
+        window._nasceuAqui = true;
         document.getElementById("m-dados").dataset.sessao = SESSAO;
       }
       localStorage.setItem(_jobKey(), d.job);
@@ -324,7 +326,11 @@
           + "<div class='log'>" + linhas + "</div></details>";
         mScrollFim();
         if (!j.running) {
-          clearInterval(_timer); localStorage.removeItem(_jobKey());
+          clearInterval(_timer);
+          if (window._nasceuAqui) {
+            window._nasceuAqui = false;
+            try { location.href = "/midia/" + SESSAO; return; } catch (e) {}
+          } localStorage.removeItem(_jobKey());
           if (j.error) {
             alvo.innerHTML += "<div class='rodape'>⚠️ " + String(j.error).replace(/</g,"&lt;") + "</div>";
           } else {
