@@ -1657,3 +1657,34 @@ operador) vive em AGENTS-historico.md — arquivo PRIVADO, fora do git.
   `_colecao_doc.html` em `.doc-bloco`s) SÓ no MODAL LARGO — validado
   via API (1600 doc-linhas na coleção de teste). E2E
   `Temp\kilo\e2e_pack2.py`.
+
+- **📅 RELÓGIO DO SERVIDOR + SLUG-REGRA + REVISÃO PELO GLM DO DONO (28/08,
+  madrugada 2)**: (1) **"que dia é hoje?"** respondia 29/10/2023 — 3 camadas
+  agora: detector `_e_pergunta_tempo` no `_processar_query` responde DIRETO
+  pelo relógio (0 LLM), `_system_text` injeta "📅 Hoje é …" em TODA chamada
+  e o GUARD no runner do job anexa correção quando a resposta cita ano fora
+  do atual em pergunta sobre hoje (busca ddg/serper segue nos modos
+  web/Auto para EVENTOS — relógio é a fonte da verdade para DATA).
+  (2) **"por que quebrou as perguntas"**: o histórico levava só as ÚLTIMAS
+  6 mensagens — em "1+1… e mais 2… e a raiz?" a 1ª soma caía FORA da
+  janela → janela 12 (`_history_messages` + reformula). (3) **REGRA DO
+  SLUG** (dono: "sem uri a sessão não deve aparecer"): GET `/` limpa o
+  cookie e abre NOVA conversa (multimídia idem, rascunho vazia reusada); a
+  1ª resposta promove a barra para `/c/{sid}` (`data-sid` no `_chatjob` +
+  afterSwap replaceState) e o envio multimídia para `/midia/{sid}`.
+  ⚠️ 2 ARMADILHAS: texto FORA de `{% block %}` em template que estende
+  base.html o JINJA DESCARTA (o script nunca chegava ao navegador), e
+  bloco JS precisa de TAG `<script>` real no append. (4) **Alturas
+  chat = multimídia 880=880**: tirar h1/descrição/wrapper do midia (grid
+  direto no main), `grid-template-rows: minmax(0,1fr)` (a row implícita
+  media pelo conteúdo) e ZERAR o `margin-bottom:.9rem` do `.cartao` nos
+  filhos do grid. (5) **Tooltips práticos** nos 23 campos (`_DICAS_CAMPO`
+  + `.campo-dica` CSS puro — hover/focus, absoluto, sem tocar o layout).
+  (6) **REVISÃO PELO MULTIMODAL DO DONO**: screenshots Playwright → upload
+  `/api/upload` (campo **file**) → `POST /api/midia/analisar {modelo:
+  zai:glm-4.6v}` → o result vem em **`analise`** — o glm DELE apontou (e
+  corrigimos): estado vazio do chat centralizado com EXEMPLOS clicáveis
+  (`exemploPergunta` preenche o composer; `#palco` flex para centrar),
+  KPIs 11→12,5px, cards de altura uniforme (grid-auto-rows 1fr). E2E
+  `Temp\kilo\e2e_pack3.py` + `val_final.py` (glm revalidou: sem
+  desalinhamento).
