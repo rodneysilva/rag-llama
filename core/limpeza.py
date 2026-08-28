@@ -264,6 +264,93 @@ def e_lixo_documento(texto: str, min_chars: int = 600) -> bool:
     return alfa / max(len(t), 1) < 0.45
 
 
+# ---------- SCORE DE QUALIDADE (padrão de mercado p/ ingestão RAG) ----------
+# Cada chunk recebe nota 0-1 na INGESTÃO; abaixo do limiar (SCORE_CHUNK_MIN
+# no .env, default 0.55) é rejeitado com o motivo no relatório da Revisão.
+# Fatores validados pela prática da comunidade (Qdrant/Apify/Firecrawl):
+#   - densidade de links (links dominando = página, não conteúdo)
+#   - razão de tokens únicos (baixa = repetição/tabela/lista)
+#   - comprimento em palavras (< 15 = stub, ruído na query)
+#   - razão alfanumérica (tabela/símbolos dominando)
+#   - JSON/estrutura de dados embutida (e-commerce, APIs cruas)
+#   - lista de nomes próprios (índice/tabela wiki sem frase)
+
+_RE_LINK = re.compile(r"https?://\S+|www\.\S+")
+
+# pesos dos fatores (somam 1.0)
+_PESOS = {"links": 0.30, "unicos": 0.30, "palavras": 0.25, "alfa": 0.15}
+
+
+def _parece_json(texto: str) -> bool:
+    """Bloco com estrutura JSON embutida (payload de e-commerce, API crua)."""
+    t = texto.strip()
+    marcadores = t.count("{") + t.count("[")
+    return marcadores >= 2 and ('":' in t or "':" in t)
+
+
+def _razao_nomes(palavras: list[str]) -> float:
+    """Proporção de palavras capitalizadas (índice de wiki, lista de nomes)."""
+    if not palavras:
+        return 0.0
+    return sum(1 for w in palavras if w[:1].isupper()) / len(palavras)
+
+
+def score_chunk(texto: str) -> tuple[float, list[str]]:
+    """(nota 0-1, motivos das penalidades) para um chunk JÁ limpo.
+
+    Usado pela ingestão (gate default) e pelo Modo Revisão (relatório).
+    Puro, sem LLM, sem rede — determinístico. Na dúvida, mantém.
+    """
+    t = (texto or "").strip()
+    motivos: list[str] = []
+    if not t:
+        return 0.0, ["vazio"]
+    palavras = _palavras(t)
+    n = len(palavras)
+    # 1) links: proporção dos tokens que são URLs
+    links = len(_RE_LINK.findall(t))
+    d_links = links / n if n else 1.0
+    nota_links = max(0.0, 1.0 - d_links * 4)   # >25% de links zera o fator
+    if d_links > 0.10:
+        motivos.append(f"densidade de links {d_links:.0%}")
+    # 2) razão de tokens únicos (repetição/lista)
+    unicos = len({w.lower() for w in palavras}) / n if n else 0.0
+    nota_unicos = min(1.0, unicos / 0.55)       # 55%+ de únicos = nota cheia
+    if unicos < 0.45:
+        motivos.append(f"repetição (tokens únicos {unicos:.0%})")
+    # 3) palavras: mínimo 15 (stub de tabela/código sem contexto)
+    nota_pal = min(1.0, n / 15.0)
+    if n < 15:
+        motivos.append(f"{n} palavra(s) (<15)")
+    # 4) alfanumérico
+    alfa = sum(c.isalnum() for c in t) / len(t)
+    nota_alfa = min(1.0, max(0.0, (alfa - 0.45) / 0.40))
+    if alfa < 0.55:
+        motivos.append(f"símbolos dominando (alfa {alfa:.0%})")
+    # 5) JSON embutido (evidência real: blocos com displayPrice/priceAmount
+    #    ingeridos na extinta coleção psicanalista)
+    if _parece_json(t):
+        motivos.append("estrutura JSON embutida")
+        return 0.05, motivos
+    # 6) lista de nomes próprios SEM frase (índice/tabela wiki — evidência
+    #    real da culinaria: "Wongi Manilkara kauki Wooly jelly palm...")
+    if n >= 8:
+        nomes = _razao_nomes(palavras)
+        pont = sum(t.count(c) for c in ".!?:;")
+        if nomes > 0.5 and pont / max(n, 1) < 0.03:
+            motivos.append(f"lista de nomes sem frase (caps {nomes:.0%})")
+            return 0.20, motivos
+    # 7) TABELA markdown (pipes dominando): "| valor | valor |" é grade de
+    #    dados, não prosa — evidência real das tabelas wiki ingeridas
+    d_pipes = t.count("|") / max(n, 1)
+    if d_pipes > 0.15:
+        motivos.append(f"tabela markdown (pipes {d_pipes:.0%})")
+        return 0.15, motivos
+    nota = (_PESOS["links"] * nota_links + _PESOS["unicos"] * nota_unicos
+            + _PESOS["palavras"] * nota_pal + _PESOS["alfa"] * nota_alfa)
+    return round(nota, 3), motivos
+
+
 def titulo_de(texto: str, fallback: str = "") -> str:
     """Título do documento: 1º cabeçalho markdown, 1ª linha curta em
     maiúsculas ou o nome do arquivo como último recurso."""

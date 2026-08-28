@@ -91,6 +91,12 @@ FIELDS = {
                        "híbrido responde só com o modelo (fim da alucinação "
                        "sobre contexto irrelevante, caso vatapá 0.470); rag "
                        "recusa. Relevante-médio real: 0.606", "float"),
+    "SCORE_CHUNK_MIN": ("Aplicação",
+                        "Gate de qualidade da INGESTÃO (0.55): chunk com "
+                        "score abaixo é rejeitado (JSON cru, tabela wiki, "
+                        "lista de nomes, links dominando) — padrão "
+                        "comunidade RAG; motivo aparece no log/Revisão",
+                        "float"),
     "TEMPERATURE":    ("Aplicação", "Temperatura da LLM", "float"),
     "PROMPT_SYSTEM":  ("Aplicação", "Prompt de sistema do RAG", "text"),
     "RERANKER":       ("Aplicação",
@@ -189,7 +195,7 @@ def reload():
     """Relê o .env e atualiza os valores deste módulo."""
     global LLM_BASE_URL, LLM_MODEL, EMBED_BASE_URL, EMBED_MODEL, QDRANT_URL
     global COLLECTION, SERPER_API_KEY, CHUNK_SIZE, CHUNK_OVERLAP, TOP_K
-    global SCORE_MIN, TEMPERATURE, PROMPT_SYSTEM
+    global SCORE_MIN, TEMPERATURE, PROMPT_SYSTEM, SCORE_CHUNK_MIN
     global SCORE_DIRETO, SCORE_FRACO
     global ESTUDIO_PAUSAR_CHAT, ESTUDIO_VRAM_ASSENTAMENTO_S, ESTUDIO_RESTORE_TENTATIVAS, ESTUDIO_PAUSAR_EMBED, GPU_MODO
     global AUTH_SECRET, AUTH_ADMIN_USER, AUTH_ADMIN_PASS
@@ -226,6 +232,9 @@ def reload():
     SCORE_MIN = float(os.getenv("SCORE_MIN", "0.35"))
     SCORE_DIRETO = float(os.getenv("SCORE_DIRETO", "0.65"))
     SCORE_FRACO = float(os.getenv("SCORE_FRACO", "0.55"))
+    # GATE DE QUALIDADE da ingestão (padrão comunidade RAG): chunk com
+    # score_chunk() abaixo disso é rejeitado (motivo no log/Revisão)
+    SCORE_CHUNK_MIN = float(os.getenv("SCORE_CHUNK_MIN", "0.55"))
     TEMPERATURE = float(os.getenv("TEMPERATURE", "0.5"))
     PROMPT_SYSTEM = os.getenv(
         "PROMPT_SYSTEM",
@@ -258,6 +267,7 @@ def as_dict():
         "SCORE_MIN": SCORE_MIN,
         "SCORE_DIRETO": SCORE_DIRETO,
         "SCORE_FRACO": SCORE_FRACO,
+        "SCORE_CHUNK_MIN": SCORE_CHUNK_MIN,
         "TEMPERATURE": TEMPERATURE,
         "PROMPT_SYSTEM": PROMPT_SYSTEM,
         "RERANKER": int(RERANKER),

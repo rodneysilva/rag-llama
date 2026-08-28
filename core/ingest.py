@@ -24,7 +24,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
 
 from . import catalog, config, contadores, rag
-from .limpeza import e_lixo, e_lixo_documento, limpar_texto, titulo_de, url_de
+from .limpeza import e_lixo, e_lixo_documento, limpar_texto, score_chunk, titulo_de, url_de
 
 
 def _slug_pasta(nome: str) -> str:
@@ -179,6 +179,7 @@ def _dividir(docs, log):
                 pedacos.append(c)
 
     mantidos, vistos, descartados = [], set(), 0
+    _rej_score = []  # (motivo, qtd) — relatório do gate de qualidade
     for c in pedacos:
         chave = hashlib.md5(
             re.sub(r"\s+", " ", c.page_content).strip().encode("utf-8")).hexdigest()
@@ -189,6 +190,17 @@ def _dividir(docs, log):
                 or (eh_cod and len(c.page_content.strip()) < 60):
             descartados += 1
             continue
+        # GATE DE QUALIDADE (padrão comunidade RAG, pedido do dono 28/08):
+        # score 0-1 por chunk; abaixo do limiar do .env = rejeitado com
+        # motivo (links/repetição/palavras/alfa/JSON/tabela/lista de nomes)
+        if not eh_cod:
+            nota, motivos = score_chunk(c.page_content)
+            c.metadata["score"] = nota
+            if nota < config.SCORE_CHUNK_MIN:
+                for m in motivos or ["score baixo"]:
+                    _rej_score.append(m)
+                descartados += 1
+                continue
         vistos.add(chave)
         mantidos.append(c)
 
@@ -204,6 +216,12 @@ def _dividir(docs, log):
             c.page_content = f"[{cab}]\n{c.page_content}"
     log(f"✂️  {len(mantidos)} pedaço(s) válido(s) "
         f"({descartados} descartado(s): ruído de página, curto ou duplicado)")
+    if _rej_score:
+        from collections import Counter as _C
+        por_motivo = _C(_rej_score).most_common()
+        resumo = ", ".join(f"{m} ({q})" for m, q in por_motivo)
+        log(f"🎛️  gate de qualidade: {len(_rej_score)} chunk(s) abaixo de "
+            f"{config.SCORE_CHUNK_MIN} — {resumo}")
     return mantidos
 
 
