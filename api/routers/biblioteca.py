@@ -238,17 +238,26 @@ def hx_colecao_doc(nome: str, request: Request, chave: str):
     # chunks do documento — ordenados por i/n do metadata (pedido do dono
     # 28/08: o modal mostra o documento inteiro legível/editável, não só
     # os 4-6 primeiros)
-    _campo = ("arquivo" if (achado[0].payload or {}).get("arquivo")
-              else "source")
+    _md0 = _md_ponto(achado[0])
+    # campo REAL onde a chave vive (plano OU metadata.*) — o filtro do
+    # scroll precisa casar com o formato que a coleção gravou
+    _campo = None
+    for cand in ("arquivo", "metadata.arquivo", "source", "metadata.source"):
+        _val = _md0.get(cand.rsplit(".", 1)[-1])
+        if _val == chave:
+            _campo = cand
+            break
+    if _campo is None:
+        _campo = "arquivo"
     todos = list(_scroll_todos(
         client, nome, limite=4000,
         filtro=Filter(must=[FieldCondition(
             key=_campo, match=MatchValue(value=chave))])))
-    todos.sort(key=lambda p: (p.payload or {}).get("i", 0))
-    md0 = achado[0].payload or {}
+    todos.sort(key=lambda p: _md_ponto(p).get("i", 0))
+    md0 = _md0
     titulo = str(md0.get("titulo") or chave.replace("\\", "/")
                  .rsplit("/", 1)[-1] or "?")
-    chunks = [str(p.payload.get("page_content", "")) for p in todos]
+    chunks = [str((p.payload or {}).get("page_content", "")) for p in todos]
     texto_completo = "\n\n".join(chunks)
     return TEMPLATES.TemplateResponse(
         request, "_colecao_doc.html",
