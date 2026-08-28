@@ -954,3 +954,23 @@ dialog.modal-caixa .modal-corpo { overflow-y: auto;
 body.pagina-midia .midia-grid { grid-template-rows: minmax(0, 1fr); }
 body.pagina-midia .midia-grid > * { margin-bottom: 0; }
 body.pagina-midia .midia-coluna { height: auto; align-self: stretch; }
+
+/* ═══ ESTADO VAZIO do chat (revisão glm-4.6v): centro do palco, exemplos
+   clicáveis — sem linha solta desalinhada no topo. ═══ */
+.chat-vazio { margin: auto; text-align: center; display: flex;
+  flex-direction: column; gap: .45rem; align-items: center; padding: 1.2rem; }
+.chat-vazio-titulo { font-size: 1rem; font-weight: 600; opacity: .9; }
+.chat-vazio-exemplos { display: flex; flex-wrap: wrap; gap: .5rem;
+  justify-content: center; margin-top: .5rem; max-width: 34rem; }
+.chat-vazio-exemplos button { border: 1px solid var(--borda);
+  background: var(--card); color: var(--texto); border-radius: 999px;
+  padding: .35rem .75rem; font-size: .78rem; cursor: pointer; }
+.chat-vazio-exemplos button:hover { border-color: var(--acento);
+  background: var(--acento-suave); }
+
+/* ═══ REVISÃO glm-4.6v (dashboard/sistema/biblioteca): KPIs legíveis
+   (sub-texto sobe p/ 12,5px) e cards de altura UNIFORME por linha. ═══ */
+.kpi .mini, .kpi small { font-size: .78rem; }
+.grade, .qdrant-grid, .dash .grade-cards { grid-auto-rows: 1fr; }
+.modelo-card { display: flex; flex-direction: column; }
+.modelo-card .mc-linha { margin-top: auto; }

@@ -1665,4 +1665,14 @@ document.addEventListener("htmx:afterSwap", (ev) => {
 })();
 </script>
 
+<script>
+/* exemplo do estado vazio → composer */
+function exemploPergunta(btn) {
+  const ta = document.getElementById("pergunta");
+  ta.value = btn.textContent.trim();
+  ta.focus();
+  if (typeof ajustarAlturaTA === "function") ajustarAlturaTA(ta);
+}
+</script>
+
 {% endblock %}

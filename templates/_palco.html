@@ -45,7 +45,19 @@
             </div>
           {% endif %}
         {% else %}
-          <p class="mut" style="align-self:center;">converse, pergunte, peça mídia — o raciocínio aparece com log completo.</p>
+          {# estado VAZIO (revisado pelo multimodal do dono — glm-4.6v):
+             centro do palco, legenda legível e EXEMPLOS clicáveis que
+             preenchem o composer (nada de linha solta no topo). #}
+          <div class="chat-vazio">
+            <p class="chat-vazio-titulo">converse, pergunte, peça mídia</p>
+            <p class="mini" style="opacity:.75;">o raciocínio aparece com log
+              completo em cada resposta</p>
+            <div class="chat-vazio-exemplos">
+              <button type="button" onclick="exemploPergunta(this)">Que dia é hoje?</button>
+              <button type="button" onclick="exemploPergunta(this)">resuma o que você sabe sobre docker</button>
+              <button type="button" onclick="exemploPergunta(this)">me ajude a escrever uma função em Python</button>
+            </div>
+          </div>
         {% endfor %}
       </section>
       <!-- área do job em curso: log INLINE, linha por linha (sem popup) -->
