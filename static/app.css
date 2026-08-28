@@ -951,4 +951,4 @@ dialog.modal-caixa .modal-corpo { overflow-y: auto;
 /* ═══ ALTURA PADRÃO ÚNICA: multimídia segue o MESMO contrato do chat
    (.app-shell main = 100dvh - topo) — fim do chute "10.5rem" que
    desalinhava o painel com o topo. ═══ */
-.midia-coluna { height: 100%; }
+body.pagina-midia .midia-coluna { height: auto; align-self: stretch; }
