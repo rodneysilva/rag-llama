@@ -167,6 +167,23 @@ def hx_job(kind: str, job: str, request: Request, r: int = 0):
     return TEMPLATES.TemplateResponse(request, "_job.html", ctx)
 
 
+def _md_ponto(p) -> dict:
+    """Metadata de um ponto do Qdrant nos DOIS formatos que o projeto já
+    gravou: payload PLANO (pontos migrados: arquivo/titulo no topo) e
+    payload ANINHADO (ingestão langchain: page_content + metadata{...}).
+    O /docs e o /doc liam só o plano — docs novos caíam no fallback
+    'ponto {id}' e o modal abria vazio (bug real pego na bateria pré-merge).
+    """
+    pl = p.payload or {}
+    md = pl.get("metadata") if isinstance(pl.get("metadata"), dict) else {}
+    out = dict(md)
+    for k in ("arquivo", "source", "titulo", "secao", "url", "i", "n"):
+        if k in pl and k not in out:
+            out[k] = pl[k]
+    out.setdefault("page_content", pl.get("page_content", ""))
+    return out
+
+
 @router.get("/hx/colecao/{nome}/docs")
 def hx_colecao_docs(nome: str, request: Request):
     """Documentos da coleção (drawer da Biblioteca): agrupa os CHUNKS por
