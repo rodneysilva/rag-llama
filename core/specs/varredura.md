@@ -29,6 +29,15 @@ um lote de trechos numerados `[n] (fonte) texto`. Marque SOMENTE:
 - fragmento que, sozinho, não comunica nada (frase cortada sem assunto,
   tabela de símbolos, números soltos).
 
+**⚠️ O CABEÇALHO CONTEXTUAL NÃO É NAVEGAÇÃO.** Todo chunk começa com um
+cabeçalho de proveniência entre colchetes — `[título · seção · subseção]`
+(às vezes com o título repetido). Isso NÃO é menu nem migalha de página: é
+a ORIGEM do conteúdo, gravada de propósito pela ingestão. **NUNCA marque o
+chunk por causa do cabeçalho** — ele é metadado legítimo; julgue SOMENTE o
+texto que vem DEPOIS dele. Rótulos de formatação do próprio conteúdo
+(**ERRO:**, **CORRETO:**, **Nota:**, *Exemplo:*) também NÃO são boilerplate
+— são a estrutura didática do texto.
+
 **MANTER (não marque)**:
 - qualquer conteúdo informativo do assunto da coleção, ainda que curto,
   geral, "básico" ou em outro idioma;
