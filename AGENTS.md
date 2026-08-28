@@ -1814,3 +1814,20 @@ operador) vive em AGENTS-historico.md — arquivo PRIVADO, fora do git.
   `limpar_job` e segue virtual. Scroll do chat validado: `#palco`
   overflow auto, body NÃO rola (medido). E2E `Temp\kilo\e2e_pack13.py`
   (virtual → envio cria → URI promove → lista +1).
+
+- **📜 ROLAGEM PRÓPRIA + ⤢ LER GRANDE + DICAS PADRONIZADAS (28/08, tarde
+  8)**: pedido do dono ("bloco de resposta com barra de rolagem / chat
+  flutuante — e dicas de novo chat no multimídia, tudo padronizado").
+  Sem iframe (altura/copiar/estilo virariam dívida): `.msg .resposta`
+  ganha `max-height: 30rem; overflow-y: auto` (o texto longo rola DENTRO
+  da bolha) + auto-scroll INTERNO no stream (`.stream-ao-vivo
+  .resposta` rola junto no afterSwap — sem isto o texto novo ficava
+  escondido no fundo) + **⤢ ler grande** abre o conteúdo num MODAL
+  CENTRADO (função global `abrirLeituraModal` no base.html — reusa as
+  classes globais de modal; ESC fecha; botão no rodapé do chat e ao lado
+  do 📋 copiar no multimídia). Estado vazio do MULTIMÍDIA ganhou as DICAS
+  no MESMO padrão do chat (`.chat-vazio` + `.chat-vazio-exemplos`;
+  `mExemplo` preenche o composer; 4 exemplos multimodais). Provado:
+  resposta longa com scroll interno (scrollHeight>clientHeight ✓), modal
+  aberto NO CENTRO (cx=720 em viewport 1440) com 2.848 chars, ESC fecha.
+  E2E `Temp\kilo\e2e_pack14.py`.
