@@ -1647,6 +1647,7 @@ document.addEventListener("htmx:afterSwap", (ev) => {
 });
 </script>
 
+<script>
 /* ═══ PROMOÇÃO DA URI (regra do dono 28/08): a conversa nova NASCE em "/"
    (sem slug = sem sessão visível); quando a 1ª resposta chega, o card
    carrega data-sid → a barra de endereço vira /c/{sid} sem recarregar.
@@ -1662,4 +1663,6 @@ document.addEventListener("htmx:afterSwap", (ev) => {
       history.replaceState({}, "", "/c/" + sid);
   });
 })();
+</script>
+
 {% endblock %}
