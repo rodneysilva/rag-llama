@@ -1831,3 +1831,18 @@ operador) vive em AGENTS-historico.md — arquivo PRIVADO, fora do git.
   resposta longa com scroll interno (scrollHeight>clientHeight ✓), modal
   aberto NO CENTRO (cx=720 em viewport 1440) com 2.848 chars, ESC fecha.
   E2E `Temp\kilo\e2e_pack14.py`.
+
+- **💬 CHAT FLUTUANTE GLOBAL + ALINHAMENTO (28/08, tarde 9 — resposta a
+  PERGUNTA feita ao dono, como ele pediu)**: ele escolheu "Widget em TODAS
+  as páginas" + referência de alinhamento = os OUTROS módulos. (1) **botão
+  💬 fixo (bottom-right)** em TODAS as páginas (invisível na própria do
+  chat) abre o **painel flutuante `position:fixed`** com o chat INTEIRO
+  por **iframe src="/"** (cookie autentica; envia/rola/troca conversa
+  funciona; ⤢ abre tela cheia; ✕ fecha) — acompanha a rolagem por
+  natureza (provado: rolou 1500px, painel no mesmo y). (2) chat e
+  multimídia ganham **h1 + descrição** e o MESMO padding do main dos
+  outros — título a 69px IGUAL aos demais (referência); cartões 128=128
+  idênticos entre si (o dashboard tem KPIs antes do 1º cartão — estruturas
+  internas diferem). ⚠️ E2E de elemento "escondido": checar
+  `offsetParent === null` (display:none ainda existe no DOM —
+  querySelector acha). E2E `Temp\kilo\e2e_pack15.py`.
