@@ -952,4 +952,5 @@ dialog.modal-caixa .modal-corpo { overflow-y: auto;
    (.app-shell main = 100dvh - topo) — fim do chute "10.5rem" que
    desalinhava o painel com o topo. ═══ */
 body.pagina-midia .midia-grid { grid-template-rows: minmax(0, 1fr); }
+body.pagina-midia .midia-grid > * { margin-bottom: 0; }
 body.pagina-midia .midia-coluna { height: auto; align-self: stretch; }
