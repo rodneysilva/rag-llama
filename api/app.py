@@ -6108,7 +6108,7 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
     if _rota["rota"] == "conversa" and body.mode != "livre":
         log("👋 roteador: saudação — resposta direta, SEM busca", "busca")
         contadores.set_etapa("resposta (roteador)")
-        answer = rag.answer_free(body.question, body.history)
+        answer = rag.answer_free(body.question, body.history, on_token=on_token)
         contadores.set_etapa(None)
         return {"question": body.question, "mode": body.mode,
                 "collections": colecoes, "docs": [], "answer": answer,
@@ -6128,7 +6128,7 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
         log("👋 saudação/mensagem trivial — SEM busca na base (economia de "
             "contexto: nada recuperável numa saudação)", "busca")
         contadores.set_etapa("resposta (híbrido, sem busca)")
-        answer = rag.answer_free(body.question, body.history)
+        answer = rag.answer_free(body.question, body.history, on_token=on_token)
         contadores.set_etapa(None)
         return {"question": body.question, "mode": body.mode,
                 "collections": colecoes, "docs": [], "answer": answer,
@@ -6639,7 +6639,11 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
     elif body.mode == "hibrido":
         log(f"✍️ gerando resposta (base + modelo, {len(docs)} fragmento(s))…", "geração")
         contadores.set_etapa("resposta (híbrido)")
-        answer = rag.answer_hybrid(body.question, docs, body.history, bases)
+        # ⚡ STREAM AO VIVO (pedido do dono 28/08: "o pensando fica mudo"):
+        # com on_token a resposta aparece SENDO ESCRITA desde o 1º token —
+        # o TTFB do provedor deixa de ser um card parado
+        answer = rag.answer_hybrid(body.question, docs, body.history, bases,
+                                   on_token=on_token)
         contadores.set_etapa(None)
     else:
         log(f"✍️ gerando resposta só com a base ({len(docs)} fragmento(s))…", "geração")
