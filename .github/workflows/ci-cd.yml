@@ -76,3 +76,53 @@ jobs:
             $COMPOSE up -d --force-recreate --no-deps api
             $COMPOSE ps
           REMOTE
+
+  # ── AMBIENTE DEV (dev.disroy.org) ─────────────────────────────
+  # GitFlow completo: develop = dev.disroy.org (deploy automático em
+  # cada push), main = raga.disroy.org (produção). Stack separada
+  # (~/apps/rag-llama-dev, containers ragaroy-dev-*), volumes e estado
+  # PRÓPRIOS, reranker OFF (CPU disputada com o prod), GPU segue 100%
+  # na estação do usuário via túneis llm/embed/agente.disroy.org.
+  cd-dev:
+    needs: ci
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+      - name: Deploy no ambiente dev
+        run: |
+          ssh -p ${{ secrets.VPS_PORT }} \
+              -o StrictHostKeyChecking=no -o ServerAliveInterval=30 \
+              ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'bash -s' <<'REMOTE'
+            set -e
+            # clone único (branch develop) — os pulls seguintes são --ff-only
+            if [[ ! -d ~/apps/rag-llama-dev ]]; then
+              git clone -b develop https://github.com/rodneysilva/rag-llama.git ~/apps/rag-llama-dev
+            fi
+            cd ~/apps/rag-llama-dev
+            git fetch origin develop
+            git checkout develop
+            git reset --hard origin/develop
+            mkdir -p sessions saidas logs datasets qdrant_data
+            [[ -f users.json ]] || echo '{}' > users.json
+            # .env do dev: parte do prod (chaves/túneis) — criado 1x
+            if [[ ! -f .env ]]; then
+              cp ~/apps/rag-llama/.env .env
+            fi
+            if [[ ! -f usuarios_permitidos.txt ]]; then
+              cp ~/apps/rag-llama/usuarios_permitidos.txt usuarios_permitidos.txt
+            fi
+            for f in mcp_servers.json mcp_conhecidos.json; do
+              [[ -f $f ]] || cp ~/apps/rag-llama/$f $f
+            done
+            COMPOSE="docker compose -f docker-compose.yml -f $HOME/infra/services/rag-llama-dev/docker-compose.prod.yml"
+            $COMPOSE up -d qdrant
+            docker compose -f docker-compose.yml build sandbox
+            $COMPOSE up -d --no-deps sandbox
+            $COMPOSE build api
+            $COMPOSE up -d --force-recreate --no-deps api
+            $COMPOSE ps
+          REMOTE
