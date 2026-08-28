@@ -15,32 +15,32 @@
   <div class="grade">
     <div class="kpi">
       <div class="rotulo">💬 chat (conversa) · :8090</div>
-      <div class="valor" style="font-size:1rem; word-break:break-all;">
+      <div class="valor titulo-quebra">
         {% if motor.chat %}{{ motor.chat }}{% elif motor.rodando %}🎨 geração em curso{% else %}— desligado —{% endif %}
       </div>
       <div class="sub">
-        {% if motor.chat %}<span style="color:var(--ok)">● servindo o TEXTO do chat</span>
+        {% if motor.chat %}<span class="cor-ok">● servindo o TEXTO do chat</span>
         {% elif motor.rodando %}<span style="color:var(--aviso)">⏸️ pausado — a GPU está com:</span>
           {% for r in motor.rodando[:3] %}<br><span class="mini">🎨 {{ r.rotulo }}</span>{% endfor %}
-        {% else %}<span style="color:var(--erro)">○ fora</span>{% endif %}
+        {% else %}<span class="cor-erro">○ fora</span>{% endif %}
       </div>
     </div>
     <div class="kpi">
       <div class="rotulo">🧬 embedding · :8081</div>
       <div class="valor" style="font-size:1rem;">bge-m3</div>
       <div class="sub">
-        {% if motor.embed %}<span style="color:var(--ok)">● sempre no ar</span>
-        {% else %}<span style="color:var(--erro)">○ fora</span>{% endif %}
+        {% if motor.embed %}<span class="cor-ok">● sempre no ar</span>
+        {% else %}<span class="cor-erro">○ fora</span>{% endif %}
       </div>
     </div>
     <div class="kpi">
       <div class="rotulo">🖼️ visão (multimodal) · :8082 / 🌐</div>
-      <div class="valor" style="font-size:1rem; word-break:break-all;">
+      <div class="valor titulo-quebra">
         {% if ativos.visao %}{{ ativos.visao }}{% elif ativos.visao_externa %}{{ ativos.visao_externa[0] }}{% else %}— sobe quando pedida —{% endif %}
       </div>
       <div class="sub">
-        {% if ativos.visao %}<span style="color:var(--ok)">● local no ar (análise i2t)</span>
-        {% elif ativos.visao_externa %}<span style="color:var(--ok)">● via API externa</span>
+        {% if ativos.visao %}<span class="cor-ok">● local no ar (análise i2t)</span>
+        {% elif ativos.visao_externa %}<span class="cor-ok">● via API externa</span>
         {% else %}<span style="color:var(--suave)">○ escolha um 👁 no chat/Multimídia que ele sobe</span>{% endif %}
         {% if ativos.difusores %} · 🎨 {{ ativos.difusores | length }} difusor(es){% endif %}
       </div>
@@ -58,7 +58,7 @@
 
   {# manutenção: ações RARAS de GPU fora do caminho (OOUX: níveis) #}
   <details style="margin-top:.8rem;">
-    <summary class="mini" style="cursor:pointer;">🔧 manutenção da GPU
+    <summary class="mini clicavel">🔧 manutenção da GPU
       (ligar/desligar servidores)</summary>
     <div style="display:flex; gap:.6rem; flex-wrap:wrap; margin-top:.5rem;">
       <button hx-post="/api/llm/ligar" hx-swap="none" hx-confirm="subir o llama-server do chat (LLM_MODEL do .env)?">🧠 ligar chat</button>
@@ -90,7 +90,7 @@
     <b>👁 Multimídia</b> — aqui é só a chave.</p>
   <div style="display:flex; gap:.4rem; flex-wrap:wrap; margin:.4rem 0 .8rem;">
     {% for c in prov_conhecidos %}
-    <button type="button" class="chip-prompt" style="cursor:pointer;"
+    <button type="button" class="chip-prompt clicavel"
             title="{{ c.dica }} · {{ c.site }}"
             onclick="usarProv('{{ c.id }}', '{{ c.nome }}', '{{ c.base_url }}')">
       ☁️ {{ c.nome }}</button>
@@ -101,9 +101,9 @@
     <div><label>id (slug)</label>
       <input type="text" name="pid" required placeholder="zai" maxlength="12" style="text-transform:uppercase; width:100%;"></div>
     <div><label>nome (rótulo)</label>
-      <input type="text" name="pnome" placeholder="Z.AI Coding Plan" style="width:100%;"></div>
-    <div style="grid-column:1/-1;"><label>base URL da API</label>
-      <input type="text" name="purl" required list="prov-presets" placeholder="https://api.z.ai/api/paas/v4" style="width:100%;">
+      <input type="text" name="pnome" placeholder="Z.AI Coding Plan" class="w100"></div>
+    <div class="full-col"><label>base URL da API</label>
+      <input type="text" name="purl" required list="prov-presets" placeholder="https://api.z.ai/api/paas/v4" class="w100">
       <datalist id="prov-presets">
         {% for c in prov_conhecidos %}
         <option value="{{ c.base_url }}">{{ c.nome }}</option>
@@ -111,10 +111,10 @@
         <option value="https://open.bigmodel.cn/api/paas/v4">Zhipu bigmodel — GLM (China)</option>
       </datalist></div>
     <div><label>chave da API 🔒</label>
-      <input name="pkey" type="password" autocomplete="off" placeholder="sk-…" style="width:100%;"></div>
-    <div style="grid-column:1/-1;"><label>modelos (opcional — manual, vírgula)</label>
-      <input type="text" name="pmodelos" placeholder="glm-4.6, glm-4.5-air (só se a API não listar)" style="width:100%;"></div>
-    <div style="grid-column:1/-1;"><button type="submit">☁️ cadastrar provedor</button></div>
+      <input name="pkey" type="password" autocomplete="off" placeholder="sk-…" class="w100"></div>
+    <div class="full-col"><label>modelos (opcional — manual, vírgula)</label>
+      <input type="text" name="pmodelos" placeholder="glm-4.6, glm-4.5-air (só se a API não listar)" class="w100"></div>
+    <div class="full-col"><button type="submit">☁️ cadastrar provedor</button></div>
   </form>
   <p id="prov-res" class="mini" style="margin:.5rem 0 0;"></p>
 </section>
@@ -151,18 +151,18 @@
       {% for c in campos %}
       {% if c.tipo == "text" %}
       <div style="flex:1 1 100%;"><label>{{ c.chave }} <span class="campo-dica" tabindex="0" data-dica="{{ c.dica | e }}">ⓘ</span></label>
-        <textarea name="{{ c.chave }}" rows="2" style="width:100%;">{{ c.valor }}</textarea></div>
+        <textarea name="{{ c.chave }}" rows="2" class="w100">{{ c.valor }}</textarea></div>
       {% else %}
       <div class="estreito" style="flex:1 1 14rem;">
         <label>{{ c.chave }}{% if c.tipo == "secret" %} 🔒{% endif %} <span class="campo-dica" tabindex="0" data-dica="{{ c.dica | e }}">ⓘ</span></label>
         {% if c.tipo == "secret" %}
         <input type="password" name="{{ c.chave }}" autocomplete="off"
                placeholder="{{ '•••••••• definida — digite para trocar' if c.definido else 'não definida' }}"
-               style="width:100%;">
+               class="w100">
         {% elif c.tipo in ("int", "float") %}
-        <input type="number" {% if c.tipo == "float" %}step="0.01"{% endif %} name="{{ c.chave }}" value="{{ c.valor }}" style="width:100%;">
+        <input type="number" {% if c.tipo == "float" %}step="0.01"{% endif %} name="{{ c.chave }}" value="{{ c.valor }}" class="w100">
         {% else %}
-        <input type="text" name="{{ c.chave }}" value="{{ c.valor }}" style="width:100%;">
+        <input type="text" name="{{ c.chave }}" value="{{ c.valor }}" class="w100">
         {% endif %}
       </div>
       {% endif %}
