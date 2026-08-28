@@ -1600,7 +1600,37 @@ operador) vive em AGENTS-historico.md — arquivo PRIVADO, fora do git.
   modais usam esse padrão. (3) **Tema manual**: botão ☀️/🌙 no topo
   (`alternarTema`) grava `data-tema` no `<html>` + localStorage
   `ragaroy.tema` — CSS: `@media dark :root:not([data-tema=claro])` +
-  `:root[data-tema=escuro]` (manual VENCE o sistema; editar um bloco =
-  editar o outro); script no `<head>` ANTES do CSS (sem flash);
-  ícone reflete o tema ATUAL. E2E `Temp\kilo\e2e_tema_esc.py`: ☀️→🌙
-  com bg 246→16, persiste após reload, ESC fecha lightbox.
+   `:root[data-tema=escuro]` (manual VENCE o sistema; editar um bloco =
+   editar o outro); script no `<head>` ANTES do CSS (sem flash);
+   ícone reflete o tema ATUAL. E2E `Temp\kilo\e2e_tema_esc.py`: ☀️→🌙
+   com bg 246→16, persiste após reload, ESC fecha lightbox.
+
+- **🖥️ PACOTE UI FULL-BLEED (28/08, madrugada)**: pedido do dono
+  (layout full width/height como o multimídia no chat; scrollbar só na
+  lista que excede; CSS global em camadas; dashboard modelos maiores +
+  média de tempo; Infra→Qdrant enriquecido sem espaço em branco; modal
+  "documento" fantasma; modal de doc GRANDE; título "RagAroy —
+  [módulo]"). (1) **`.app-shell`** (camada LAYOUT do app.css):
+  `body.pagina-{chat,midia} main` = `calc(100dvh - var(--altura-topo))`
+  com overflow hidden; `.chat-shell` stretch; sidebar full-height
+  (scroll SÓ na lista); `#palco` rola; composer estático no fim;
+  multimídia no MESMO contrato. ⚠️ 3 ARMADILHAS de CSS que travaram o
+  stretch: regra ANTIGA `body.pagina-chat main{display:block}` vinha
+  depois e vencia; `align-items:flex-start` antigo idem; `height:100%`
+  em filho de flex-item esticado vira AUTO no Chrome (o stretch do pai
+  é quem estica — medido 204→880). (2) **dialog FANTASMA**:
+  `.modal-caixa{display:flex}` vencia o UA → dialog sem open ficava
+  visível ("documento perdida já exibindo") —
+  `dialog.modal-caixa:not([open]){display:none}`. (3) **Modal de
+  documento LARGO** (78rem) com título no cabeçalho e tipografia de
+  leitura (`.doc-texto` pre-wrap). (4) **Dashboard**: media_s por
+  chamada nos cards; grade `minmax(260px)` — ⚠️ o STYLE EMBUTIDO do
+  dashboard vence o app.css E o `rem` fluido encolhia `16rem`→213px
+  cortando letras (min em PX real; medido 322px); **Qdrant
+  enriquecido** (KPIs: coleções/pontos/maior/média + grade fluida
+  `.qdrant-grid`); ⚠️ a section "Infraestrutura" antiga DUPLICAVA no
+  topo (removida) e o `.dash-2col` 1.4fr deixava a coluna direita
+  VAZIA (fora — tudo full width). (5) **Títulos** `RagAroy — Chat|
+  Multimídia|…` (block titulo por módulo). E2E
+  `Temp\kilo\e2e_uipack.py` (chat 898px full, sbFull, palco auto,
+  título, midia semScroll, qdrant+media, fantasma fora, card 322px).
