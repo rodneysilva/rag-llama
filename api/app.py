@@ -5843,8 +5843,15 @@ def query(body: QueryIn):
                     _dur = max(time.time() - _t0, 0.001)
                     _tk = (res.get("tokens") or {}).get("saida") or 0 if isinstance(res, dict) else 0
                     if isinstance(res, dict) and _tk:
+                        # ⚡ tok/s HONESTO: geração pura (streaming) ou a
+                        # ÚLTIMA CHAMADA LLM — nunca o job inteiro (busca
+                        # web + fila inflavam o denominador: 3.744 tok /
+                        # 80 s = "46 tok/s" quando a chamada gerou a ~370)
+                        _uc = contadores.ultima_chamada()
                         res["tok_s"] = (contadores.vel_geracao()
-                                        or round(_tk / _dur, 1))
+                                        or (round(_uc["saida"] / _uc["duracao_s"], 1)
+                                            if _uc.get("saida") and _uc.get("duracao_s")
+                                            else round(_tk / _dur, 1)))
                         res["duracao_s"] = round(_dur, 1)
                 except Exception:
                     pass

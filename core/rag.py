@@ -135,7 +135,7 @@ def llm(temperature=None):
 
         def _registrar(self, entrada, saida, dur):
             try:
-                contadores.registrar(entrada, saida)
+                contadores.registrar(entrada, saida, duracao_s=dur)
                 # MODELO REAL: config.LLM_MODEL fica VELHO após trocas feitas
                 # na estação (o .env da VPS não acompanha) — a telemetria e o
                 # dashboard "por modelo" liam sempre o mesmo nome. Quem sabe

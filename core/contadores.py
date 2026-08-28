@@ -80,6 +80,12 @@ def vel_geracao() -> float | None:
     return getattr(_local, "vel_geracao", None)
 
 
+def ultima_chamada() -> dict:
+    """Saída e duração da ÚLTIMA chamada LLM desta thread (fallback do tok/s
+    quando não houve streaming — sem 1º token marcado não há taxa pura)."""
+    return dict(getattr(_local, "ultima", {}) or {})
+
+
 def _balanco_somar(entrada: int, saida: int) -> None:
     b = getattr(_local, "balanco", None)
     if b is None:
@@ -93,10 +99,17 @@ def _balanco_somar(entrada: int, saida: int) -> None:
 # ---------- persistência: append atômico em JSONL (API + CLI no mesmo
 # total, sem broker — cada linha é uma chamada LLM) ----------
 
-def registrar(entrada: int, saida: int) -> None:
+def registrar(entrada: int, saida: int, duracao_s: float = 0) -> None:
     """Acumula o uso de UMA chamada LLM (prompt/completion tokens) — no
-    balanço desta thread E no arquivo do servidor (append)."""
+    balanço desta thread E no arquivo do servidor (append). A `duracao_s`
+    alimenta o tok/s do rodapé quando não houve streaming (a taxa caía no
+    'saída/duração do JOB', que inclui busca web e fila)."""
     _balanco_somar(entrada, saida)
+    try:
+        _local.ultima = {"saida": int(saida or 0),
+                         "duracao_s": round(float(duracao_s or 0), 2)}
+    except Exception:
+        pass
     try:
         ARQUIVO.parent.mkdir(parents=True, exist_ok=True)
         with open(ARQUIVO, "a", encoding="utf-8") as f:   # O_APPEND
