@@ -1566,3 +1566,24 @@ operador) vive em AGENTS-historico.md — arquivo PRIVADO, fora do git.
   duracao 49.6} → card qwen2.5-vl-7b apareceu. ⚠️ NameError `alvo` no
   runner do midia_enviar (a variável era `payload['referencia']`) —
   runner novo: conferir TODOS os nomes locais do escopo.
+
+- **📐 WIDTH FULL + SLUGS NA URI (27/08, noite 7)**: pedido do dono ("o
+  chat ficou com width reduzido — era pro MULTIMÍDIA ficar igual ao
+  CHAT, como o topbar… incluir slug da sessão na uri do chat, multimídia
+  e sandbox; sandbox é máquina sempre ligada"). (1) **clamp/teto
+  REMOVIDO** dos dois (chat volta full como o topbar, multimídia
+  igual). (2) **Chat `/c/{sid}`**: rota valida owner → assume o cookie
+  → renderiza a home (pagina_chat ganhou `_sid` override); abrir
+  conversa faz `history.pushState('/c/{sid}')`; nova → replaceState
+  '/'. (3) **Multimídia `/midia/{sid}`** (path; `?s=` compatível;
+  HX-Redirect da nova aponta o path; itens da sidebar linkam o path).
+  (4) **Sandbox com slug**: app vivo nasce
+  `/sandbox/app/{sid-da-conversa}/{chave}/` (cookie da sessão no POST
+  do testar → `slug_sessao`); ⚠️ a rota ANTIGA `{chave}/{path:path}`
+  ENGOLIA a URL com slug por ORDEM DE DECLARAÇÃO → fallback na própria
+  rota: chave sem formato + 1º segmento do path com formato = revalida;
+  middleware Referer aceita os 2 formatos. Rotas não-GET na home
+  injetada SEM link (clicar POST dava 405/login). Sandbox sempre
+  ligada: container `restart: unless-stopped`, sem porta pública (só
+  rede interna) — por design. E2E `Temp\kilo\e2e_slugs.py`: /c na URL,
+  nova → path, app 200 com slug e POST marcado.
