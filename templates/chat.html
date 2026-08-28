@@ -1646,7 +1646,6 @@ document.addEventListener("htmx:afterSwap", (ev) => {
   if (fim) falarTexto(fim.textContent.slice(0, 1200));
 });
 </script>
-{% endblock %}
 
 /* ═══ PROMOÇÃO DA URI (regra do dono 28/08): a conversa nova NASCE em "/"
    (sem slug = sem sessão visível); quando a 1ª resposta chega, o card
@@ -1663,3 +1662,4 @@ document.addEventListener("htmx:afterSwap", (ev) => {
       history.replaceState({}, "", "/c/" + sid);
   });
 })();
+{% endblock %}
