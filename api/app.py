@@ -1952,8 +1952,9 @@ def pagina_dashboard(request: Request):
         # os que não tiverem tokens ou uso, não exibir")
         if not u.get("chamadas"):
             continue
+        media_s = round(u["segundos"] / u["chamadas"], 1)
         modelos_llm.append({
-            "nome": nome, **u,
+            "nome": nome, **u, "media_s": media_s,
             "gb": gb_por_alias.get(modelos.normalizar(nome)),
             "ativo": modelos.normalizar(nome) == modelos.normalizar(servindo),
         })

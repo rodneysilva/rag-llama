@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block titulo %}Biblioteca — RagAroy{% endblock %}
+  {% block titulo %}Biblioteca{% endblock %}
 {% block conteudo %}
 <div class="pagina-conteudo">
 
@@ -323,25 +323,37 @@
       slot.hidden = false;
     }
     // MODAL de detalhes (a lista corta o conteúdo em 160 chars): o modal
-    // nativo <dialog> traz o documento por inteiro + backdrop fecha.
+    // nativo <dialog> LARGO (padrão global) traz o documento por inteiro,
+    // tipografia de leitura + ESC/backdrop fecham.
     async function abrirDocModal(nome, chave) {
       const dlg = document.getElementById("doc-modal");
       const corpo = document.getElementById("doc-modal-corpo");
+      const cab = dlg.querySelector(".modal-cab b");
       corpo.innerHTML = '<p class="mini">carregando documento…</p>';
       dlg.showModal();
       try {
         const r = await fetch("/hx/colecao/" + encodeURIComponent(nome)
                               + "/doc?chave=" + encodeURIComponent(chave));
-        corpo.innerHTML = await r.text();
+        const html = await r.text();
+        // título do modal = 1º <b>/h do conteúdo; corpo vira bloco de leitura
+        const d = document.createElement("div");
+        d.innerHTML = html;
+        const b = d.querySelector("b, h1, h2, h3");
+        if (b && cab) { cab.textContent = b.textContent.slice(0, 90); b.remove(); }
+        else if (cab) { cab.textContent = "documento"; }
+        corpo.innerHTML = '<div class="doc-texto">'
+            + d.innerHTML.replace(/<\/?(div|p|pre)[^>]*>/gi, "\n")
+                .replace(/\n{3,}/g, "\n\n").trim()
+            + "</div>";
       } catch (e) {
         corpo.innerHTML = '<p class="erro-texto">falha: ' + e.message + "</p>";
       }
     }
   </script>
 
-  {# MODAL de detalhes do documento — PADRÃO GLOBAL (dialog nativo: ESC
-     fecha pelo base.html; classes .modal-* do app.css) #}
-  <dialog id="doc-modal" class="modal-caixa" style="border:none; padding:0;">
+  {# MODAL de documento — GRANDE (leitura), padrão global: dialog nativo
+     (ESC fecha no base.html) + .modal-caixa.larga (78rem) #}
+  <dialog id="doc-modal" class="modal-caixa larga" style="border:none; padding:0;">
     <div class="modal-cab">
       <b>documento</b>
       <button type="button" class="acao-btn" data-fechar

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block titulo %}Dashboard — RagAroy{% endblock %}
+  {% block titulo %}Dashboard{% endblock %}
 {% block conteudo %}
 <div class="pagina-conteudo">
 
@@ -58,11 +58,41 @@
         <span>🪙 {{ (m.entrada + m.saida) // m.chamadas }} tot.</span>
       </div>
       <div class="mc-linha mini">
+        <span title="tempo médio por chamada">⏱ {{ m.media_s }}s/cham.</span>
         <span>{{ "%.0f" | format(m.segundos) }}s de LLM</span>
         {% if m.ultima %}<span>últ. {{ m.ultima }}</span>{% endif %}
       </div>
     </div>
     {% else %}<p class="mut">nenhuma chamada registrada ainda — use um modelo e ele aparece aqui.</p>{% endfor %}
+  </div>
+</section>
+
+<section class="cartao">
+  <h2>🗄️ Qdrant</h2>
+  <p class="descricao">base vetorial — todas as coleções com pontos e
+     dimensão (grade fluida que preenche a largura, sem espaço em branco).</p>
+  {% set total_pts = kpis.pontos %}
+  {% set maior = colecoes_detalhe[0] if colecoes_detalhe else none %}
+  <div class="grade" style="margin-bottom:.8rem;">
+    <div class="kpi"><div class="rotulo">coleções</div>
+      <div class="valor">{{ kpis.colecoes }}</div></div>
+    <div class="kpi"><div class="rotulo">pontos indexados</div>
+      <div class="valor">{{ total_pts }}</div></div>
+    <div class="kpi"><div class="rotulo">maior coleção</div>
+      <div class="valor" style="font-size:1rem; word-break:break-all;">{{ maior[0] if maior else '—' }}</div>
+      <div class="sub">{{ maior[1].points if maior else 0 }} pontos</div></div>
+    <div class="kpi"><div class="rotulo">fragmentos médios</div>
+      <div class="valor">{{ (total_pts / kpis.colecoes) | round(0) | int if kpis.colecoes else 0 }}</div>
+      <div class="sub">por coleção</div></div>
+  </div>
+  <div class="qdrant-grid">
+    {% for nome, v in colecoes_detalhe %}
+    <div class="qdrant-card">
+      <b title="{{ nome }}">{{ nome }}</b>
+      <span class="qtd">{{ v.points if v.points is not none else '—' }}</span>
+      <span class="mini">{{ v.dim ~ 'd' if v.dim else '' }}</span>
+    </div>
+    {% else %}<p class="mut">sem coleções (Qdrant offline?).</p>{% endfor %}
   </div>
 </section>
 
