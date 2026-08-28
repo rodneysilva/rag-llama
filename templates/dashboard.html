@@ -15,24 +15,6 @@
     <div class="sub">{% if servindo %}servindo: {{ servindo }}{% else %}— sem leitura —{% endif %}</div></div>
 </div>
 
-<section class="cartao">
-  <h2>Infraestrutura</h2>
-  <div class="grade-infra">
-    <div class="infra-card">
-      <b>🗄️ Qdrant</b>
-      <div class="mini" style="margin:.25rem 0 .5rem;">{{ kpis.colecoes }} coleção(ões) · {{ kpis.pontos }} pontos</div>
-      <div class="log" style="max-height:11rem;">
-        {% for nome, v in colecoes_detalhe %}
-        <div class="mini" style="display:flex; justify-content:space-between; gap:.5rem;">
-          <span style="overflow:hidden; text-overflow:ellipsis;">{{ nome }}</span>
-          <span style="flex:none;">{{ v.points if v.points is not none else "—" }}{% if v.dim %} · {{ v.dim }}d{% endif %}</span>
-        </div>
-        {% endfor %}
-        {% if not colecoes_detalhe %}<div class="mini">sem coleções (Qdrant offline?)</div>{% endif %}
-      </div>
-    </div>
-  </div>
-</section>
 
 <section class="cartao">
   <h2>Modelos de linguagem</h2>
