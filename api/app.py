@@ -6425,13 +6425,25 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
                     # pela nota); nota baixa = descarta como antes (é o
                     # que separa Tucupi 0.7 do Fabada irrelevante 0.003).
                     notas = None
-                    try:
-                        notas = rerank.notas_de(
-                            pergunta_busca,
-                            [d.page_content for d, _, _ in achados[:8]],
-                            log=lambda m, g="busca": log(m, g))
-                    except Exception:
-                        pass
+                    _limiar_resgate = 0.8 * config.SCORE_FRACO
+                    if top_score < _limiar_resgate:
+                        # ⚡ MUITO abaixo do fraco (pedido do dono 28/08:
+                        # "esse pensando não deveria ser rápido?") — o
+                        # cross-encoder (~1,5 s/fragmento na CPU da VPS)
+                        # raramente resgata um 0.35; borderline (0.44–0.55,
+                        # caso bilíngue real 0.547) SEGUE com o resgate
+                        log(f"⚡ score {top_score:.3f} muito abaixo do "
+                            f"fraco ({config.SCORE_FRACO}) — resgate do "
+                            "reranker PULADO (economia de ~6 s de CPU)",
+                            "busca")
+                    else:
+                        try:
+                            notas = rerank.notas_de(
+                                pergunta_busca,
+                                [d.page_content for d, _, _ in achados[:8]],
+                                log=lambda m, g="busca": log(m, g))
+                        except Exception:
+                            notas = None
                     if notas and max(notas) >= 0.10:
                         pares = sorted(zip(achados[:len(notas)], notas),
                                        key=lambda t: -t[1])
