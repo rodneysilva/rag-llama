@@ -1760,3 +1760,18 @@ operador) vive em AGENTS-historico.md — arquivo PRIVADO, fora do git.
   262-420 tok/s com TTFB 41-50 s (raciocínio) — o "46 tok/s" antigo do
   rodapé era saída/duração-do-JOB (busca web incluída): agora usa a
   última CHAMADA (`contadores.ultima_chamada`, `registrar(duracao_s=)`).
+
+- **⚡ STREAM AO VIVO RECUPERADO (28/08, tarde 4)**: dono: "não fiz a
+  pesquisa no LLM local, foi só no provedor". O card "pensando…" ficava
+  MUDO do início ao fim com provedor externo — DOIS bugs encadeados:
+  (a) o caminho híbrido chamava `answer_hybrid(...)` SEM `on_token`
+  (linha do `elif body.mode == "hibrido"` — geração por invoke, zero
+  stream; livre/saudação idem); (b) **`JobRegistry.status()` NÃO devolvia
+  o campo `parcial`** (gravava mas o snapshot não expunha — o stream ao
+  vivo estava quebrado para TUDO desde o refactor do registry). Fixes:
+  on_token no híbrido/livre/roteador-trivial + `"parcial": j.get("parcial")`
+  no status. Provado em produção (zai flash): 1º texto AO VIVO aos 21 s
+  (TTFB da zai) crescendo até concluir em 24,7 s. O que resta no
+  "pensando" externo é o TTFB da NUVEM deles (benchmark: 14–50 s — não
+  há correção local). Ajustes anteriores (reranker borderline, roteador
+  pulado, fila visível) valem para o caminho local.
