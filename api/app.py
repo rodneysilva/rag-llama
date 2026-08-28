@@ -4046,9 +4046,25 @@ def _midia_pagina_base(request: Request, s: str):
         for _x in ctx["m_sessoes"]:
             if _x.get("job_ativo"):
                 _cand = midia_sessoes.abrir(_x["id"], owner)
-                if _cand:
-                    sessao = _cand
-                    break
+                if not _cand:
+                    continue
+                # 💀 FANTASMA: job morto (restart da API derruba os jobs em
+                # memória) deixava job_ativo pendurado PARA SEMPRE — o
+                # /midia reabria a sessão velha toda vez (o "não está
+                # criando novas sessões" do dono). Expira na hora.
+                _jid = (_cand.get("job_ativo") or {}).get("job")
+                _vivo = False
+                if _jid:
+                    try:
+                        _st = _midia.status(_jid, 0, "")
+                        _vivo = bool(_st.get("running"))
+                    except Exception:
+                        _vivo = False
+                if not _vivo:
+                    midia_sessoes.limpar_job(_cand["id"])
+                    continue
+                sessao = _cand
+                break
         # REGRA DO DONO (28/08, SOLID — MESMO CICLO do chat): SEM slug e
         # sem job = sessão VIRTUAL (id vazio, NADA no disco — igual ao "/"
         # do chat): a sessão só NASCE no 1º envio (midia_enviar cria);
