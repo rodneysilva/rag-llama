@@ -2,11 +2,15 @@
   {% block titulo %}Multimídia{% endblock %}
 {% block classe %}pagina-midia{% endblock %}
 {% block conteudo %}
-{# MESMO contrato do CHAT (pedido do dono 28/08: "multimídia com a mesma
-   largura E ALTURA que o chat"): sem h1/descrição — o grid vai DIRETO ao
-   main do .app-shell e estica a viewport inteira menos o topbar. #}
+{# MESMA referência dos OUTROS módulos (pedido do dono 28/08): h1 +
+   descrição — o cartão nasce na MESMA linha dos demais; a coluna segue
+   esticando até o rodapé (flex:1). #}
+<div class="pagina-conteudo">
 <div id="m-dados" data-sessao='{{ m_sessao.id }}'
      data-job='{{ (m_sessao.job_ativo or None) | tojson }}' hidden></div>
+
+<h1>👁 Multimídia</h1>
+<p class="descricao">cada envio escolhe o modelo — 👁 análise · 🎨 imagem · 🎬 vídeo/gif</p>
 
 <div class="midia-grid">
   {# ── sidebar de sessões — PADRÃO ÚNICO com o chat do multimídia ── #}
@@ -418,5 +422,7 @@
   });
 })();
 </script>
+
+</div>
 
 {% endblock %}
