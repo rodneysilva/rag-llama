@@ -1656,6 +1656,35 @@ def hx_prompt_melhorar(request: Request, ideia: str = Form(""),
     ref = (referencia or "").strip()
     if ref:
         contexto += f"\nREFERÊNCIA SELECIONADA no painel: {ref}"
+    # ⚡ FALLBACK EXTERNO (pedido do dono 28/08): a ✨ usava SÓ a LLM local
+    # — com ela desligada o botão ficava "…" eterno. Local fora do ar → o
+    # PRIMEIRO modelo de conversa dos provedores cadastrados assume.
+    if not modelos.servido(modelos.CHAT_PORTA):
+        from core import provedores as _pv
+        _ext = None
+        try:
+            for _pid in _pv.ids():
+                for _m in (_pv.modelos(_pid) or []):
+                    if _m.get("cat") in ("conversa", "raciocinio",
+                                         "programacao"):
+                        _ext = _pv.resolver(_pid, _m["nome"])
+                        break
+                if _ext:
+                    break
+        except Exception:
+            _ext = None
+        if _ext:
+            rag.set_override(_ext)  # thread-local: só nesta chamada
+            try:
+                return PlainTextResponse(
+                    _prompt.melhorar(ideia, tipo, contexto))
+            finally:
+                rag.set_override(None)
+        raise HTTPException(
+            status_code=503,
+            detail="a LLM local está fora do ar e nenhum provedor de "
+                   "conversa está cadastrado — religue 🧠 no topo ou "
+                   "cadastre a chave em Sistema → ☁️ Provedores")
     return PlainTextResponse(_prompt.melhorar(ideia, tipo, contexto))
 
 
@@ -5927,11 +5956,20 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
     # roteia a pergunta ANTES de cache/Qdrant/rerank — pedido de CRIAÇÃO
     # em modo rag é orientado na hora (antes: pagava ~7 s de busca para
     # no fim recusar), saudação responde direto. "fluxo" não toca em nada.
-    try:
-        _rota = grafo.rotear(body.question, body.mode, log=log,
-                             historia=body.history)
-    except Exception as _e:
-        _rota = {"rota": "fluxo", "tipo": "", "motivo": f"erro: {str(_e)[:40]}"}
+    if not colecoes:
+        # ⚡ SEM coleções = SEM roteador (pedido do dono 28/08: com provedor
+        # externo a classificação pagava ~4 s de ida-e-volta à API antes da
+        # resposta; sem base nada a rotear — a saudação trivial segue pelo
+        # heurístico sem LLM logo abaixo).
+        _rota = {"rota": "fluxo", "tipo": "", "motivo": "sem coleções"}
+        log("🧭 roteador PULADO (sem coleções) — direto ao modelo", "mensagem")
+    else:
+        try:
+            _rota = grafo.rotear(body.question, body.mode, log=log,
+                                 historia=body.history)
+        except Exception as _e:
+            _rota = {"rota": "fluxo", "tipo": "",
+                     "motivo": f"erro: {str(_e)[:40]}"}
     if _rota["rota"] == "criar_como_hibrido":
         # 🧭 ESCALADA AUTOMÁTICA (pedido do dono: "como ele não sabe o que
         # estou falando?"): criação é impossível no rag (só o que está na
