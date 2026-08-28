@@ -1634,3 +1634,26 @@ operador) vive em AGENTS-historico.md — arquivo PRIVADO, fora do git.
   Multimídia|…` (block titulo por módulo). E2E
   `Temp\kilo\e2e_uipack.py` (chat 898px full, sbFull, palco auto,
   título, midia semScroll, qdrant+media, fantasma fora, card 322px).
+
+- **🩹 REVISÃO DO PEDIDO (28/08, noite)**: dono insatisfeito com a
+  1ª rodada ("analisem o que foi feito errado… estou usando sua máxima
+  capacidade"). (0) **AUDITORIA DO FIELDS**: script cru `config.FIELDS`
+  × referências em api/core — **23/23 USADOS** (PROMPT_SYSTEM em
+  rag.py:260, LLM_PROVIDERS em provedores.ids, ESTUDIO_* em
+  conjuntos/midia/app) — nada morto p/ remover; a tela segue com os
+  23. (1) **ERROR "does not support image input"**: o servidor :8082
+  alias "vl" erguido SEM mmproj devolvia o ERRO **como se fosse a
+  descrição** (entrava no contexto!) — `legendar_imagem` local ganhou
+  AUTO-REPARO (detecta o marker → derruba a porta → `_subir_vl` com
+  mmproj → tenta 1x; persiste = erro com orientação) + guard na
+  `visao()` (503 claro). ⚠️ agente da estação REINICIADO p/ pegar. (2)
+  **Largura chat × multimídia IGUAL de verdade** (medido 1417=1417) e
+  **CHAT EM CARTÃO** destacado (`.chat-col` com fundo card/borda/raio
+  como o `.midia-coluna`; palco rolando dentro; composer no cartão).
+  (3) **Dashboard**: nome do modelo em 1 LINHA com ellipsis (quebrava
+  feio — `white-space:nowrap` no mc-topo b) + linhas com wrap. (4)
+  **Biblioteca docs**: lista LIMPA (`.doc-linha` = 1 linha: título
+  ellipsis + chips; hover acento) e o CONTEÚDO (trechos completos
+  `_colecao_doc.html` em `.doc-bloco`s) SÓ no MODAL LARGO — validado
+  via API (1600 doc-linhas na coleção de teste). E2E
+  `Temp\kilo\e2e_pack2.py`.
