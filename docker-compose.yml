@@ -27,6 +27,15 @@ services:
     volumes:
       - ./qdrant_data:/qdrant/storage
     restart: unless-stopped
+    # Qdrant com nofile 1024 (default do dockerd em VMs OCI) PANICA na
+    # otimização de coleções grandes: "RocksDB open error: IO error: Too
+    # many open files" (provado 28/08 no re-embed de 79k pontos —
+    # higienização de dotnet/python morreu no meio e deixou status red).
+    # 65536 é o padrão de mercado para vector stores.
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
 
   api:
     build: .
