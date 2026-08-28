@@ -894,3 +894,34 @@ dialog.modal-caixa:not([open]) { display: none; }   /* UA perdia p/ classe — d
 .qdrant-card b { overflow-wrap: anywhere; }
 .qdrant-card .qtd { font-variant-numeric: tabular-nums; color: var(--acento);
   font-weight: 700; }
+
+/* ═══ CHAT EM CARTÃO (igual ao multimídia — pedido do dono 28/08):
+   a coluna conversa+composer vive num cartão destacado; o palco rola
+   dentro; mesmo padding/raio do .midia-coluna. ═══ */
+body.pagina-chat .chat-col {
+  background: var(--card); border: 1px solid var(--borda);
+  border-radius: 12px; min-height: 0; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+body.pagina-chat #palco { padding: .8rem .9rem 0; }
+body.pagina-chat #composer { padding: .6rem .8rem .7rem; background: var(--card); }
+body.pagina-chat #conversa { margin-bottom: .8rem; }
+
+.modelo-card .mc-topo b { display: block; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.modelo-card .mc-linha { flex-wrap: wrap; gap: .3rem .7rem; }
+.qdrant-card b { display: block; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+
+/* ═══ BIBLIOTECA · documentos: LISTA limpa + modal largo (pedido 28/08) ═══ */
+.doc-lista { display: flex; flex-direction: column; gap: .3rem; }
+.doc-linha { display: flex; align-items: center; gap: .5rem; width: 100%;
+  text-align: left; background: var(--bg); border: 1px solid var(--borda);
+  border-radius: 9px; padding: .5rem .6rem; cursor: pointer; min-width: 0; }
+.doc-linha:hover { border-color: var(--acento);
+  background: var(--acento-suave); }
+.doc-linha-titulo { font-size: .82rem; flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-blocos { display: flex; flex-direction: column; gap: .9rem; }
+.doc-bloco { border-top: 1px dashed var(--borda); padding-top: .6rem; }
+.doc-bloco:first-child { border-top: none; padding-top: 0; }

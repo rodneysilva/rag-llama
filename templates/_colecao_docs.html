@@ -1,31 +1,16 @@
-{# documentos de UMA coleção (drawer da Biblioteca) — lazy via /hx/colecao/{nome}/docs.
-   Cada documento: nome (metadata titulo ou basename), nº de pedaços, prévia
-   e o formulário que GRAVA o nome no Qdrant (set_payload em todos os chunks). #}
-<div class="doc-item">
+{# documentos de UMA coleção (drawer da Biblioteca) — LISTA LIMPA (pedido do
+   dono: "layout péssimo, usar modal"): cada documento é UMA LINHA com título
+   e chips; o CONTEÚDO completo, o preview e o nomear vivem no MODAL LARGO
+   global (clique na linha abre). #}
+<div class="doc-lista">
   {% for d in docs %}
-  <div class="doc-chunk">
-    <div class="doc-hd">
-      <b>{{ d.titulo[:90] }}</b>
-      <span class="doc-col">{{ d.chunks }} pedaço(s)</span>
-      {% if not d.nomeado %}<span class="doc-col" title="nome derivado do arquivo — grave um título melhor">sem título</span>{% endif %}
-    </div>
-    {% if d.previa %}<div class="doc-tx">{{ d.previa }}</div>{% endif %}
-    <div style="display:flex; gap:.4rem; margin-top:.3rem; flex-wrap:wrap;">
-      <button class="mini-btn" onclick="abrirDocModal('{{ nome | e }}', {{ d.chave | tojson | e }})"
-              title="abrir o documento completo em modal">🔍 detalhes (modal)</button>
-    </div>
-    <details style="margin-top:.3rem;">
-      <summary class="mini">📝 nomear (grava no Qdrant)</summary>
-      <form hx-post="/hx/colecao/{{ nome }}/nomear" hx-target="find .resp" hx-swap="innerHTML"
-            class="linha" style="margin-top:.35rem; gap:.4rem;">
-        <input type="hidden" name="chave" value="{{ d.chave | e }}">
-        <input type="text" name="titulo" value="{{ d.titulo | e }}" required
-               style="flex:1; min-width:8rem;" placeholder="título do documento">
-        <button type="submit" class="mini-btn">gravar</button>
-        <div class="resp"></div>
-      </form>
-    </details>
-  </div>
+  <button type="button" class="doc-linha" onclick="abrirDocModal('{{ nome | e }}', {{ d.chave | tojson | e }})"
+          title="abrir o documento completo">
+    <b class="doc-linha-titulo">{{ d.titulo[:110] }}</b>
+    <span class="doc-col">{{ d.chunks }} pedaço(s)</span>
+    {% if not d.nomeado %}<span class="doc-col" title="nome derivado do arquivo">sem título</span>{% endif %}
+    <span class="mini" style="opacity:.55;">abrir 📄</span>
+  </button>
   {% else %}
   <p class="mut">coleção vazia (nenhum ponto).</p>
   {% endfor %}

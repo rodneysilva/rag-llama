@@ -4818,7 +4818,15 @@ def visao(body: VisaoIn):
                                         "nome": Path(body.arquivo).name,
                                         "pergunta": body.pergunta},
                                        timeout=420)
-            return {"descricao": r.get("descricao", "")}
+            _desc = r.get("descricao", "")
+            # 🛡️ guard: servidor de visão SEM mmproj devolve o ERRO como se
+            # fosse descrição (bug real) — vira 503 com orientação, nunca
+            # entra no contexto como "descrição" da imagem
+            if "does not support image input" in (_desc or ""):
+                raise RuntimeError(
+                    "o servidor de visão no ar não aceita imagens (sem "
+                    "mmproj) — reinicie a visão no Sistema (🖼️ subir visão)")
+            return {"descricao": _desc}
         except RuntimeError as e:
             raise HTTPException(status_code=503, detail=str(e))
         except OSError as e:

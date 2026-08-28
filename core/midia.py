@@ -615,14 +615,37 @@ def legendar_imagem(arquivo: str, pergunta: str | None = None,
         pergunta = pergunta or ("Descreva esta imagem em português de forma "
                                 "detalhada: cena, objetos, pessoas, ação, estilo, cores.")
         # host RESOLVIDO (container → host.docker.internal; host → 127.0.0.1)
-        t0_loc = time.time()
-        r = httpx.post(f"http://{modelos._host_de(modelos.VL_PORTA)}:{modelos.VL_PORTA}/v1/chat/completions",
-                       json={"messages": [{"role": "user", "content": [
-                           {"type": "image_url", "image_url": {"url": f"data:image/{ext};base64,{b64}"}},
-                           {"type": "text", "text": pergunta}]}]},
-                       timeout=300)
-        r.raise_for_status()
-        texto = r.json()["choices"][0]["message"]["content"].strip()
+        for _tentativa in (1, 2):
+            t0_loc = time.time()
+            r = httpx.post(f"http://{modelos._host_de(modelos.VL_PORTA)}:{modelos.VL_PORTA}/v1/chat/completions",
+                           json={"messages": [{"role": "user", "content": [
+                               {"type": "image_url", "image_url": {"url": f"data:image/{ext};base64,{b64}"}},
+                               {"type": "text", "text": pergunta}]}]},
+                           timeout=300)
+            r.raise_for_status()
+            texto = r.json()["choices"][0]["message"]["content"].strip()
+            # 🔁 AUTO-REPARO (bug real do dono: "ERROR: Cannot read image —
+            # this model does not support image input"): um :8082 alias "vl"
+            # erguido SEM mmproj devolve isto COMO SE FOSSE a descrição —
+            # derruba o servidor inválido, sobe o VL certo e tenta 1x mais
+            if "does not support image input" in texto:
+                if _tentativa == 1:
+                    log("⚠️ servidor de visão SEM multimodal no ar — "
+                        "reiniciando o Qwen2.5-VL com mmproj…", "analisar")
+                    try:
+                        modelos.derrubar_porta(
+                            modelos.VL_PORTA, "visão sem mmproj (auto-reparo)")
+                    except Exception:
+                        pass
+                    if not modelos._subir_vl():
+                        raise RuntimeError("visão (:8082) não re-subiu — "
+                                           "veja logs/llama-vl.log")
+                    continue
+                raise RuntimeError(
+                    "o modelo de visão no ar não aceita imagens (sem mmproj) "
+                    "e o reinício não resolveu — rode ▶ '🖼️ subir visão' no "
+                    "Sistema ou verifique D:\\models\\visao (GGUF + mmproj)")
+            break
         # TELEMETRIA: o multimodal É uma LLM em uso — sem isto o Dashboard
         # só enxergava o chat (pedido do dono). Usage quando o servidor devolve.
         try:
