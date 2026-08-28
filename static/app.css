@@ -214,7 +214,7 @@ body.pagina-chat #conversa {
 
 /* ═══════════ CHAT-SHELL: drawer conversas | coluna | split docs ═══════════
    Altura NATURAL: as colunas crescem com o conteúdo (a página rola). */
-.chat-shell { display: flex; align-items: flex-start; gap: .7rem; }
+.chat-shell { display: flex; gap: .7rem; }
 .chat-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 /* composer no FLUXO do documento e COLADO NO RODAPÉ (pedido do dono): a
    página rola livre e o campo de pergunta fica SEMPRE visível embaixo —
