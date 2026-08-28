@@ -4,7 +4,7 @@
    que o raciocínio fique sempre minimizado, se eu quiser vê-lo, eu abro") —
    o contador de passos cresce visível; abrir é escolha e o base.html
    preserva o estado entre os re-renders do polling (600 ms). #}
-<div hx-get="/hx/chat/{{ job }}" hx-trigger="every 600ms" hx-swap="outerHTML">
+<div data-sid="{{ sid | default('') }}" hx-get="/hx/chat/{{ job }}" hx-trigger="every 600ms" hx-swap="outerHTML">
   {% if parcial %}
   <div class="msg assistente stream-ao-vivo">
     <div class="quem">assistente · escrevendo<span class="ponto" style="display:inline-block;"></span></div>

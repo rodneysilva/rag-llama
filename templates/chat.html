@@ -1647,3 +1647,19 @@ document.addEventListener("htmx:afterSwap", (ev) => {
 });
 </script>
 {% endblock %}
+
+/* ═══ PROMOÇÃO DA URI (regra do dono 28/08): a conversa nova NASCE em "/"
+   (sem slug = sem sessão visível); quando a 1ª resposta chega, o card
+   carrega data-sid → a barra de endereço vira /c/{sid} sem recarregar.
+   F5 dali sempre volta NA MESMA conversa. ═══ */
+(function () {
+  document.addEventListener("htmx:afterSwap", (e) => {
+    const alvo = e.target;
+    if (!alvo || !alvo.querySelector) return;
+    const card = alvo.querySelector?.("[data-sid]") ||
+                 (alvo.hasAttribute?.("data-sid") ? alvo : null);
+    const sid = (card && card.dataset.sid) || "";
+    if (sid && location.pathname === "/")
+      history.replaceState({}, "", "/c/" + sid);
+  });
+})();

@@ -925,3 +925,30 @@ body.pagina-chat #conversa { margin-bottom: .8rem; }
 .doc-blocos { display: flex; flex-direction: column; gap: .9rem; }
 .doc-bloco { border-top: 1px dashed var(--borda); padding-top: .6rem; }
 .doc-bloco:first-child { border-top: none; padding-top: 0; }
+
+/* ═══ ⓘ TOOLTIP DE CAMPO (Sistema — pedido 28/08): dica PRÁTICA no hover,
+   CSS puro, position:absolute (NÃO muda o layout da linha). ═══ */
+.campo-dica { cursor: help; color: var(--acento); font-weight: 700;
+  border: 1px solid var(--borda); border-radius: 50%;
+  padding: 0 .3rem; font-size: .68rem; position: relative;
+  display: inline-block; line-height: 1.15; vertical-align: baseline; }
+.campo-dica:hover::after, .campo-dica:focus::after {
+  content: attr(data-dica); position: absolute; left: 0; top: 1.35rem;
+  z-index: 80; background: var(--card); color: var(--texto);
+  border: 1px solid var(--borda); border-radius: 8px;
+  padding: .5rem .65rem; width: 17rem; max-width: 72vw;
+  font-weight: 400; font-size: .74rem; line-height: 1.4;
+  box-shadow: 0 8px 22px rgba(0,0,0,.22); white-space: normal;
+  text-align: left; }
+.campo-dica:focus { outline: 2px solid var(--acento); outline-offset: 1px; }
+
+/* ═══ MODAL = POPUP CENTRADO (conceito do dono): caixa no MEIO da tela
+   com fundo escurecido atrás; altura que passa da tela ROLA dentro. ═══ */
+dialog.modal-caixa { margin: auto; max-height: calc(100dvh - 2.5rem); }
+dialog.modal-caixa .modal-corpo { overflow-y: auto;
+  max-height: calc(100dvh - 9rem); }
+
+/* ═══ ALTURA PADRÃO ÚNICA: multimídia segue o MESMO contrato do chat
+   (.app-shell main = 100dvh - topo) — fim do chute "10.5rem" que
+   desalinhava o painel com o topo. ═══ */
+.midia-coluna { height: 100%; }

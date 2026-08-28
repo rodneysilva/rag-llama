@@ -362,3 +362,17 @@
   })();
 </script>
 {% endblock %}
+
+/* ═══ PROMOÇÃO DA URI (regra do dono 28/08): sessão nova nasce em "/midia"
+   (rascunho vazio); o 1º envio promove a barra para /midia/{sid} — F5 dali
+   volta na MESMA sessão. ═══ */
+(function () {
+  document.addEventListener("htmx:afterRequest", (e) => {
+    const f = e.target.closest?.('#m-form, form[hx-post="/api/midia/enviar"]');
+    if (f && e.detail.successful) {
+      const sid = document.getElementById("m-dados")?.dataset.sessao || "";
+      if (sid && location.pathname === "/midia")
+        history.replaceState({}, "", "/midia/" + sid);
+    }
+  });
+})();

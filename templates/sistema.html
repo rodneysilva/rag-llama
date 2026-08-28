@@ -150,11 +150,11 @@
     <div class="linha">
       {% for c in campos %}
       {% if c.tipo == "text" %}
-      <div style="flex:1 1 100%;"><label title="{{ c.rotulo | e }}">{{ c.chave }}</label>
+      <div style="flex:1 1 100%;"><label>{{ c.chave }} <span class="campo-dica" tabindex="0" data-dica="{{ c.dica | e }}">ⓘ</span></label>
         <textarea name="{{ c.chave }}" rows="2" style="width:100%;">{{ c.valor }}</textarea></div>
       {% else %}
-      <div class="estreito" style="flex:1 1 14rem;" title="{{ c.rotulo | e }}">
-        <label>{{ c.chave }}{% if c.tipo == "secret" %} 🔒{% endif %}</label>
+      <div class="estreito" style="flex:1 1 14rem;">
+        <label>{{ c.chave }}{% if c.tipo == "secret" %} 🔒{% endif %} <span class="campo-dica" tabindex="0" data-dica="{{ c.dica | e }}">ⓘ</span></label>
         {% if c.tipo == "secret" %}
         <input type="password" name="{{ c.chave }}" autocomplete="off"
                placeholder="{{ '•••••••• definida — digite para trocar' if c.definido else 'não definida' }}"

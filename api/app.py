@@ -759,7 +759,11 @@ def hx_conversa_copy(request: Request):
 def pagina_chat(request: Request, _sid: str | None = None):
     """Home = conversa (mensagens da sessão do cookie + composer). O
     `_sid` é o override da rota /c/{sid} (conversa por slug na URI)."""
-    sid_uso = _sid or request.cookies.get(SESSAO_COOKIE)
+    # REGRA DO DONO (28/08): SEM slug na URI = conversa NOVA — a sessão do
+    # cookie NÃO aparece (o cookie é limpo aqui; o 1º envio cria sid novo e
+    # a URI é promovida para /c/{sid}). /c/{sid} = a conversa DA URI (F5
+    # dentro dela volta na mesma conversa).
+    sid_uso = _sid
     ctx = _paginas_ctx(request, "chat")
     ctx["mensagens"] = _msgs_da_sessao(sid_uso, ctx["usuario"])
     # job EM CURSO da sessão: o polling volta renderizado (refresh não perde)
@@ -861,7 +865,10 @@ def pagina_chat(request: Request, _sid: str | None = None):
         ctx["mcps"] = [s.get("nome") or s for s in mcp_registry.list_servers()]
     except Exception:
         ctx["mcps"] = []
-    return TEMPLATES.TemplateResponse(request, "chat.html", ctx)
+    resposta = TEMPLATES.TemplateResponse(request, "chat.html", ctx)
+    if not _sid:
+        resposta.delete_cookie(SESSAO_COOKIE)  # nova conversa DE VERDADE
+    return resposta
 
 
 @app.get("/c/{sid}")
@@ -1052,7 +1059,7 @@ def hx_chat(request: Request, question: str = Form(""), mode: str = Form("hibrid
         parcial = TEMPLATES.TemplateResponse(
             request, "_chat_inicio.html",
             {"request": request, "job": job, "linhas": linhas,
-             "running": True, "pergunta": question,
+             "running": True, "pergunta": question, "sid": sid,
              "otimista": request.headers.get("x-otimista") == "1"})
         # cookie do sid: o _stub_sid foi criado ANTES (linha do corpo) —
         # ler DELE (resp_stub só nasce no fluxo de texto adiante)
@@ -1101,7 +1108,7 @@ def hx_chat(request: Request, question: str = Form(""), mode: str = Form("hibrid
         pass
     linhas = _query.status(r["job"], 0, "")["lines"]
     ctx = {"request": request, "job": r["job"], "linhas": linhas,
-           "running": True, "pergunta": question,
+           "running": True, "pergunta": question, "sid": sid,
            # 🫧 MODO OTIMISTA: o browser já inseriu a bolha do usuário NA
            # HORA (antes do POST voltar) — o partial traz SÓ o card do job
            # (sem bolha = sem duplicata)
@@ -2061,11 +2068,42 @@ def pagina_sistema(request: Request):
         bruto = cfg_atual.get(chave, os.getenv(chave, ""))
         grupos_cfg.setdefault(grupo, []).append({
             "chave": chave, "rotulo": rotulo, "tipo": tipo,
+            "dica": _DICAS_CAMPO.get(chave, rotulo),
             "valor": "" if tipo == "secret" else str(bruto or ""),
             "definido": bool(bruto),   # secret definido mostra placeholder ••••
         })
     ctx["grupos_cfg"] = grupos_cfg
     return TEMPLATES.TemplateResponse(request, "sistema.html", ctx)
+
+
+# ⓘ dicas PRÁTICAS por campo (tooltip do Sistema — pedido do dono 28/08:
+# "me fala na prática todos os campos e descreva como tooltip"): o que faz,
+# quando mexer e exemplo. A chave nunca viu um dica aplicável antes.
+_DICAS_CAMPO = {
+    "LLM_BASE_URL": "Endereço do servidor de CONVERSA (llama-server). Só mexa se trocar porta/máquina — ex.: http://host.docker.internal:8090 no container ou https://llm.disroy.org pelo túnel.",
+    "LLM_MODEL": "GGUF servido AGORA. Na prática troque pelo seletor do CHAT (troca a quente e grava aqui); editar à mão é só para consertar.",
+    "EMBED_BASE_URL": "Endereço do embedding (bge-m3) — quem indexa e busca no Qdrant chama isto. Padrão: http://…:8081 (ligado sempre).",
+    "EMBED_MODEL": "Nome do modelo de embedding. ⚠️ Trocar por um de dimensão diferente exige REINGESTAR todas as coleções.",
+    "QDRANT_URL": "Onde o Qdrant (banco vetorial) responde. No container: http://qdrant:6333.",
+    "SERPER_API_KEY": "Chave do serper.dev (Google) usada na pesquisa aprofundada (modo Auto/Pesquisa/Seed). Sem chave cai no DuckDuckGo automaticamente.",
+    "LLM_PROVIDERS": "Ids EXTRA de provedores externos, vírgula (glm,deepseek…). Na prática quase não precisa: o cadastro ☁️ do Sistema (PROV_*_BASE_URL) já auto-descobre.",
+    "HF_TOKEN": "Token do HuggingFace: datasets PRIVADOS da sua conta e rate-limit maior. Cole aqui e salve — aplica na hora.",
+    "ESTUDIO_PAUSAR_CHAT": "1 = derruba o chat (:8090) durante geração de mídia para liberar VRAM e religa sozinho ao fim (recomendado em 8 GB). 0 arrisca OOM.",
+    "ESTUDIO_VRAM_ASSENTAMENTO_S": "Segundos de espera após erguer/derrubar servidor — a VRAM libera sozinha, o app não mede. 6 é o bom; suba só se der falta de memória.",
+    "ESTUDIO_RESTORE_TENTATIVAS": "Quantas vezes tentar reerguer o chat após a geração. 3 cobre; mais só atrasa o erro aparecer.",
+    "ESTUDIO_PAUSAR_EMBED": "0 = embedding convive com geração LEVE (t2i/whisper — recomendado); 1 = pausa o embedding em TODA geração (última opção).",
+    "GPU_MODO": "todos = LLMs e difusão/whisper; somente_llms = bloqueia mídia (403 claro) e deixa só chat/visão/embedding. Também no badge 🎮 do topo.",
+    "CHUNK_SIZE": "Tamanho do pedaço ao INGERIR documento (caracteres). 900–1200 funciona bem; menor = trechos mais precisos, mais pedaços.",
+    "CHUNK_OVERLAP": "Sobreposição entre pedaços para não cortar ideia no meio. ~10% do CHUNK_SIZE.",
+    "TOP_K": "Quantos fragmentos buscar por consulta. 4–8; subir aumenta contexto e custo de tokens.",
+    "SCORE_MIN": "Similaridade mínima para o fragmento entrar (0–1). Subir = mais rígido: menos ruído, mas pode achar menos.",
+    "SCORE_DIRETO": "Score em que o MELHOR fragmento responde sozinho, SEM consultar a LLM (economia total de tokens). 0.65 calibrado.",
+    "SCORE_FRACO": "Abaixo disto o fragmento é FRACO e nem entra no prompt (híbrido responde só com o modelo). 0.55.",
+    "TEMPERATURE": "Criatividade (0 = determinístico). 0.1–0.3 para fatos/código/matÉmtica; 0.5+ só para escrita criativa — alto ERRA contas.",
+    "PROMPT_SYSTEM": "Instruções extras fixas em TODAS as respostas (tom, idioma, proibições). Ex.: 'Responda em português, direto, sem repetir a pergunta.'",
+    "RERANKER": "1 = reordena os achados com cross-encoder local (precisão melhor, +~2 s por busca). 0 = desliga.",
+    "RERANK_MODEL": "Modelo do reranker no HuggingFace. base = leve (1,1 GB); v2-m3 = melhor em PT (2,3 GB) — compare no bench antes de trocar.",
+}
 
 
 @app.get("/entrar")
@@ -3960,14 +3998,18 @@ def _midia_pagina_base(request: Request, s: str):
     sessao = None
     if s:
         sessao = midia_sessoes.abrir(s, owner)
-    if sessao is None and ctx["m_sessoes"]:
-        try:
-            sessao = midia_sessoes.abrir(ctx["m_sessoes"][0]["id"], owner)
-        except Exception:
-            pass
     if sessao is None:
-        sessao = midia_sessoes.criar(owner)
-        ctx["m_sessoes"] = midia_sessoes.listar(owner)
+        # REGRA DO DONO (28/08): SEM slug na URI = sessão NOVA — não abre a
+        # última por cookie/chute. Reusa uma RASCUNHO vazia (não acumula
+        # lixo na lista) e o 1º envio promove a URI para /midia/{sid}.
+        for _x in ctx["m_sessoes"]:
+            _cand = midia_sessoes.abrir(_x["id"], owner)
+            if _cand and not _cand.get("itens"):
+                sessao = _cand
+                break
+        if sessao is None:
+            sessao = midia_sessoes.criar(owner)
+            ctx["m_sessoes"] = midia_sessoes.listar(owner)
     ctx["m_sessao"] = sessao
     # TODOS os modelos num select só, agrupados por CAPACIDADE — o dono
     # alterna livremente entre as mensagens
@@ -5640,6 +5682,36 @@ def query(body: QueryIn):
                 res = _processar_query(
                     corpo, log=lambda m, g="geral": _query_log(jid, m, g),
                     on_token=lambda txt: _query.parcial(jid, txt))
+                # 📅 GUARD DE DATA (pedido do dono 28/08: "quando a resposta
+                # da LLM for diferente [do dia real], consultas mais
+                # aprofundadas"): perguntas sobre hoje/agora cuja RESPOSTA
+                # cita ano que não é o atual = data do treinamento VAZANDO.
+                # A correção do RELÓGIO é anexada (aviso visível, resposta
+                # original preservada); DuckDuckGo/Serper entram no modo
+                # web/Auto para eventos, que é onde busca ajuda de verdade.
+                try:
+                    import re as _re2
+                    from datetime import datetime as _dt2
+                    if isinstance(res, dict) and res.get("answer"):
+                        _perg = str(corpo.question or "").lower()
+                        _atuais = any(w in _perg for w in (
+                            "hoje", "agora", "atual", "ontem", "amanh"))
+                        _anos = {int(x) for x in _re2.findall(
+                            r"\b(?:19|20)\d{2}\b", str(res["answer"]))}
+                        if (_atuais and _anos
+                                and _dt2.now().year not in _anos):
+                            _rel = _resposta_relogio()
+                            res["answer"] = (
+                                str(res["answer"]).rstrip()
+                                + "\n\n---\n⚠️ **Correção do relógio do "
+                                "servidor**: " + _rel["answer"]
+                                + "\n_(a data citada acima veio do corte de "
+                                "treinamento do modelo)_")
+                            _query_log(jid, "📅 guard de data: a resposta "
+                                       "citava ano fora do atual — correção "
+                                       "do relógio anexada", "resposta")
+                except Exception:
+                    pass
                 # ⚡ tok/s: velocidade REAL de GERAÇÃO (do 1º token em
                 # diante — sem o pré-processamento do prompt; o cálculo
                 # antigo dividia pelo total e "caía" com prompt grande)
@@ -5700,6 +5772,40 @@ def query_cancel(job: str, request: Request):
 _rota_status("/api/query/status/{job}", _query,             "Job de consulta não encontrado")
 
 
+_RE_TEMPO = __import__("re").compile(
+    r"(que\s+dia\s+(?:é|e|eh)\s+hoje|qual\s+(?:é\s+|e\s+)?(?:a\s+)?data"
+    r"(?:\s+de)?\s+hoje|dia\s+de\s+hoje|que\s+horas?\s+s(?:ã|a)o|"
+    r"hora\s+(?:agora|atual)|data\s+atual|hoje\s+(?:é|e|eh)\s+que\s+dia|"
+    r"em\s+que\s+(?:dia|data)\s+(?:estamos|estamos\s+hoje)|"
+    r"que\s+dia\s+(?:estamos|é\s+hoje))",
+    __import__("re").IGNORECASE)
+
+
+def _e_pergunta_tempo(pergunta: str) -> bool:
+    """Pergunta CLARAMENTE sobre data/hora AGORA (curta — pergunta longa
+    tem outro assunto junto e não deve ser interceptada)."""
+    p = (pergunta or "").strip().lower()
+    return len(p) <= 120 and bool(_RE_TEMPO.search(p))
+
+
+def _resposta_relogio() -> dict:
+    """Resposta de data/hora pelo RELÓGIO DO SERVIDOR (fonte da verdade —
+    zero LLM, zero busca, zero alucinação de '29 de outubro de 2023')."""
+    from datetime import datetime
+    _DS = ("segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
+           "sexta-feira", "sábado", "domingo")
+    _MS = ("janeiro", "fevereiro", "março", "abril", "maio", "junho",
+           "julho", "agosto", "setembro", "outubro", "novembro", "dezembro")
+    a = datetime.now()
+    extenso = f"{_DS[a.weekday()]}, {a.day} de {_MS[a.month - 1]} de {a.year}"
+    texto = (f"Hoje é **{extenso}** — {a.strftime('%d/%m/%Y')}." + "\n\n"
+             + f"🕐 Agora são **{a.strftime('%H:%M')}** no relógio do servidor "
+             "RagAroy.")
+    return {"answer": texto, "docs": [], "mode": "relogio", "model": None,
+            "tokens": {"entrada": 0, "saida": 0, "chamadas": 0, "total": 0},
+            "cache": None}
+
+
 def _processar_query(body: QueryIn, log=None, on_token=None):
     """Processa uma consulta (compartilhada entre a rota síncrona e o job).
     `log(msg, grupo)` recebe as etapas — cache, busca, geração, tokens."""
@@ -5731,6 +5837,15 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
     if getattr(config, "MOCK_LLM", False):
         from core import mock as _mock
         return _mock.responder(body, log)
+    # 📅 PERGUNTA DE DATA/HORA → RELÓGIO DO SERVIDOR (pedido do dono 28/08).
+    # A fonte da verdade é ESTA máquina; busca web (DuckDuckGo/Serper) já
+    # existe para perguntas de EVENTOS (modo web/Auto/Pesquisa).
+    if _e_pergunta_tempo(str(body.question or "")):
+        _rel = _resposta_relogio()
+        log("📅 pergunta de data/hora — respondida pelo RELÓGIO do servidor "
+            "(LLM não consultada: a data do treinamento do modelo mente)",
+            "resposta")
+        return _rel
     # sessão ocupada (tarefa de mídia em curso): espera — pode navegar, não executar
     ocup = tarefas.sessao_ocupada(body.sessao)
     if ocup:

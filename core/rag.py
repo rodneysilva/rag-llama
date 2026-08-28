@@ -246,9 +246,11 @@ def llm(temperature=None):
 
 
 def _history_messages(history) -> list:
-    """Últimas 6 mensagens do chat como objetos LangChain (valores, não template)."""
+    """Últimas 12 mensagens (era 6 — pedido do dono 28/08: em conversas de
+    continuidade "E mais 2? E mais 3? E a raiz quadrada?" a 1ª pergunta caía
+    FORA da janela e o modelo perdia a conta acumulada; 12 cobre a cadeia)."""
     msgs = []
-    for m in (history or [])[-6:]:
+    for m in (history or [])[-12:]:
         classe = AIMessage if m.get("role") == "assistant" else HumanMessage
         msgs.append(classe(content=str(m.get("content", ""))))
     return msgs
@@ -256,7 +258,21 @@ def _history_messages(history) -> list:
 
 def _system_text(nome_spec: str) -> str:
     """Texto da spec + extras do operador (entra no prompt como valor, não template)."""
-    texto = spec(nome_spec)
+    # 📅 DATA/HORA DO SERVIDOR em TODA chamada (pedido do dono 28/08:
+    # "que dia é hoje?" saía 29/10/2023 — data do corte de treinamento).
+    # O modelo SABE a data corrente antes de abrir a boca.
+    from datetime import datetime as _dt
+    _d = _dt.now()
+    _DS = ("segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
+           "sexta-feira", "sábado", "domingo")
+    _MS = ("janeiro", "fevereiro", "março", "abril", "maio", "junho",
+           "julho", "agosto", "setembro", "outubro", "novembro", "dezembro")
+    texto = (f"📅 Hoje é {_DS[_d.weekday()]}, {_d.day} de "
+             f"{_MS[_d.month - 1]} de {_d.year}, {_d.strftime('%H:%M')} "
+             "(relógio do servidor)." + "\n"
+             "Toda referência a 'hoje', 'agora', "
+             "'ontem', 'este ano' ou datas correntes usa ESTA data — nunca "
+             "uma data do treinamento." + "\n\n" + spec(nome_spec))
     if config.PROMPT_SYSTEM.strip():  # instruções extras opcionais do operador
         texto += "\n\nInstruções adicionais do operador:\n" + config.PROMPT_SYSTEM
     return texto
@@ -565,7 +581,7 @@ def reformula(question: str, history) -> str:
     """
     if not history:
         return question
-    hist_user = [m for m in history[-6:] if m.get("role") == "user"]
+    hist_user = [m for m in history[-12:] if m.get("role") == "user"]
     if not hist_user:
         return question
     prompt = ChatPromptTemplate.from_messages([
