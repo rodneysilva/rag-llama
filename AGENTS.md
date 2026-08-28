@@ -1745,3 +1745,18 @@ operador) vive em AGENTS-historico.md — arquivo PRIVADO, fora do git.
   na frente (serial pela GPU)" no card (o "E em 2022?" preso do dono era
   o job VL de teste na frente; 80 s da resposta longa = 3,7 k tokens a
   46 tok/s da própria API zai). E2E `Temp\kilo\e2e_pack7.py`.
+
+- **⚡ PENSANDO RÁPIDO (28/08, tarde 3)**: dono: "esse pensando não deveria
+  ser rápido, já que é local? O que está onerando?". PERFIL REAL medido
+  (híbrido, 1 coleção, LLM local): 11,8 s = roteador 1,7 s + busca
+  (Qdrant+embed via túnel) 0,5 s + **6,1 s de RERANK de resgate** (o
+  cross-encoder na CPU de 2 vCPU custa ~1,5 s/fragmento e rodava até para
+  score 0.350, claramente fraco, onde raramente resgata) + geração 3,4 s.
+  FIX: resgate SÓ para borderline (`top >= 0.8 × SCORE_FRACO` ≈ 0.44 —
+  o caso bilíngue real 0.547 segue coberto) com log "⚡ resgate PULADO";
+  muito abaixo descarta direto. Pós-fix a MESMA pergunta: **6,0 s**.
+  Polling do card 600→400 ms (`_chatjob.html`). Benchmark local zai
+  (bench_zai.py): flash gera a 371-388 tok/s puro com TTFB 14-22 s; max
+  262-420 tok/s com TTFB 41-50 s (raciocínio) — o "46 tok/s" antigo do
+  rodapé era saída/duração-do-JOB (busca web incluída): agora usa a
+  última CHAMADA (`contadores.ultima_chamada`, `registrar(duracao_s=)`).
