@@ -157,7 +157,7 @@ PROV_ANTHROPIC_API_KEY=sk-ant-...
 
 | | produção | desenvolvimento |
 |---|---|---|
-| URL | `raga.disroy.org` | `dev.disroy.org` |
+| URL | `ai.disroy.org` | `dev.disroy.org` |
 | branch | `main` | `develop` |
 | deploy | automático a cada push (CI/CD → VPS) | automático a cada push (job `cd-dev`) |
 | stack | `~/apps/rag-llama` · containers `ragaroy-*` | `~/apps/rag-llama-dev` · containers `ragaroy-dev-*` |

@@ -79,7 +79,7 @@ jobs:
 
   # ── AMBIENTE DEV (dev.disroy.org) ─────────────────────────────
   # GitFlow completo: develop = dev.disroy.org (deploy automático em
-  # cada push), main = raga.disroy.org (produção). Stack separada
+  # cada push), main = ai.disroy.org (produção — alias raga/ia). Stack separada
   # (~/apps/rag-llama-dev, containers ragaroy-dev-*), volumes e estado
   # PRÓPRIOS, reranker OFF (CPU disputada com o prod), GPU segue 100%
   # na estação do usuário via túneis llm/embed/agente.disroy.org.

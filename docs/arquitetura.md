@@ -71,7 +71,7 @@ Dois ambientes completos coexistem na VPS sob isolamento total de estado:
 
 | Atributo | Produção | Desenvolvimento |
 |---|---|---|
-| Domínio | `raga.disroy.org` | `dev.disroy.org` |
+| Domínio | `ai.disroy.org` (alias `raga`/`ia`) | `dev.disroy.org` |
 | Branch | `main` | `develop` |
 | Diretório | `~/apps/rag-llama` | `~/apps/rag-llama-dev` |
 | Containers | `ragaroy-*` | `ragaroy-dev-*` |
