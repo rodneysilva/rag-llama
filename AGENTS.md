@@ -1789,3 +1789,13 @@ operador) vive em AGENTS-historico.md — arquivo PRIVADO, fora do git.
   longas, não do RagAroy (o 7B local faz ~25 tok/s constante; flash curto
   é ~15×; flash longo aproxima do local). Bench: `Temp\kilo\bench_zai.py`
   (curto) e `bench_longo2.py` (longo/corte).
+
+- **📏 SPEC ENXUTA (28/08, tarde 6 — aprovada pelo dono "sim, pode alterar
+  a spec")**: regra 12b no hibrido.md ("COMPLETA mas ENXUTA": tabela/
+  bullets > parágrafos, sem eco da pergunta nem conclusão repetida, teto
+  ~500 palavras — só alongue com pedido explícito de texto longo) +
+  injeção EXTRA no `_system_text` quando `_override()` (externo): "⏱
+  LIMITE DE SAÍDA… máximo ~400 palavras" (o provedor desacelera gerações
+  longas). PROVADO (mesma pergunta Nietzsche×Schopenhauer, zai flash):
+  🔺3.532→1.864 tokens · 76,2→47,3 s · resposta em TABELA densa de 345
+  palavras. Especificação é lru_cache — deploy já recarrega (restart).
