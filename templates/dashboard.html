@@ -87,18 +87,11 @@
      LARGURA: infra+fila lado a lado ≥70rem; KPIs densos (9rem) ═══ */
   .pagina-conteudo .grade { grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr)); }
   .grade-modelos { display: grid; grid-template-columns: repeat(auto-fill,
-    minmax(min(13rem, 100%), 1fr)); gap: .6rem; }
-  .grade-infra { display: grid; grid-template-columns: repeat(auto-fill,
-    minmax(min(17rem, 100%), 1fr)); gap: .6rem; margin-bottom: .4rem; }
-  .infra-card { border: 1px solid var(--borda); border-radius: 10px;
-    padding: .55rem .65rem; background: var(--bg); display: flex;
-    flex-direction: column; gap: .2rem; font-size: .8rem; min-width: 0; }
-  .infra-card > b { overflow-wrap: anywhere; }
-  .infra-card .log div { overflow-wrap: anywhere; }
-  .modelo-card { border: 1px solid var(--borda); border-radius: 10px;
-    padding: .55rem .65rem; background: var(--bg); display: flex;
-    flex-direction: column; gap: .3rem; min-width: 0; }
-  .mc-topo b { overflow-wrap: anywhere; min-width: 0; }
+    minmax(min(260px, 100%), 1fr)); gap: .8rem; }
+  .modelo-card { border: 1px solid var(--borda); border-radius: 12px;
+    padding: .8rem .9rem; background: var(--bg); display: flex;
+    flex-direction: column; gap: .45rem; min-width: 0; }
+  .mc-topo b { font-size: .92rem; line-height: 1.3; overflow-wrap: anywhere; min-width: 0; }
   .mc-linha { overflow-wrap: anywhere; }
   .modelo-card.ativo { border-color: var(--acento);
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--acento) 35%, transparent); }
