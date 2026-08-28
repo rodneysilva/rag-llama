@@ -1675,4 +1675,25 @@ function exemploPergunta(btn) {
 }
 </script>
 
+<script>
+/* ═══ AUTO-SCROLL (pedido do dono 28/08: "o painel do chat descesse ou
+   subisse com o scroll"): a conversa ACOMPANHA o texto sendo escrito —
+   mas só quando o usuário já está no fim; quem subiu para reler não é
+   arrastado de volta (o ponto de leição manda). ═══ */
+(function () {
+  const palco = () => document.getElementById("palco");
+  let pertoDoFim = true;
+  document.addEventListener("htmx:beforeSwap", () => {
+    const el = palco();
+    if (!el) return;
+    pertoDoFim = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  });
+  document.addEventListener("htmx:afterSwap", (e) => {
+    if (!e.target.closest || !e.target.closest("#palco")) return;
+    const el = palco();
+    if (el && pertoDoFim) el.scrollTop = el.scrollHeight;
+  });
+})();
+</script>
+
 {% endblock %}

@@ -290,6 +290,14 @@
     _timer = setInterval(async () => {
       try {
         const j = await (await fetch("/api/midia/status/" + jid)).json();
+        // 📜 AUTO-SCROLL (padrão do chat): acompanha o resultado crescendo
+        // — só se o usuário está no fim (quem subiu para ler não é arrastado)
+        const conv = document.getElementById("m-conversa");
+        let noFim = false;
+        if (conv) noFim = conv.scrollHeight - conv.scrollTop - conv.clientHeight < 120;
+        if (alvo && alvo.isConnected && noFim) {
+          try { conv.scrollTop = conv.scrollHeight; } catch (e) {}
+        }
         if (!alvo || !alvo.isConnected) {
           // página recarregou no meio: acha/recria o card no fim da conversa
           alvo = document.querySelector("#m-conversa .m-andamento");
