@@ -1560,9 +1560,19 @@ def sandbox_raiz(request: Request):
 async def sandbox_app(chave: str, path: str, request: Request):
     """APP VIVO do teste de site — HOSPEDADO TEMPORARIAMENTE (pedido do
     dono): o link público {chave} = porta+expiração assinadas (HMAC do
-    AUTH_SECRET, ~30 min). Sem login: quem TEM o link acessa."""
+    AUTH_SECRET, ~30 min). Sem login: quem TEM o link acessa.
+
+    Aceita TAMBÉM o formato COM SLUG da sessão (/sandbox/app/{sid}/{chave}/
+    …): esta rota é declarada ANTES da variante com slug e a {path:path}
+    engole tudo — se `chave` não tem formato de chave e o 1º segmento do
+    path TEM, é o caso slug (revalida com ele)."""
     from core import sandbox as _sb
     porta = _sb.chave_app_ok(chave)
+    if not porta and _RE_CHAVE_APP.match(chave or "") is None:
+        partes = (path or "").split("/", 1)
+        if partes and _RE_CHAVE_APP.match(partes[0]):
+            chave, path = partes[0], (partes[1] if len(partes) > 1 else "")
+            porta = _sb.chave_app_ok(chave)
     if not porta:
         return _pag_fora(request, "expirou")
     return await _proxy_app_api(porta, request, "/" + (path or ""), chave=chave)
