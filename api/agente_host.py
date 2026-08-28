@@ -122,9 +122,15 @@ def _rodar_tarefa_host(tid: str, body: TarefaIn):
             _log("⏸️ pausando os servidores de LLM — a GPU é da difusão…", "pausar")
             estado = midia.pausar_servicos(log=_log, pesado=pesado)
         if mod == "t2i":
+            # INIT (melhoria i2i do multimídia): o anexo é a BASE da cena —
+            # força 0.65 preserva a composição (pedido do dono 28/08)
+            _init = body.arquivo if p.get("init") else None
+            if _init:
+                _log("🎨 i2i: anexo é a BASE da cena (força 0.65)", "gerar")
             r = midia.gerar_imagem(_prompt, p.get("modelo"),
                                    p.get("largura", 1024), p.get("altura", 1024),
                                    p.get("seed"), negativo=p.get("negativo"),
+                                   imagem_inicial=_init,
                                    log=_log, progresso=_prog)
         elif mod in ("t2v", "i2v"):
             r = midia.gerar_video(_prompt,

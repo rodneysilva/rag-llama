@@ -80,6 +80,15 @@ def _despachar(fabricar, kind: str, payload: dict,
     payload = {**payload, "job": jid}
     if reg is not None:
         reg.iniciar(jid)
+        try:
+            from core import executor as _exec
+            na_frente = getattr(_exec.fila, "qsize", lambda: 0)()
+            if na_frente:
+                reg.log(jid, f"⏳ fila: {na_frente} job(s) na frente "
+                             "(execução serial — um por vez pela GPU)",
+                        etapa="geral")
+        except Exception:
+            pass
 
     # HISTÓRICO: embrulha a FÁBRICA — cobre o caminho async E o de thread
     fabricar_puro = fabricar
@@ -4125,6 +4134,64 @@ class MidiaEnviarIn(BaseModel):
     gif: bool = False
 
 
+def _midia_local_agente(payload: dict, jid: str, mod: str,
+                           params_t: dict) -> dict:
+    """Geração LOCAL do MULTIMÍDIA com a API em CONTAINER: a GPU e os GGUFs
+    vivem na ESTAÇÃO — a tarefa viaja ao AGENTE do host (o mesmo motor do
+    chat), o log volta ao card em tempo real e o arquivo serve pela VPS
+    (pull-back na rota /api/midia). Bug real do dono 28/08: o caminho
+    direto procurava D:\\models no Linux da VPS e dizia 'modelos de vídeo
+    ausentes' com tudo lá na estação."""
+    import base64 as _b64
+    import httpx as _hx
+    from core.modelos import _agente_host, _agente_headers
+    b64 = None
+    if payload.get("referencia"):
+        b64 = _b64.b64encode(
+            Path(payload["referencia"]).read_bytes()).decode("ascii")
+    _midia.log(jid, "🖥️ GPU na estação — tarefa enviada ao AGENTE do host…",
+               etapa="modelo")
+    r = modelos._chamar_agente(
+        "/tarefas", {"modalidade": mod, "texto": payload["prompt"],
+                     "params": params_t,
+                     "arquivo": (payload.get("nome_ref") or None),
+                     "arquivo_b64": b64}, timeout=120)
+    tid = (r or {}).get("tarefa")
+    if not tid:
+        raise RuntimeError(f"agente não devolveu tarefa: {str(r)[:120]}")
+    _midia.log(jid, f"🧵 tarefa {tid} na estação — log abaixo em tempo real",
+               etapa="modelo")
+    cursor, falhas = 0, 0
+    while True:
+        time.sleep(2)
+        try:
+            s = _hx.get(f"{_agente_host()}/tarefas/status/{tid}",
+                        params={"cursor": cursor},
+                        headers=_agente_headers(), timeout=30).json()
+        except Exception as e:
+            falhas += 1
+            if falhas > 15:
+                raise RuntimeError(f"perdi contato com o agente: {str(e)[:120]}")
+            continue
+        falhas = 0
+        for l in (s.get("lines") or []):
+            _midia.log(jid, str(l.get("msg") or l),
+                       etapa=(l.get("etapa") or "gerar"))
+        cursor += len(s.get("lines") or [])
+        if not s.get("running"):
+            if s.get("error"):
+                raise RuntimeError(str(s["error"])[:300])
+            res = s.get("result") or {}
+            return {"tipo": (res.get("tipo") or
+                             ("video" if mod == "t2v" else "imagem")),
+                    "arquivo": res.get("arquivo"), "pasta": res.get("pasta"),
+                    "prompt": payload["prompt"],
+                    "modelo": payload["modelo"],
+                    "segundos": res.get("segundos"),
+                    "frames": res.get("frames"),
+                    "referencia": payload.get("nome_ref")}
+
+
 @app.post("/api/midia/enviar")
 def midia_enviar(body: MidiaEnviarIn, request: Request):
     """Envio ÚNICO do módulo Multimídia — job com raciocínio ao vivo que ao
@@ -4233,6 +4300,13 @@ def midia_enviar(body: MidiaEnviarIn, request: Request):
                                 jid, msg, **({"etapa": e} if e else {})))
                         resultado = {**resultado, "tipo": "imagem",
                                      "modelo": payload["modelo"]}
+                    elif config.EM_CONTAINER:
+                        # GPU/GGUFs na ESTAÇÃO: tarefa via AGENTE (o caminho
+                        # direto procurava D:\\models no Linux da VPS)
+                        resultado = _midia_local_agente(
+                            payload, jid, "t2i",
+                            {"modelo": payload["modelo"],
+                             "init": payload["tipo"] == "melhoria"})
                     else:
                         # LOCAL: conjuntos pausam/restauram as LLMs
                         from core import conjuntos as _conj
@@ -4260,7 +4334,16 @@ def midia_enviar(body: MidiaEnviarIn, request: Request):
                             _m.restaurar_servicos(
                                 estado, log=lambda msg, g="": _midia.log(
                                     jid, msg, **({"etapa": g} if g else {})))
-                else:  # vídeo/gif
+                elif config.EM_CONTAINER:
+                    # GPU/GGUFs na ESTAÇÃO: tarefa via AGENTE (bug do dono:
+                    # "modelos ausentes em D:\\models/video" com tudo lá)
+                    resultado = _midia_local_agente(
+                        payload, jid, "t2v",
+                        {"modelo": payload["modelo"],
+                         "frames": (17 if payload["gif"]
+                                    else int(payload.get("duracao") or 3) * 16 + 1),
+                         "gif": bool(payload["gif"])})
+                else:  # vídeo/gif (host direto)
                     from core import conjuntos as _conj
                     try:
                         _conj.garantir("difusao",
@@ -5847,6 +5930,22 @@ def _resposta_relogio() -> dict:
             "cache": None}
 
 
+_RE_PEDE_WEB = __import__("re").compile(
+    r"(pesquis\w*|busqu\w*|busca(?:r)?|procure|procurar|consult\w*|"
+    r"olh\w*|ach\w*|encontr\w*)[^.!?]{0,48}"
+    r"(internet|web\b|online|google|duckduckgo|na rede)"
+    r"|(internet|web\b|online|google)[^.!?]{0,48}"
+    r"(pesquis\w*|busqu\w*|busca(?:r)?|procure|procurar|consult\w*)",
+    __import__("re").IGNORECASE)
+
+
+def _pede_web(pergunta: str) -> bool:
+    """Pedido EXPLÍCITO de busca na internet NA PRÓPRIA mensagem (pedido do
+    dono 28/08: "pode pesquisar na internet" — o modelo respondia "não
+    consigo pesquisar" porque a busca dependia do MCP marcado)."""
+    return bool(_RE_PEDE_WEB.search(pergunta or ""))
+
+
 def _processar_query(body: QueryIn, log=None, on_token=None):
     """Processa uma consulta (compartilhada entre a rota síncrona e o job).
     `log(msg, grupo)` recebe as etapas — cache, busca, geração, tokens."""
@@ -5887,6 +5986,13 @@ def _processar_query(body: QueryIn, log=None, on_token=None):
             "(LLM não consultada: a data do treinamento do modelo mente)",
             "resposta")
         return _rel
+    # 🌐 WEB POR INTENÇÃO: o pedido de busca na MENSAGEM ativa o mesmo
+    # motor do MCP "pesquisa-web" (DuckDuckGo → Serper, páginas inteiras
+    # como fragmentos [n]) — sem depender de marcar nada no composer.
+    if MCP_WEB not in (body.mcps or []) and _pede_web(str(body.question or "")):
+        body.mcps = list(body.mcps or []) + [MCP_WEB]
+        log("🌐 pedido de PESQUISA NA WEB detectado na mensagem — busca "
+            "ativada (DuckDuckGo → Serper)", "mcp")
     # sessão ocupada (tarefa de mídia em curso): espera — pode navegar, não executar
     ocup = tarefas.sessao_ocupada(body.sessao)
     if ocup:
