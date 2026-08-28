@@ -1587,3 +1587,20 @@ operador) vive em AGENTS-historico.md — arquivo PRIVADO, fora do git.
   ligada: container `restart: unless-stopped`, sem porta pública (só
   rede interna) — por design. E2E `Temp\kilo\e2e_slugs.py`: /c na URL,
   nova → path, app 200 com slug e POST marcado.
+
+- **⎋ ESC GLOBAL + TEMA CLARO NO TOPO (27/08, noite 8)**: pedido do
+  dono ("deixar o esc para sair de modals, css globais padronizados,
+  incluir o tema claro clicável no topo"). (1) **ESC fecha modais em
+  TODAS as páginas** (handler no base.html, um ESC por camada): dialog
+  nativo → lightbox → `.modal-fundo` (classe global, fecha via
+  `[data-fechar]`) → `details.modal`. (2) **Classes globais de modal**
+  no app.css: `.modal-fundo` (fixed+backdrop, hidden=default) /
+  `.modal-caixa` / `.modal-cab` / `.modal-corpo` — o doc-modal da
+  Biblioteca migrado (dialog nativo com as classes globais); novos
+  modais usam esse padrão. (3) **Tema manual**: botão ☀️/🌙 no topo
+  (`alternarTema`) grava `data-tema` no `<html>` + localStorage
+  `ragaroy.tema` — CSS: `@media dark :root:not([data-tema=claro])` +
+  `:root[data-tema=escuro]` (manual VENCE o sistema; editar um bloco =
+  editar o outro); script no `<head>` ANTES do CSS (sem flash);
+  ícone reflete o tema ATUAL. E2E `Temp\kilo\e2e_tema_esc.py`: ☀️→🌙
+  com bg 246→16, persiste após reload, ESC fecha lightbox.
