@@ -46,3 +46,6 @@ hf_cache/
 
 # registro das rodadas (conversas com o operador) — privado
 AGENTS-historico.md
+
+# artefatos de rodada do agente (provas ficam em scripts/split)
+Temp/

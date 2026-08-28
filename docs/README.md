@@ -4,9 +4,10 @@
 
 | Quero… | Ler |
 |---|---|
+| **REQUISITOS ativos (fonte única)** | `DEMANDAS.md` (O QUÊ: requisitos fixos, demandas em curso, decisões) |
 | **Usar / instalar / subir** | `../README.md` (instalação, serviços, comandos, endpoints) |
 | **Modificar o projeto sem quebrar** | `../AGENTS.md` (memória operacional: stack, armadilhas, decisões) |
-| **Entender a arquitetura do código** | `core-analise.md` (módulo a módulo, com `arquivo:linha`) |
+| **Entender a arquitetura do código** | `arquitetura.md` (**CONTRATO SOLID/DDD/Clean** — camadas, routers, regra de dependência, débitos Fase 2, prova de paridade) · `core-analise.md` (módulo a módulo, com `arquivo:linha`) |
 | **Entender RAG/conceitos** | `guia-conceitos-rag.md` (dados, busca híbrida, rerank, frameworks) |
 | **Ver o roteiro e o estado** | `plano-qualidade-rag.md` (fases A–F, débito, status ✅) |
 | **Mudar o COMPORTAMENTO da LLM** | `../core/specs/*.md` (índice abaixo) |
