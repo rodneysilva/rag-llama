@@ -1,38 +1,56 @@
-/* RagAroy — UI simples (HTMX + Jinja). Um arquivo. Sem framework. */
-:root {
-  --bg: #f6f7f9; --card: #ffffff; --texto: #1a1d21; --suave: #5b6470;
-  --borda: #d9dee4; --acento: #0f62fe; --acento-suave: #e8f0ff;
-  --ok: #0e8345; --erro: #c2410c; --aviso: #b45309; --fundo-codigo: #f0f2f5;
-  --altura-topo: 3.55rem;   /* header do app-shell (padding .65 + conteúdo) */
-}
-/* 🎨 TEMA: o SISTEMA segue prefers-color-scheme; o TOGGLE manual do topo
-   (☀️/🌙) grava data-tema no <html> e VENCE o automático. Os 2 blocos
-   (media + [data-tema]) mantêm as MESMAS variáveis — editar um = editar
-   o outro. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-tema="claro"]) {
+/* RagAroy — UI (HTMX + Jinja). Um arquivo. Sem framework.
+   ═══ ARQUITETURA CSS — ITCSS em cascade layers nativos (@layer), zero
+   build (docs/arquitetura.md §Layout). Ordem das camadas (a PRIMEIRA
+   declarada tem MENOR precedência — a lista abaixo É o contrato):
+     settings   → variáveis de tema/design tokens
+     base       → reset mínimo + elemento puro (html/body/heading)
+     layout     → .app-shell, .modulo-shell, grids estruturais
+   Regras FORA de @layer (componentes/utilitários) vencem as camadas —
+   é o que preserva a cascata histórica do arquivo durante a migração.
+   Tailwind (vendor, carregado APÓS este arquivo) segue como utilitário.
+   ═══ */
+@layer settings, base, layout;
+
+@layer settings {
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --texto: #1a1d21; --suave: #5b6470;
+    --borda: #d9dee4; --acento: #0f62fe; --acento-suave: #e8f0ff;
+    --ok: #0e8345; --erro: #c2410c; --aviso: #b45309; --fundo-codigo: #f0f2f5;
+    --altura-topo: 3.55rem;   /* header do app-shell (padding .65 + conteúdo) */
+  }
+  /* 🎨 TEMA: o SISTEMA segue prefers-color-scheme; o TOGGLE manual do topo
+     (☀️/🌙) grava data-tema no <html> e VENCE o automático. Os 2 blocos
+     (media + [data-tema]) mantêm as MESMAS variáveis — editar um = editar
+     o outro. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-tema="claro"]) {
+      --bg: #101418; --card: #171d24; --texto: #e8eaed; --suave: #9aa4b1;
+      --borda: #2a323c; --acento: #6ea0ff; --acento-suave: #1b2a44;
+      --ok: #34d399; --erro: #f87171; --aviso: #fbbf24; --fundo-codigo: #0d1117;
+    }
+  }
+  :root[data-tema="escuro"] {
     --bg: #101418; --card: #171d24; --texto: #e8eaed; --suave: #9aa4b1;
     --borda: #2a323c; --acento: #6ea0ff; --acento-suave: #1b2a44;
     --ok: #34d399; --erro: #f87171; --aviso: #fbbf24; --fundo-codigo: #0d1117;
   }
 }
-:root[data-tema="escuro"] {
-  --bg: #101418; --card: #171d24; --texto: #e8eaed; --suave: #9aa4b1;
-  --borda: #2a323c; --acento: #6ea0ff; --acento-suave: #1b2a44;
-  --ok: #34d399; --erro: #f87171; --aviso: #fbbf24; --fundo-codigo: #0d1117;
-}
-* { box-sizing: border-box; }
-html {
-  scroll-behavior: smooth;
-  /* ESCALA FLUIDA: ~15px em 1080p (visual atual preservado), 13.5px em
-     celulares, até 18px em 4K — tudo que usa rem cresce junto (inputs,
-     log, tabelas, mensagens). iOS não infla o texto girando a tela. */
-  font-size: clamp(13.5px, calc(12px + 0.16vw), 18px);
-  -webkit-text-size-adjust: 100%;
-}
-body {
-  margin: 0; background: var(--bg); color: var(--texto);
-  font: 1rem/1.55 system-ui, "Segoe UI", Roboto, sans-serif;
+
+@layer base {
+  * { box-sizing: border-box; }
+  html {
+    scroll-behavior: smooth;
+    /* ESCALA FLUIDA: ~15px em 1080p (visual atual preservado), 13.5px em
+       celulares, até 18px em 4K — tudo que usa rem cresce junto (inputs,
+       log, tabelas, mensagens). iOS não infla o texto girando a tela. */
+    font-size: clamp(13.5px, calc(12px + 0.16vw), 18px);
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    margin: 0; background: var(--bg); color: var(--texto);
+    font: 1rem/1.55 system-ui, "Segoe UI", Roboto, sans-serif;
+  }
+  a { color: var(--acento); }
 }
 
 /* ═══ FULLSCREEN: o app ocupa a tela inteira (header fixo + main flex) ═══ */
@@ -81,12 +99,40 @@ header.topo .direita { margin-left: auto; display: flex; gap: .5rem; align-items
    (régua única clamp), centrado. Bordas alinhadas em todas as abas. ═══ */
 main {
   max-width: none; width: 100%; margin: 0;
-  padding: 1rem clamp(1rem, 3vw, 3rem);   /* respiro lateral proporcional */
+  /* PADDING UNICO (modulo-shell): TODOS os modulos respiram igual —
+     chat/multimidia/biblioteca/dashboard/sistema na mesma regua
+     (fim do 1rem+clamp x .55rem/.8rem divergentes medidos) */
+  padding: .6rem .8rem .7rem;
 }
 /* régua do conteúdo interno (cards/tabelas) — proporcional e centrada */
 .pagina-conteudo {
   max-width: none;
   margin: 0 auto;
+}
+
+/* ═══ .modulo-shell — CONTRATO UNICO DE SHELL (2.2 da normalizacao):
+   TODO modulo conversacional usa o MESMO grid (sidebar 13.5rem + 1fr) e
+   a MESMA viewport (100dvh - topo, overflow hidden, scroll interno).
+   .chat-shell e .midia-grid viram ALIASES do contrato — nao existem
+   mais regras separadas para cada um. ═══ */
+@layer layout {
+  body.pagina-chat main, body.pagina-midia main {
+    display: flex; flex-direction: column;
+    height: calc(100dvh - var(--altura-topo, 3.4rem));
+    overflow: hidden; min-height: 0;
+  }
+  .modulo-shell, .chat-shell, .midia-grid {
+    flex: 1; min-height: 0; width: 100%; margin: 0;
+    display: grid; gap: .7rem;
+    grid-template-columns: 13.5rem minmax(0, 1fr);
+    align-items: stretch;
+  }
+  @media (max-width: 55rem) {
+    .modulo-shell, .chat-shell, .midia-grid { grid-template-columns: 1fr; }
+  }
+  body.pagina-chat .chat-shell, body.pagina-midia .midia-grid {
+    /* alias: nada alem do contrato */
+  }
 }
 section.cartao {
   background: var(--card); border: 1px solid var(--borda); border-radius: 12px;
@@ -131,11 +177,19 @@ button.perigo:hover {
   border-color: var(--erro);
 }
 button:disabled { opacity: .5; cursor: default; transform: none; box-shadow: none; }
-.linha { display: flex; gap: .6rem; flex-wrap: wrap; align-items: flex-end; }
+.linha { display: grid; gap: .6rem; align-items: end;
+  /* GRID COERENTE (2.3): fonte/assunto flexionam IGUAIS; máx. fontes e
+     coleção-alvo têm largura FIXA previsível — os 4 campos sempre na
+     mesma régua, sem largura derivada do conteúdo (form da Biblioteca) */
+  grid-template-columns: minmax(9rem, 1fr) minmax(12rem, 2fr) auto min(100%, 15rem); }
+@media (max-width: 55rem) {
+  .linha { grid-template-columns: 1fr 1fr; }
+}
 /* min(100%, Xrem): ocupa Xrem quando cabe; quando o campo não cabe mais,
    assume 100% e QUEBRA PARA A PRÓXIMA LINHA (em vez de espremer no celular) */
-.linha > div { flex: 1; min-width: min(100%, 10rem); }
-.linha > div.estreito { flex: 0 0 auto; min-width: min(100%, 6rem); }
+.linha > div { min-width: 0; }
+.linha > div.estreito { width: auto; }
+.linha input[type=number] { width: 6rem; }
 /* TABELA RESPONSIVA: display:block + overflow-x = a tabela ROLA DENTRO do
    card em telas estreitas (técnica clássica) — a página NUNCA ganha scroll
    horizontal. Cabeçalho nunca quebra em duas linhas; textos longos
@@ -210,8 +264,10 @@ body.pagina-chat #conversa {
 
 /* ═══════════ CHAT-SHELL: drawer conversas | coluna | split docs ═══════════
    Altura NATURAL: as colunas crescem com o conteúdo (a página rola). */
-.chat-shell { display: flex; gap: .7rem; }
+/* (chat-shell/midia-grid agora sao ALIASES do .modulo-shell no @layer
+   layout — regras flex/grid separadas removidas na normalizacao 2.2) */
 .chat-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.midia-coluna { display: flex; flex-direction: column; min-height: 0; flex: 1; }
 /* composer no FLUXO do documento e COLADO NO RODAPÉ (pedido do dono): a
    página rola livre e o campo de pergunta fica SEMPRE visível embaixo —
    sticky bottom com o mesmo fundo da página (não vira "flutuante"). */
@@ -836,18 +892,11 @@ figure.cod code { background: none; padding: 0; border: 0;
 /* --- MULTIM
 
 /* ═══ MULTIMÍDIA (conversa): fullscreen acompanhando o topbar ═══ */
-.midia-grid {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: 13.5rem minmax(0, 1fr);
-  align-items: stretch; }
+/* .midia-grid: alias do .modulo-shell (contrato unico @layer layout) */
 @media (max-width: 55rem) {
   .midia-grid { grid-template-columns: 1fr; }
 }
-.midia-coluna {
-  display: flex; flex-direction: column; min-height: 0;
-  height: calc(100dvh - 10.5rem);   /* topbar + h1 + respiro */
-}
+/* midia-coluna: altura vem do stretch do .modulo-shell */
 .midia-coluna > #m-conversa {
   flex: 1 1 auto; min-height: 0; overflow: auto;
 }
@@ -951,9 +1000,7 @@ dialog.modal-caixa .modal-corpo { overflow-y: auto;
 /* ═══ ALTURA PADRÃO ÚNICA: multimídia segue o MESMO contrato do chat
    (.app-shell main = 100dvh - topo) — fim do chute "10.5rem" que
    desalinhava o painel com o topo. ═══ */
-body.pagina-midia .midia-grid { grid-template-rows: minmax(0, 1fr); }
-body.pagina-midia .midia-grid > * { margin-bottom: 0; }
-body.pagina-midia .midia-coluna { height: auto; align-self: stretch; }
+/* (regras de shell do midia removidas — contrato unico @layer layout) */
 
 /* ═══ ESTADO VAZIO do chat (revisão glm-4.6v): centro do palco, exemplos
    clicáveis — sem linha solta desalinhada no topo. ═══ */
@@ -1020,3 +1067,10 @@ body.pagina-chat #composer, body.pagina-midia #m-composer {
   position: sticky; bottom: 0; z-index: 20;
   background: var(--card);
 }
+/* MESMA ANCORA (2.4): o composer do midia vive num .cartao com padding
+   interno — o offset media 18px a mais que o chat. A coluna central do
+   midia perde o padding lateral (o composer e as bolhas assentam na
+   MESMA regua do chat). */
+body.pagina-midia .midia-coluna { padding: 0; border: none; background: transparent; }
+body.pagina-midia .midia-coluna > #m-conversa { padding: 0 .9rem; }
+body.pagina-midia #m-composer { margin: 0 .9rem; }
