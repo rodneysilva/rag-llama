@@ -38,6 +38,7 @@
     <div class="resposta">{{ _md_basico(r.texto or '') | safe }}</div>
     <div class="acoes-msg" style="margin-top:.4rem;">
       <button type="button" class="acao" onclick="navigator.clipboard.writeText(this.closest('.msg').querySelector('.resposta').innerText); window.toast && window.toast('análise copiada')">📋 copiar</button>
+      <button type="button" class="acao" onclick="abrirLeituraModal(this.closest('.msg').querySelector('.resposta'))" title="abre o texto inteiro num popup de leitura (ESC fecha)">⤢ ler grande</button>
     </div>
   </div>
   {% else %}

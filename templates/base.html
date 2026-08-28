@@ -222,5 +222,25 @@
     setTimeout(() => (_netTravado = false), 12000);
   });
 </script>
+<script>
+/* ⤢ LER GRANDE (padrão do dono): abre o conteúdo da resposta no MODAL
+   centrado — popup no meio da tela, ESC fecha (handler global). */
+function abrirLeituraModal(origem) {
+  let m = document.getElementById("leitura-modal");
+  if (!m) {
+    m = document.createElement("div");
+    m.id = "leitura-modal"; m.className = "modal-fundo"; m.hidden = true;
+    m.innerHTML = '<div class="modal-caixa larga"><div class="modal-cab">'
+      + '<b>leitura</b><button type="button" class="mini-btn" data-fechar>'
+      + '✕ fechar</button></div><div class="modal-corpo leitura-corpo"></div></div>';
+    m.addEventListener("click", (e) => {
+      if (e.target === m || e.target.closest("[data-fechar]")) m.hidden = true;
+    });
+    document.body.appendChild(m);
+  }
+  m.querySelector(".leitura-corpo").innerHTML = origem.innerHTML;
+  m.hidden = false;
+}
+</script>
 </body>
 </html>

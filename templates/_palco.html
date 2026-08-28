@@ -40,6 +40,7 @@
               {% if m.content %}
               <div class="rodape tts-link" data-texto="{{ m.content[:1200] | e }}">
                 <a href="#" onclick="falarTexto(this.closest('.tts-link').dataset.texto); return false;">▶ ouvir</a>
+                · <a href="#" onclick="abrirLeituraModal(this.closest('.msg').querySelector('.resposta')); return false;" title="abre a resposta inteira num popup de leitura (ESC fecha)">⤢ ler grande</a>
               </div>
               {% endif %}
             </div>

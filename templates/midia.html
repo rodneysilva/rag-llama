@@ -35,7 +35,16 @@
   <section class="cartao midia-coluna">
     <div id="m-conversa" style="display:flex; flex-direction:column; gap:.9rem;">
       {% if not m_sessao.itens %}
-      <p class="mini" style="opacity:.7;">comece anexando uma imagem e perguntando, ou escolha um gerador e descreva a cena…</p>
+      <div class="chat-vazio">
+        <p class="chat-vazio-titulo">conversa de mídia — cada envio escolhe o modelo</p>
+        <p class="mini" style="opacity:.75;">anexe uma imagem para 👁 analisar, ou escolha um gerador 🎨🖼🎬 e descreva a cena</p>
+        <div class="chat-vazio-exemplos">
+          <button type="button" onclick="mExemplo(this)">descreva o que há de errado nesta imagem</button>
+          <button type="button" onclick="mExemplo(this)">gato samurai em Kyoto ao entardecer, realismo cinematográfico</button>
+          <button type="button" onclick="mExemplo(this)">gif curto de um foguete decolando em loop perfeito</button>
+          <button type="button" onclick="mExemplo(this)">melhore esta foto mantendo a composição (i2i)</button>
+        </div>
+      </div>
       {% endif %}
       {% for it in m_sessao.itens %}
       {% include "_midia_item.html" %}
@@ -154,6 +163,13 @@
     }
   }
   selM.addEventListener("change", mInfo); mInfo();
+
+  /* dica do estado vazio → composer (padrão do chat) */
+  function mExemplo(btn) {
+    const ta = document.getElementById("m-prompt");
+    ta.value = btn.textContent.trim();
+    ta.focus();
+  }
 
   function mChip(b) {
     const ta = document.getElementById("m-prompt");
