@@ -178,7 +178,9 @@ body.pagina-chat .chat-shell, body.pagina-midia .midia-grid {
 .chat-shell { align-items: stretch; }
 /* sidebar de sessões: full-height, scroll só na lista */
 body.pagina-chat .drawer-conversas {
-  position: static; max-height: none; height: 100%;
+  position: static; max-height: none;
+  /* SEM height: filho de flex-item esticado com % vira auto no Chrome —
+     o align-items:stretch da .chat-shell dá a altura */
 }
 body.pagina-chat .drawer-corpo { flex: 1; overflow-y: auto; min-height: 0; }
 /* coluna do chat: conversa rola, composer fixo no fim */
