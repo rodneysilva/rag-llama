@@ -107,7 +107,7 @@
       </div>
       <textarea id="m-prompt" rows="2" placeholder="pergunta sobre a imagem anexada, ou prompt da cena a gerar…"></textarea>
       <div style="display:flex; gap:.5rem; flex-wrap:wrap; align-items:center;">
-        <select id="m-modelo" title="o modelo decide o que acontece com este envio">
+        <select id="m-modelo" title="o modelo decide o que acontece com este envio" style="flex:0 0 auto;">
           {% for g in m_grupos %}
           <optgroup label="{{ g.rotulo }}">
             {% for mm in g.modelos %}
@@ -117,14 +117,15 @@
           {% endfor %}
         </select>
         <span class="mini" id="m-modelo-info" style="opacity:.7; flex:1; min-width:8rem;"></span>
-        <select id="m-dur" title="duração do vídeo (16 fps)">
+        <select id="m-dur" title="duração do vídeo (16 fps)" style="flex:0 0 auto;">
           <option value="2">⏱ 2s</option><option value="3" selected>⏱ 3s</option>
           <option value="5">⏱ 5s</option><option value="8">⏱ 8s</option>
         </select>
-        <label class="mini" title="loop de 17 frames a 12 fps"><input type="checkbox" id="m-gif"> 🎞 gif</label>
-        <button type="button" id="btn-mprompt" title="a LLM transforma o rascunho em storytelling denso de cinema (preserva o que você escreveu)"
+        <label class="mini" title="loop de 17 frames a 12 fps" style="flex:0 0 auto;"><input type="checkbox" id="m-gif"> 🎞 gif</label>
+        <button type="button" id="btn-mprompt" style="flex:0 0 auto; min-width:8.6rem;"
+                title="a LLM transforma o rascunho em storytelling denso de cinema (preserva o que você escreveu)"
                 onclick="mMelhorarPrompt(this)">✨ gerar prompt</button>
-        <button class="primario" type="submit" id="m-btn">➤ enviar</button>
+        <button class="primario" type="submit" id="m-btn" style="flex:0 0 auto; min-width:6.2rem;">➤ enviar</button>
       </div>
     </form>
   </section>
@@ -182,6 +183,24 @@
     ta.focus();
   }
 
+  /* ⏱ SINCRONIZA a duração com o que o PROMPT PEDE (bug do dono 29/08: o
+     texto dizia "cena de 5 segundos" e o seletor seguia no 3 — o vídeo
+     saía curto). O texto do usuário/✨ manda; o seletor apenas reflete. */
+  function mSincronizarDuracao(texto) {
+    const sel = document.getElementById("m-dur");
+    if (!sel || sel.style.display === "none") return;
+    const m = String(texto || "").match(/(\d{1,2})\s*(?:segundos|segundo|seconds|s\b)/i);
+    if (!m) return;
+    const n = parseInt(m[1], 10);
+    if ([2, 3, 5, 8].includes(n)) {
+      if (parseInt(sel.value, 10) !== n) {
+        sel.value = String(n);
+        sel.animate([{ transform: "scale(1)" }, { transform: "scale(1.12)" },
+                     { transform: "scale(1)" }], { duration: 350 });
+      }
+    }
+  }
+
   /* ✨ GERAR PROMPT: a LLM transforma o rascunho em storytelling denso —
      reusa o /hx/prompt-melhorar do chat (spec prompt_melhoria.md; o tipo
      do modelo vai como dica) e substitui o campo */
@@ -193,18 +212,21 @@
     const tipo = document.getElementById("m-gif").checked ? "gif"
       : g.includes("vídeo") ? "video"
       : g.includes("gerar imagem") ? (_ref ? "i2v" : "imagem") : "";
-    const rot = btn.textContent; btn.textContent = "…"; btn.disabled = true;
+    const rot = btn.textContent; btn.textContent = "✨ gerando…"; btn.disabled = true;
     try {
       const corpo = new URLSearchParams({ideia, tipo,
         referencia: _ref ? _ref.split(/[\\\/]/).pop() : ""});
       const r = await fetch("/hx/prompt-melhorar", {
         method: "POST",
-        headers: {"Content-Type": "application/x-www-form-urlencoded"},
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: corpo.toString()});
       if (!r.ok) throw new Error("HTTP " + r.status);
       const txt = (await r.text()).trim();
-      if (txt) { ta.value = txt; ta.focus(); }
-      btn.textContent = "✓";
+      if (txt) {
+        ta.value = txt; ta.focus();
+        mSincronizarDuracao(txt);   // texto diz 5s → seletor acompanha
+      }
+      btn.textContent = "✓ pronto";
     } catch (e) {
       alert("não consegui melhorar o prompt: " + e.message);
       btn.textContent = rot; btn.disabled = false; return;
@@ -275,6 +297,7 @@
     ev.preventDefault();
     const prompt = document.getElementById("m-prompt").value.trim();
     if (!prompt) return false;
+    mSincronizarDuracao(prompt);   // texto pede 5s? o seletor acompanha AGORA
     mCancelarAnterior();
     const card = mBolhaUsuario(prompt);
     document.getElementById("m-prompt").value = "";   // limpa NO ATO
