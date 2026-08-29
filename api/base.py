@@ -1831,10 +1831,26 @@ def _midia_local_agente(payload: dict, jid: str, mod: str,
                         headers=_agente_headers(), timeout=30).json()
         except Exception as e:
             falhas += 1
-            if falhas > 15:
+            # TOLERÂNCIA REAL (bug do dono 29/08): durante o decode do VAE
+            # o sd-cli satura a estação e o túnel devolve corpo vazio/502
+            # por MINUTOS — a geração SEGUE na GPU. Desistir em 30 s matava
+            # o job com o vídeo a caminho (terminou 19 min depois lá).
+            if falhas in (5, 30, 90):
+                _midia.log(jid, f"⚠️ contato instável com a estação "
+                                f"({falhas} tentativa(s)) — a geração SEGUE "
+                                f"na GPU; reconectando…", etapa="agente")
+            if falhas > 150:  # ~5 min de silêncio CONTÍNUO: desiste de VER
                 raise RuntimeError(f"perdi contato com o agente: {str(e)[:120]}")
             continue
         falhas = 0
+        if "running" not in s:
+            # agente respondeu, mas não é status de tarefa (ex.: 404 pós-
+            # restart do agente) — erro claro em vez de resultado vazio
+            raise RuntimeError(str(s.get("detail") or s)[:200])
+        # progresso/ETA da tarefa na estação → registry do job (a barra
+        # vive no card da multimídia)
+        if s.get("progresso") is not None or s.get("etapa"):
+            _midia.progresso(jid, s.get("progresso"), s.get("etapa"))
         for l in (s.get("lines") or []):
             _midia.log(jid, str(l.get("msg") or l),
                        etapa=(l.get("etapa") or "gerar"))

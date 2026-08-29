@@ -339,8 +339,20 @@
         const linhas = (j.lines || []).map(l =>
           "<div><span class='hora'>" + (l.ts || "") + "</span>" +
           String(l.msg || "").replace(/</g,"&lt;") + "</div>").join("");
+        // 📊 BARRA DE PROGRESSO (pedido do dono 29/08): fração + etapa +
+        // ETA vêm do motor (barras do sd-cli) via agente/registry
+        const pct = Math.round((j.progresso || 0) * 100);
+        const eta = j.eta_s ? " · ~" + (j.eta_s > 90 ? Math.round(j.eta_s / 60) + " min" : j.eta_s + "s") : "";
+        const etapa = j.etapa_atual ? " · " + j.etapa_atual : "";
+        const barra = (j.progresso != null)
+          ? "<div style='display:flex; align-items:center; gap:.5rem; margin:.15rem 0 .35rem;'>"
+            + "<div class='pbar'>"
+            + "<i style='width:" + pct + "%;'></i></div>"
+            + "<span class='mini' style='white-space:nowrap;'>" + pct + "%" + etapa + eta + "</span></div>"
+          : "";
         alvo.innerHTML =
           "<div class='pensando-cab'><span class='ponto'></span> processando (" + (tipo || "mídia") + ")…</div>"
+          + barra
           + "<details class='raciocinio-vivo'><summary>raciocínio · "
           + (j.lines || []).length + " linha(s) — clique para abrir</summary>"
           + "<div class='log'>" + linhas + "</div></details>";

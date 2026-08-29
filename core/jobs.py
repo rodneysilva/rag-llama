@@ -41,7 +41,12 @@ def _novo_job(dic: dict, lock: threading.Lock, job: str) -> None:
     with lock:
         _podar_concluidos(dic)
         dic[job] = {"lines": [], "running": True, "result": None,
-                    "error": None, "picked": False}
+                    "error": None, "picked": False,
+                    # progresso de GERAÇÃO (motor parseia as barras do
+                    # sd-cli): fração 0..1, etapa e ETA — o card da
+                    # multimídia renderiza a barra (pedido do dono 29/08)
+                    "t0": time.time(), "progresso": None,
+                    "eta_s": None, "etapa_atual": None}
 
 
 TODOS_JOBS: list = []  # alimenta _jobs_ativos e o ⏹ Parar tudo (1 lista só)
@@ -118,6 +123,29 @@ class JobRegistry:
         except Exception:
             pass  # disco cheio/permissão: o log ao vivo segue valendo
 
+    def progresso(self, jid: str, fracao: float | None,
+                  etapa: str | None = None) -> None:
+        """Fração de GERAÇÃO (0..1) + etapa — ETA derivado do decorrido.
+
+        Mesma heurística do core.tarefas (média por fração consumida);
+        monótono (nunca regride) para a barra não pular para trás."""
+        with self.lock:
+            j = self.jobs.get(jid)
+            if not j or not j.get("running"):
+                return
+            try:
+                fr = max(0.0, min(1.0, float(fracao)))
+            except (TypeError, ValueError):
+                fr = None
+            if fr is not None:
+                j["progresso"] = max(j.get("progresso") or 0.0, fr)
+                decorrido = time.time() - j.get("t0", time.time())
+                if j["progresso"] > 0.05:
+                    total_est = decorrido / j["progresso"]
+                    j["eta_s"] = max(0, round(total_est - decorrido))
+            if etapa:
+                j["etapa_atual"] = etapa
+
     def concluir(self, jid: str, result=None, error=None) -> None:
         """Fecha o job (running=False) gravando result e/ou error. Job
         CANCELADO pelo usuário: o resultado tardio é DESCARTADO (o cancelou
@@ -172,6 +200,9 @@ class JobRegistry:
             return {"running": j["running"], "total": len(j["lines"]),
                     "lines": j["lines"][cursor:], "result": j["result"],
                     "error": j["error"],
-                    "parcial": j.get("parcial") or ""}
+                    "parcial": j.get("parcial") or "",
+                    "progresso": j.get("progresso"),
+                    "eta_s": j.get("eta_s"),
+                    "etapa_atual": j.get("etapa_atual")}
 
 
