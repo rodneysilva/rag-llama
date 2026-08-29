@@ -6,6 +6,8 @@ DICA extra) geração de mídia — e propõe a forma melhor de escrever.
 Comportamento na spec `prompt_melhoria.md` (regra de ouro: nada hardcoded).
 Uma ÚNICA chamada à LLM de conversa; usado pelo botão ✨ do composer.
 """
+import re
+
 from . import rag
 from .specs import spec
 
@@ -21,6 +23,14 @@ def melhorar(ideia: str, tipo: str = "", contexto: str = "") -> str:
     if not ideia:
         return ""
     tipo = (tipo or "").strip().lower()
+    # ⏱ REPLANTE da dica pela duração ESCRITA no rascunho (o texto manda —
+    # mesmo ciclo do seletor no composer): "cena de 5 segundos" com dica
+    # "video 3s" escalava a ação ERRADA; a spec escala a estrutura do
+    # storytelling pela duração da DICA.
+    if tipo.startswith("video") and not tipo.endswith("s"):
+        m = re.search(r"(\d{1,2})\s*(?:segundos|segundo|seconds|s\b)", ideia.lower())
+        if m and m.group(1) in ("2", "3", "5", "8"):
+            tipo = f"video {m.group(1)}s"
     pergunta = f"RASCUNHO DO USUÁRIO:\n{ideia}"
     if tipo:
         pergunta = f"DICA DE TIPO (selecionada no composer): {tipo}\n{pergunta}"

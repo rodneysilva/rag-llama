@@ -209,8 +209,9 @@
     const ideia = ta.value.trim();
     if (!ideia) { alert("escreva a ideia da cena primeiro — a ✨ a transforma em prompt de cinema"); return; }
     const g = mGrupo();
+    const durSel = document.getElementById("m-dur");
     const tipo = document.getElementById("m-gif").checked ? "gif"
-      : g.includes("vídeo") ? "video"
+      : g.includes("vídeo") ? ("video " + (durSel.value || "3") + "s")
       : g.includes("gerar imagem") ? (_ref ? "i2v" : "imagem") : "";
     const rot = btn.textContent; btn.textContent = "✨ gerando…"; btn.disabled = true;
     try {

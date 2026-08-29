@@ -458,6 +458,11 @@ def gerar_video(prompt: str, imagem_inicial: str | None = None, frames: int = 33
                            "(tests_manual/baixar_multimodal.py)")
     eh_21 = "2.1" in difusor.stem.lower() or "2_1" in difusor.stem.lower()
     cfg = "5.0" if eh_21 else "6.0"
+    # ⚡ STEPS por modelo (pedido do dono 29/08: "não achei o vídeo de boa
+    # qualidade" — análise visual apontou granulado/baixa definição): o
+    # default do sd-cli (20) deixa o latente sub-refinado. 2.2-5B pede mais
+    # passos; 2.1-1.3B converge antes (passos a mais = tempo à toa).
+    steps = 24 if eh_21 else 30
     seed = seed if seed is not None else random.randint(0, 2**31 - 1)
     SAIDAS["video"].mkdir(parents=True, exist_ok=True)
     bruto = SAIDAS["video"] / f"{'i2v' if imagem_inicial else 't2v'}_{seed}_{int(time.time())}.webm"
@@ -481,7 +486,7 @@ def gerar_video(prompt: str, imagem_inicial: str | None = None, frames: int = 33
 
     t0 = time.time()
     log(f"🎬 {difusor.stem} · {largura}x{altura} · {frames} frames · "
-        f"{'i2v' if imagem_inicial else 't2v'} · seed {seed}", "gerar")
+        f"{steps} passos · {'i2v' if imagem_inicial else 't2v'} · seed {seed}", "gerar")
     if negativo:
         log(f"🚫 negative prompt do pedido: {negativo[:120]}", "gerar")
     cmd = [motor.sd_cli(), "-M", "vid_gen",
@@ -491,6 +496,7 @@ def gerar_video(prompt: str, imagem_inicial: str | None = None, frames: int = 33
            "-W", str(largura), "-H", str(altura),
            "--diffusion-fa", "--offload-to-cpu",
            "--video-frames", str(frames), "--flow-shift", "3.0",
+           "--steps", str(steps),
            "--vae-tiling", "--vae-tile-size", "16x16", "--temporal-tiling",
            # VAE 3D do Wan pede ~20 GB sem tiling (RTX 8 GB): tile pequeno +
            # corte temporal cabem no ~6 GB livres com o embed residente
