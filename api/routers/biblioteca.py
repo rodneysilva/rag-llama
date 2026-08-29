@@ -236,7 +236,8 @@ def hx_colecao_doc(nome: str, request: Request, chave: str):
         client = QdrantClient(url=config.QDRANT_URL, timeout=10,
                               check_compatibility=False)
         from qdrant_client.models import FieldCondition, Filter, MatchValue
-        for campo in ("arquivo", "source"):
+        # AMBOS os formatos de payload: plano (migrado) e aninhado (langchain)
+        for campo in ("arquivo", "metadata.arquivo", "source", "metadata.source"):
             filtro = Filter(must=[FieldCondition(
                 key=campo, match=MatchValue(value=chave))])
             pts, _ = client.scroll(collection_name=nome, limit=6,
