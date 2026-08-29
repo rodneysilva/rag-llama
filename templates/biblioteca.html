@@ -241,23 +241,18 @@
       }
       btn.textContent = "✓ instalado";
       carregarMcpsBiblio();
-    // DELEGATE: abrir/editar documento por data-attrs (fim das aspas
-    // quebradas em onclick — "Unexpected end of input" ao abrir o modal)
-    document.addEventListener("click", (ev) => {
-      const linha = ev.target.closest(".doc-linha[data-chave]");
-      if (linha) {
-        abrirDocModal(linha.dataset.colecao, linha.dataset.chave);
-        return;
-      }
-      const salvar = ev.target.closest("#doc-editar-salvar[data-chave]");
-      if (salvar) {
-        salvarDocEdicao(salvar.dataset.colecao, salvar.dataset.chave);
-      }
-    });
     } catch (e) { alert("falha: " + e.message); }
     btn.disabled = false; setTimeout(() => (btn.textContent = "instalar"), 1500);
   }
   carregarMcpsBiblio();
+  // DELEGATE global: abrir/editar documento por data-attrs (fim das
+  // aspas quebradas em onclick — "Unexpected end of input" no modal)
+  document.addEventListener("click", (ev) => {
+    const linha = ev.target.closest(".doc-linha[data-chave]");
+    if (linha) { abrirDocModal(linha.dataset.colecao, linha.dataset.chave); return; }
+    const salvar = ev.target.closest("#doc-editar-salvar[data-chave]");
+    if (salvar) { salvarDocEdicao(salvar.dataset.colecao, salvar.dataset.chave); }
+  });
 </script>
 
 <div id="executando">
