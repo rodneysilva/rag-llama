@@ -267,10 +267,11 @@ def hx_colecao_doc(nome: str, request: Request, chave: str):
             break
     if _campo is None:
         _campo = "arquivo"
-    todos = list(_scroll_todos(
+    # _scroll_todos devolve LOTES (gerador) — achata para pontos
+    todos = [p for lote in _scroll_todos(
         client, nome, limite=4000,
         filtro=Filter(must=[FieldCondition(
-            key=_campo, match=MatchValue(value=chave))])))
+            key=_campo, match=MatchValue(value=chave))])) for p in lote]
     todos.sort(key=lambda p: _md_ponto(p).get("i", 0))
     md0 = _md0
     titulo = str(md0.get("titulo") or chave.replace("\\", "/")
