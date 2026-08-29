@@ -305,10 +305,10 @@ def hx_colecao_editar(nome: str, request: Request,
     try:
         client = QdrantClient(url=config.QDRANT_URL, timeout=30,
                               check_compatibility=False)
-        # acha o campo real (arquivo | source) usado pela coleção
+        # acha o campo real nos DOIS formatos (plano e metadata.* aninhado)
         filtro = None
         total = 0
-        for campo in ("arquivo", "source"):
+        for campo in ("arquivo", "metadata.arquivo", "source", "metadata.source"):
             filtro = Filter(must=[FieldCondition(
                 key=campo, match=MatchValue(value=chave))])
             total = client.count(nome, exact=True,
