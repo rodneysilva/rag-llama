@@ -1,10 +1,15 @@
 """Rotas de status das famílias de job — extraídas de api/app.py (split Fase 1).
 _rota_status registra no router local (antes registrava no app; mesmo efeito).
+
+Fase 2: o registry levanta JobNaoEncontrado (domínio) — a conversão em
+HTTP 404 vive AQUI, na borda da API (o core não conhece FastAPI).
 """
 from api.base import *  # noqa: F401,F403 — contrato do split
 from api.routers.sistema import status  # noqa: F401 — chamada cross-router (era namespace global do monólito)
 
 from fastapi import APIRouter
+
+from core.jobs import JobNaoEncontrado
 
 router = APIRouter()
 
@@ -12,7 +17,10 @@ def _rota_status(caminho: str, reg: "JobRegistry", msg404: str) -> None:
     """Registra a rota GET de status de uma família — o corpo era idêntico
     palavra por palavra em 8 lugares."""
     def status(job: str, cursor: int = 0):
-        return reg.status(job, cursor, msg404)
+        try:
+            return reg.status(job, cursor, msg404)
+        except JobNaoEncontrado as e:
+            raise HTTPException(status_code=404, detail=str(e))
     router.get(caminho)(status)
 
 

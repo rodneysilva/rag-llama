@@ -11,12 +11,16 @@ import time
 from itertools import count
 from pathlib import Path
 
-# Débito Fase 1: status() levantava HTTPException no monólito. Paridade
-# exige mantê-la aqui; Fase 2 do split troca por exceção de DOMÍNIO
-# (ex.: JobNaoEncontrado) convertida em 404 na borda da API.
-from fastapi import HTTPException
-
 PASTA_LOGS_JOBS = Path("logs/jobs")
+
+
+class JobNaoEncontrado(Exception):
+    """Job ausente do registro — exceção de DOMÍNIO (Fase 2 do split).
+
+    Nasceu na Fase 1 como HTTPException (paridade com o monólito); a borda
+    da API (`api/routers/jobs.py`) converte em HTTP 404 — o core segue sem
+    depender de FastAPI, como manda o contrato de camadas.
+    """
 
 
 def _podar_concluidos(dic: dict, manter: int = 10) -> None:
@@ -157,11 +161,14 @@ class JobRegistry:
             return cancelados
 
     def status(self, jid: str, cursor: int, msg404: str) -> dict:
-        """Snapshot do job a partir do `cursor` (polling da webui)."""
+        """Snapshot do job a partir do `cursor` (polling da webui).
+
+        Levanta JobNaoEncontrado (domínio) se o job não está no registro —
+        a borda da API converte em HTTP 404 com a mensagem da família."""
         with self.lock:
             j = self.jobs.get(jid)
             if not j:
-                raise HTTPException(status_code=404, detail=msg404)
+                raise JobNaoEncontrado(msg404)
             return {"running": j["running"], "total": len(j["lines"]),
                     "lines": j["lines"][cursor:], "result": j["result"],
                     "error": j["error"],

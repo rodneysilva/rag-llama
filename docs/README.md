@@ -45,7 +45,6 @@ prompt no código). Exige restart da API (lru_cache) ou `POST /api/specs/reload`
 | `midia_prompt.md` / `midia_critica.md` | pipeline de prompts do estúdio |
 | `destrinchar.md` / `analise_colecoes.md` / `agrupamento.md` | manutenção de coleções |
 | `modelo_dados.md` | schema dos payloads no Qdrant |
-| `varredura.md` | julgamento LLM de lixo (conservadora) |
 | `pesquisa_planner.md` / `evidencia.md` / `sintese.md` | pesquisa profunda F4: plano, claims, síntese citada |
 | `rotulo_cluster.md` | rótulo de grupos no modo Revisão |
 | `pesquisa_web.md` | busca web do modo Auto |

@@ -43,7 +43,7 @@ recusa honesta), `livre` e `auto` (roteador decide entre base e web).
 **🧹 Base limpa por construção** — Cada chunk recebe um score de
 qualidade 0–1 na ingestão (densidade de links, repetição, JSON cru,
 tabelas sem prosa); abaixo de `SCORE_CHUNK_MIN` (.env) é rejeitado com
-motivo no relatório. Coleções existentes têm higienização e varredura
+motivo no relatório. Coleções existentes têm higienização determinística
 com backup reversível.
 
 **🔌 Provedores externos** — Qualquer endpoint OpenAI-compatible entra

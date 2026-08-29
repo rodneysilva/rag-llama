@@ -1,12 +1,18 @@
 """
-Varredura LLM de coleções: o modelo de conversa configurado (:8090) julga
-CADA chunk contra a definição da coleção (catálogo) e apaga o que é lixo
-claro — navegação, boilerplate, fragmento sem informação. Conservadora: na
-dúvida, mantém (spec varredura.md).
+Varredura LLM de coleções — APOSENTADA (29/08, decisão do dono).
 
-Toda exclusão é ANTES copiada para logs/varredura_backup/<colecao>_<ts>.jsonl
-(payload COMPLETO do ponto) — "apagar" deixa de ser irreversível: o arquivo
-pode reingestar os pontos tal como estavam.
+Prova definitiva de 28/08: o modelo de 7B local não executa o julgamento
+estruturado (N trechos → JSON seletivo) de forma confiável — 77% de
+falso-positivo com motivos AUTO-CONTRADITÓRIOS ("Conteúdo específico
+sobre X, não é lixo" marcando como lixo), mesmo com spec corrigida E
+strip do cabeçalho contextual. Instrução negativa e strip não resolvem.
+
+A limpeza vive nas camadas DETERMINÍSTICAS: gate `score_chunk` na
+ingestão, higienização (core/higieniza) e cura por score na Revisão.
+
+O módulo segue importável APENAS para restauro pontual de pontos
+apagados (logs/varredura_backup) por operador experiente — rota
+POST /api/varredura responde 410 Gone, CLI recusa com orientação.
 """
 import json
 import sys
@@ -136,14 +142,19 @@ def varredura_colecao(colecao: str, log=None) -> dict:
 
 
 def main():
-    """Entrada do CLI: uma ou várias coleções."""
-    if len(sys.argv) < 2:
-        sys.exit("Uso: python -X utf8 -m core.varredura <colecao> [outra...]")
-    for nome in sys.argv[1:]:
-        try:
-            print(varredura_colecao(nome))
-        except Exception as e:
-            print(f"❌ {nome}: {e}")
+    """Entrada do CLI: APOSENTADA (29/08, decisão do dono).
+
+    O 7B local não executa o julgamento estruturado de forma confiável
+    (77% falso-positivo com motivos auto-contraditórios — ver
+    /api/varredura 410). A limpeza vive nas camadas determinísticas:
+    higienização (`python -X utf8 -m core.higieniza <colecao>`) e o gate
+    score_chunk da ingestão. O módulo segue importável para restauros
+    pontuais (logs/varredura_backup) por operador experiente."""
+    sys.exit(
+        "Varredura LLM APOSENTADA (29/08): o modelo local de 7B julga mal e\n"
+        "apagava conteúdo valioso. Use a higienização determinística:\n"
+        "  python -X utf8 -m core.higieniza <colecao>\n"
+        "Restaurar pontos apagados: logs/varredura_backup/<colecao>_<ts>.jsonl")
 
 
 if __name__ == "__main__":

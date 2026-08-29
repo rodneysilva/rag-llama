@@ -52,7 +52,7 @@ async def hx_aquisicao(request: Request, fonte: str = Form("pesquisa"),
                                           {"request": request, "kind": kind,
                                            "job": job, "rotulo": rotulo,
                                            "linhas": s["lines"], "running": True})
-    except (ValueError, HTTPException) as e:
+    except (ValueError, HTTPException, JobNaoEncontrado) as e:
         detalhe = e.detail if isinstance(e, HTTPException) and isinstance(e.detail, str) else str(e)
         return TEMPLATES.TemplateResponse(request, "_job.html",
                                           {"request": request, "kind": "erro",
@@ -108,7 +108,7 @@ def hx_job(kind: str, job: str, request: Request, r: int = 0):
             if reg is None:
                 raise HTTPException(status_code=404, detail="tipo de job desconhecido")
             s = reg.status(job, 0, "")
-    except HTTPException:
+    except (HTTPException, JobNaoEncontrado):
         s = {"running": False, "lines": [], "result": None,
              "error": "job não encontrado"}
     # JOB AUSENTE no registro (qualquer kind): API reiniciou (deploy) e o
@@ -958,13 +958,13 @@ def higienizar(body: HigienizarIn):
 
 @router.post("/api/limpeza")
 def rota_limpeza(body: HigienizarIn):
-    """LIMPEZA COMPLETA da coleção em 2º plano — as duas etapas que antes
-    eram botões separados, agora numa sequência só:
-    1) higienização: texto normalizado (frases reconstituídas, ruído de
-       página fora), duplicados exatos removidos, o que mudou é re-embedado;
-    2) varredura LLM: cada chunk julgado contra o assunto da coleção —
-       só lixo claro sai (na dúvida, mantém).
-    Acompanhe em /api/limpeza/status/{job}?cursor=N."""
+    """LIMPEZA (higienização) da coleção em 2º plano — DETERMINÍSTICA:
+    texto normalizado (frases reconstituídas, ruído de página fora),
+    duplicados exatos removidos, o que mudou é re-embedado no mesmo id.
+
+    A etapa 2 (varredura LLM) foi APOSENTADA em 29/08 por decisão do dono:
+    o 7B local julga mal (77% falso-positivo) e apagava conteúdo valioso
+    — ver /api/varredura (410). Acompanhe em /api/limpeza/status/{job}."""
     job = _limpeza.novo_id()
     colecao = body.collection
 
@@ -976,17 +976,13 @@ def rota_limpeza(body: HigienizarIn):
             resultado = {}
             _limpeza.iniciar(jid)
             try:
-                _limpeza.log(jid, "🧹 ETAPA 1/2 — higienização de texto (reconstrução de frases, "
+                _limpeza.log(jid, "🧹 higienização de texto (reconstrução de frases, "
                                   "remoção de ruído e duplicados, re-embedding):")
                 resultado["higienizacao"] = higienizar_colecao(
                     colecao, log=lambda m: _limpeza.log(jid, "   " + m))
-                _limpeza.log(jid, "🔎 ETAPA 2/2 — varredura LLM (julgamento de cada chunk "
-                                  "contra o assunto da coleção):")
-                resultado["varredura"] = varredura_colecao(
-                    colecao, log=lambda m: _limpeza.log(jid, "   " + m))
                 _limpeza.concluir(jid, result=resultado)
             except Exception as e:
-                print(f"❌ Erro na limpeza completa: {e}")
+                print(f"❌ Erro na limpeza: {e}")
                 _limpeza.concluir(jid, error=str(e))
         return rodar
 
@@ -1022,27 +1018,19 @@ def seed(body: SeedIn):
 
 @router.post("/api/varredura")
 def varredura(body: VarreduraIn):
-    """Varredura LLM em SEGUNDO PLANO: julga cada chunk contra a definição da
-    coleção e apaga o lixo claro; acompanhe em /api/varredura/status/{job}."""
-    job = _varredura.novo_id()
-    colecao = body.collection
+    """APOSENTADA (29/08, decisão do dono) — responde 410 Gone.
 
-    def fabricar(p: dict):
-        jid = p["job"]
-
-        def rodar():
-            contadores.set_servico("limpeza")
-            _varredura.iniciar(jid)
-            try:
-                _varredura.concluir(jid, result=varredura_colecao(
-                    colecao, log=lambda m, g='': _varredura.log(jid, m, grupo=g or 'geral')))
-            except Exception as e:
-                print(f"❌ Erro na varredura: {e}")
-                _varredura.concluir(jid, error=str(e))
-        return rodar
-
-    _despachar(fabricar, "varredura", {"job": job}, _varredura)
-    return {"job": job, "status": f"/api/varredura/status/{job}"}
+    Prova definitiva de 28/08: o 7B local não executa o julgamento
+    estruturado (N trechos → JSON seletivo) de forma confiável — 77% de
+    falso-positivo com motivos auto-contraditórios, mesmo com spec
+    corrigida E strip do cabeçalho contextual. A limpeza vive nas camadas
+    DETERMINÍSTICAS: gate `score_chunk` na ingestão, higienização
+    (POST /api/limpeza) e cura por score na Revisão. A rota segue
+    registrada (remoção quebraria a prova de paridade do split)."""
+    raise HTTPException(status_code=410, detail=(
+        "varredura LLM aposentada (29/08): o modelo local de 7B julga mal "
+        "e apagava conteúdo valioso — use POST /api/limpeza (higienização "
+        "determinística) ou a cura por score na Revisão de ingestão"))
 
 
 @router.get("/api/docs")

@@ -27,9 +27,11 @@ grep -rn "from api\|import api" core/ --include="*.py"   # deve devolver vazio
 wc -l api/app.py                                         # deve permanecer < 150
 ```
 
-*Exceção documentada (dívida da Fase 1): `core/jobs.py` importa
-`HTTPException` por exigência de paridade comportamental; a Fase 2 a
-substitui por exceção de domínio convertida em HTTP 404 na borda.*
+*Exceção da dívida da Fase 1 QUITADA (29/08): `core/jobs.py` levantava
+`HTTPException` por exigência de paridade; agora levanta a exceção de
+domínio `JobNaoEncontrado`, convertida em HTTP 404 na borda da API
+(`api/routers/jobs.py`) — o core não importa FastAPI, como manda a
+restrição da linha do Domínio abaixo.*
 
 ## 2. Composição das camadas
 
@@ -150,8 +152,10 @@ ou reinício — o cache `lru_cache` não observa o disco).
 
 ## 8. Dívidas registradas (Fase 2)
 
-1. `core/jobs.py` importa `HTTPException` — substituir por exceção de
-   domínio (`JobNaoEncontrado`) convertida em 404 na borda.
+1. ~~`core/jobs.py` importa `HTTPException`~~ — **QUITADA em 29/08**:
+   substituída pela exceção de domínio `JobNaoEncontrado`, convertida em
+   404 na borda (`api/routers/jobs.py`); chamadores internos capturam a
+   exceção de domínio junto com `HTTPException`.
 2. `api/base.py` concentra 3.000+ linhas de infraestrutura heterogênea —
    particionar em `api/infra/` e migrar modelos Pydantic para
    `core/*/schemas`.

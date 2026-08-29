@@ -33,7 +33,6 @@ from core.enrich import enrich_collection
 from core.higieniza import higienizar_colecao
 from core.ingest import ingest_docs, ingest_folder
 from core.seed import seed_collection
-from core.varredura import varredura_colecao
 from fastapi.templating import Jinja2Templates  # noqa: E402
 
 __all__ = [
@@ -102,7 +101,6 @@ __all__ = [
     "ingest_docs",
     "ingest_folder",
     "seed_collection",
-    "varredura_colecao",
     "Jinja2Templates",
     "_hl",
     "RAIZ_PROJETO",
@@ -266,7 +264,7 @@ __all__ = [
 import hashlib as _hl
 
 # domínio de jobs (extraído no split — re-export p/ compat)
-from core.jobs import PASTA_LOGS_JOBS, JobRegistry, TODOS_JOBS, _novo_job, _podar_concluidos  # noqa: F401
+from core.jobs import PASTA_LOGS_JOBS, JobRegistry, TODOS_JOBS, _novo_job, _podar_concluidos, JobNaoEncontrado  # noqa: F401
 """
 API FastAPI: status dos serviços, configurações (.env), ingestão e consulta.
 Também serve a webui (build React em webui/dist/; sem build, cai na antiga
