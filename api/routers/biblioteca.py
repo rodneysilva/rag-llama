@@ -231,7 +231,7 @@ def hx_colecao_doc(nome: str, request: Request, chave: str):
     if not re.fullmatch(r"[A-Za-z0-9_\-]{1,64}", nome):
         return HTMLResponse("<p class='erro-texto'>nome inválido</p>")
     achado = None
-    total = 0
+    filtro_casado = None
     try:
         client = QdrantClient(url=config.QDRANT_URL, timeout=10,
                               check_compatibility=False)
@@ -245,8 +245,7 @@ def hx_colecao_doc(nome: str, request: Request, chave: str):
                                    with_vectors=False)
             if pts:
                 achado = pts
-                total = client.count(nome, exact=True,
-                                     count_filter=filtro).count
+                filtro_casado = filtro
                 break
     except Exception as e:
         return HTMLResponse(f"<p class='erro-texto'>falha: {str(e)[:140]}</p>")
@@ -255,25 +254,16 @@ def hx_colecao_doc(nome: str, request: Request, chave: str):
     # DOCUMENTO COMPLETO: scroll por filtro (arquivo|source) traz TODOS os
     # chunks do documento — ordenados por i/n do metadata (pedido do dono
     # 28/08: o modal mostra o documento inteiro legível/editável, não só
-    # os 4-6 primeiros)
-    _md0 = _md_ponto(achado[0])
-    # campo REAL onde a chave vive (plano OU metadata.*) — o filtro do
-    # scroll precisa casar com o formato que a coleção gravou
-    _campo = None
-    for cand in ("arquivo", "metadata.arquivo", "source", "metadata.source"):
-        _val = _md0.get(cand.rsplit(".", 1)[-1])
-        if _val == chave:
-            _campo = cand
-            break
-    if _campo is None:
-        _campo = "arquivo"
+    # os 4-6 primeiros). Usa o MESMO filtro da descoberta: o campo físico
+    # (plano OU metadata.*) já foi casado acima — re-derivar do payload
+    # mesclado é bug: _md_ponto ACHATA metadata.*, devolveria "arquivo"
+    # mesmo quando o campo real é "metadata.arquivo" (modal "documento
+    # vazio" pego na bateria pré-merge 29/08).
     # _scroll_todos devolve LOTES (gerador) — achata para pontos
     todos = [p for lote in _scroll_todos(
-        client, nome, limite=4000,
-        filtro=Filter(must=[FieldCondition(
-            key=_campo, match=MatchValue(value=chave))])) for p in lote]
+        client, nome, limite=4000, filtro=filtro_casado) for p in lote]
     todos.sort(key=lambda p: _md_ponto(p).get("i", 0))
-    md0 = _md0
+    md0 = _md_ponto(achado[0])
     titulo = str(md0.get("titulo") or chave.replace("\\", "/")
                  .rsplit("/", 1)[-1] or "?")
     chunks = [str((p.payload or {}).get("page_content", "")) for p in todos]
@@ -353,19 +343,21 @@ def hx_colecao_nomear(nome: str, request: Request,
         return HTMLResponse("<p class='erro-texto'>dados inválidos</p>")
     titulo = titulo.strip()[:200]
     from qdrant_client.models import FieldCondition, Filter, MatchValue
-    campo = "arquivo" if "\\" in chave or "/" in chave else "source"
     try:
         client = QdrantClient(url=config.QDRANT_URL, timeout=30,
                               check_compatibility=False)
-        filtro = Filter(must=[FieldCondition(key=campo,
-                                              match=MatchValue(value=chave))])
-        # tenta pelo campo real usado; se não achar, tenta o outro
-        info = client.count(nome, exact=True, count_filter=filtro).count
-        if not info:
-            campo = "source" if campo == "arquivo" else "arquivo"
-            filtro = Filter(must=[FieldCondition(key=campo,
-                                                  match=MatchValue(value=chave))])
+        # AMBOS os formatos de payload (plano e metadata.* aninhado) — o
+        # /nomear tentava só arquivo|source top-level e devolvia
+        # "documento não encontrado" para docs NOVOS (langchain grava
+        # metadata.arquivo) — mesma classe de bug do /doc (bateria 29/08)
+        filtro = None
+        info = 0
+        for campo in ("arquivo", "metadata.arquivo", "source", "metadata.source"):
+            filtro = Filter(must=[FieldCondition(
+                key=campo, match=MatchValue(value=chave))])
             info = client.count(nome, exact=True, count_filter=filtro).count
+            if info:
+                break
         if not info:
             return HTMLResponse("<p class='erro-texto'>documento não encontrado</p>")
         client.set_payload(collection_name=nome,
