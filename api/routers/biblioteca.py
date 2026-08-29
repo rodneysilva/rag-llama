@@ -103,8 +103,8 @@ def hx_job(kind: str, job: str, request: Request, r: int = 0):
                 raise HTTPException(status_code=404, detail="tarefa não encontrada")
         else:
             reg = {"pesquisa": _pesquisa, "preview": _preview, "ingest": _ingest,
-                   "seed": _seed, "limpeza": _limpeza,
-                   "manutencao": _manutencao}.get(kind)
+                   "seed": _seed, "limpeza": _limpeza, "manutencao": _manutencao,
+                   "higienizar": _higieniza}.get(kind)
             if reg is None:
                 raise HTTPException(status_code=404, detail="tipo de job desconhecido")
             s = reg.status(job, 0, "")

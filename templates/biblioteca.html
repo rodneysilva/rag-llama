@@ -278,6 +278,61 @@
         🧠 recategorizar com IA</button>
     </div>
   </div>
+
+  {# ═══ MANUTENÇÃO / SEED / SNAPSHOTS — poder operacional do dono (etapa 2) #}
+  <details class="cartao detalhe-cab" data-painel="sim" id="manutencao-cartao">
+    <summary class="link-suave">🧰 manutenção e segurança da base</summary>
+    <p class="mini" style="margin:.5rem 0 .3rem;">
+      Operações de manutenção da base: <b>analisar</b> re-faz o catálogo (área/categoria/descrição
+      de cada coleção), <b>agrupar</b> organiza por objetivo, <b>dividir</b> destrincha uma
+      coleção em várias por tema (reaproveita os vetores). Rodam como JOB — log ao vivo no topo.
+    </p>
+    <div class="linha" style="align-items:end; gap:.6rem; flex-wrap:wrap;">
+      <div style="flex:1; min-width:10rem;">
+        <label class="mini">coleção-alvo (vazio = todas; obrigatória p/ dividir)</label>
+        <input type="text" id="man-cad-colecao" placeholder="ex.: python"
+               style="width:100%; padding:.3rem .5rem;">
+      </div>
+      <button type="button" onclick="manutencaoDisparar('analisar')"
+              title="re-faz o catálogo com a LLM (job)">🧠 analisar</button>
+      <button type="button" onclick="manutencaoDisparar('agrupar')"
+              title="agrupa as coleções por objetivo (job)">🗂 agrupar</button>
+      <button type="button" onclick="manutencaoDisparar('dividir')"
+              title="destrincha a coleção-alvo em várias por tema (job)">✂️ dividir</button>
+    </div>
+
+    <hr style="border:none; border-top:1px solid var(--borda); margin:.9rem 0 .7rem;">
+
+    <p class="mini" style="margin:.2rem 0 .3rem;">
+      <b>🔬 seed profundo</b> — coleta na web (definição → rodadas de busca → curadoria com
+      scores → download + repos oficiais → ingestão em lote) e cria uma coleção nova sobre
+      qualquer assunto. Termina no modo Revisão.
+    </p>
+    <div class="linha" style="align-items:end; gap:.6rem; flex-wrap:wrap;">
+      <div style="flex:1; min-width:10rem;">
+        <label class="mini">assunto (qualquer tema)</label>
+        <input type="text" id="seed-assunto" placeholder="ex.: psicanálise, kubernetes, vinificação"
+               style="width:100%; padding:.3rem .5rem;">
+      </div>
+      <div style="width:7rem;">
+        <label class="mini">fontes (máx)</label>
+        <input type="number" id="seed-fontes" value="8" min="3" max="20"
+               style="width:100%; padding:.3rem .5rem;">
+      </div>
+      <button type="button" class="primario" onclick="seedDisparar(this)"
+              title="coleta web profunda e monta a coleção (job com log ao vivo)">🔬 semear</button>
+    </div>
+
+    <hr style="border:none; border-top:1px solid var(--borda); margin:.9rem 0 .7rem;">
+
+    <div class="linha" style="align-items:center; gap:.6rem;">
+      <b style="flex:0 0 auto;">📸 snapshots</b>
+      <span class="mini" id="snap-info">carregando…</span>
+      <button type="button" onclick="carregarSnapshots()" style="margin-left:auto;"
+              title="recarrega a lista de fotografiações do disco">↻ atualizar</button>
+    </div>
+    <div id="snap-lista" class="mini" style="margin-top:.3rem;">carregando…</div>
+  </details>
   <div class="colecoes-cards">
       {% for c in colecoes %}
       <div class="colecao-card linha-colecao" data-busca="{{ c.nome }} {{ c.categoria or '' }} {{ c.descricao or '' }}">
@@ -293,6 +348,10 @@
                   title="documentos da coleção (nomes, pedaços, prévia)">📄 documentos</button>
           <button hx-post="/hx/enriquecer/{{ c.nome }}" hx-target="#executando" hx-swap="afterbegin"
                   title="a LLM re-lê amostras e regenera área/categoria/descrição">✨ enriquecer</button>
+          <button type="button" onclick="snapshotColecao('{{ c.nome | e }}', this)"
+                  title="fotografa id+vetor+payload da coleção agora (restaurável no cartão de snapshots)">📸 snapshot</button>
+          <button type="button" onclick="higienizarColecao('{{ c.nome | e }}', this)"
+                  title="limpeza determinística: frases reconstituídas, ruído e duplicados fora, re-embed no mesmo id">🧹 higienizar</button>
           <button class="perigo" hx-post="/hx/colecao/{{ c.nome }}/apagar"
                   hx-target="#executando" hx-swap="afterbegin"
                   hx-confirm="apagar {{ c.nome }} inteira? (sem volta)">🗑 apagar</button>
@@ -425,6 +484,129 @@
         tr.style.display = tr.dataset.busca.toLowerCase().includes(q) ? "" : "none";
       });
     });
+
+    // ═══ ETAPA 2: manutenção/seed/snapshots/higienizar (poder operacional) ═══
+    function _jobCard(kind, job, rotulo) {
+      // injeta card de JOB no topo (mesmo contrato do #executando htmx)
+      const zona = document.getElementById("executando");
+      const div = document.createElement("div");
+      div.id = "job-" + job;
+      div.className = "cartao";
+      div.style.padding = ".8rem";
+      div.setAttribute("hx-get", "/hx/job/" + kind + "/" + job);
+      div.setAttribute("hx-trigger", "every 1500ms");
+      div.setAttribute("hx-swap", "outerHTML");
+      div.innerHTML = '<div class="resumo-job"><span class="ponto" style="display:inline-block;"></span>'
+        + rotulo + " — em andamento…</div>";
+      zona.prepend(div);
+      htmx.process(div);
+    }
+
+    async function snapshotColecao(nome, btn) {
+      if (!confirm("📸 fotografar '" + nome + "' agora? (id+vetor+payload em logs/snapshots — restaurável)")) return;
+      btn.disabled = true; btn.textContent = "📸…";
+      try {
+        const r = await fetch("/api/snapshot/" + encodeURIComponent(nome)
+                              + "?motivo=" + encodeURIComponent("manual (biblioteca)"));
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.detail || r.status);
+        toast("📸 snapshot de '" + nome + "' criado (" + (j.snapshots ?? "?") + " no disco)");
+        carregarSnapshots();
+      } catch (e) { toast("falha no snapshot: " + e.message); }
+      btn.disabled = false; btn.textContent = "📸 snapshot";
+    }
+
+    async function higienizarColecao(nome, btn) {
+      if (!confirm("🧹 higienizar '" + nome + "'? (frases reconstituídas, ruído e duplicados fora, re-embed no mesmo id — job em 2º plano)")) return;
+      btn.disabled = true; btn.textContent = "🧹…";
+      try {
+        const r = await fetch("/api/higienizar", {
+          method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({collection: nome})});
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.detail || r.status);
+        _jobCard("higienizar", j.job, "🧹 higienização · " + nome);
+        toast("🧹 higienização de '" + nome + "' iniciada");
+      } catch (e) { toast("falha: " + e.message); }
+      btn.disabled = false; btn.textContent = "🧹 higienizar";
+    }
+
+    async function manutencaoDisparar(acao) {
+      const colecao = (document.getElementById("man-cad-colecao").value || "").trim();
+      if (acao === "dividir" && !colecao) { toast("informe a coleção-alvo para dividir"); return; }
+      const rot = {analisar: "🧠 análise do catálogo", agrupar: "🗂 agrupamento por objetivo",
+                   dividir: "✂️ dividir '" + colecao + "'"}[acao];
+      if (!confirm(rot + " — disparar? (job com log ao vivo)")) return;
+      try {
+        const r = await fetch("/api/manutencao", {
+          method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({acao: acao, colecao: colecao || null, apagar_original: false})});
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.detail || r.status);
+        _jobCard("manutencao", j.job, rot);
+        toast(rot + " iniciado");
+      } catch (e) { toast("falha: " + e.message); }
+    }
+
+    async function seedDisparar(btn) {
+      const assunto = (document.getElementById("seed-assunto").value || "").trim();
+      if (!assunto) { toast("informe o assunto do seed"); return; }
+      const fontes = parseInt(document.getElementById("seed-fontes").value || "8", 10);
+      if (!confirm("🔬 semear coleção sobre '" + assunto + "' (até " + fontes + " fontes, curadoria com scores, termina na Revisão)?")) return;
+      btn.disabled = true; btn.textContent = "🔬…";
+      try {
+        const r = await fetch("/api/seed", {
+          method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({assunto: assunto, fontes: fontes})});
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.detail || r.status);
+        _jobCard("seed", j.job, "🔬 seed · " + assunto);
+        toast("🔬 seed de '" + assunto + "' iniciado");
+      } catch (e) { toast("falha: " + e.message); btn.disabled = false; btn.textContent = "🔬 semear"; return; }
+      btn.disabled = false; btn.textContent = "🔬 semear";
+    }
+
+    async function carregarSnapshots() {
+      const zona = document.getElementById("snap-lista");
+      const info = document.getElementById("snap-info");
+      if (!zona) return;
+      try {
+        const snaps = await (await fetch("/api/snapshot")).json();
+        if (!snaps.length) { zona.textContent = "nenhum snapshot no disco ainda."; info.textContent = ""; return; }
+        info.textContent = snaps.length + " no disco";
+        zona.innerHTML = snaps.slice(0, 30).map(s => {
+          const arq = String(s.arquivo || "").replace(/</g, "&lt;");
+          return "<div class='linha' style='align-items:center; gap:.5rem; padding:.15rem 0;'>"
+            + "<span style='flex:1; min-width:8rem;'><b>" + String(s.colecao).replace(/</g, "&lt;")
+            + "</b> · " + (s.pontos ?? "?") + " pts · " + (s.mb ?? "?") + " MB</span>"
+            + "<span class='mini' style='flex:1;'>" + String(s.motivo || "").replace(/</g, "&lt;")
+            + " · " + String(s.criado || "").replace(/</g, "&lt;").slice(0, 16).replace("T", " ") + "</span>"
+            + "<button type='button' class='acao-btn' data-snaprestaura='" + arq
+            + "' data-colecao='" + String(s.colecao).replace(/</g, "&lt;")
+            + "' title='recria a coleção a partir desta fotografia (APAGA a atual antes)'>↩ restaurar</button>"
+            + "</div>";
+        }).join("");
+      } catch (e) { zona.textContent = "falha ao listar: " + e.message; }
+    }
+    // delegate: restaurar snapshot (data-attrs — padrão do projeto)
+    document.addEventListener("click", (ev) => {
+      const b = ev.target.closest("[data-snaprestaura]");
+      if (!b) return;
+      const arq = b.dataset.snaprestaura, col = b.dataset.colecao;
+      if (!confirm("↩ restaurar '" + col + "' deste snapshot? A coleção ATUAL é APAGADA antes de recriar do arquivo. Continuar?")) return;
+      b.disabled = true; b.textContent = "↩…";
+      fetch("/api/snapshot/restaurar", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({arquivo: arq, colecao: col})
+      }).then(r => r.json().then(j => ({ok: r.ok, j})))
+        .then(({ok, j}) => {
+          if (!ok) throw new Error(j.detail || "falha");
+          toast("↩ '" + col + "' restaurado (" + JSON.stringify(j).slice(0, 80) + ")");
+          setTimeout(() => location.reload(), 900);
+        })
+        .catch(e => { toast("falha ao restaurar: " + e.message); b.disabled = false; b.textContent = "↩ restaurar"; });
+    });
+    carregarSnapshots();
   </script>
 </section>
 </div>
