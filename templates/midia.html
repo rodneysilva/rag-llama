@@ -344,6 +344,17 @@
   function mPoll(jid, tipo, card) {
     clearInterval(_timer);
     let alvo = card;
+    // 📖 ESTADO do raciocínio SOBREVIVE ao re-render (pedido do dono 03/09:
+    // "quando está carregando o processamento do vídeo eu não consigo
+    // visualizar o log, ele fica fechando"): o innerHTML do card renasce a
+    // cada tick (1,8 s) e o <details> voltava FECHADO. A intenção é
+    // capturada no POINTERDOWN (capture — vence a corrida com o polling) e
+    // o estado re-aplicado após cada render. Mesmo padrão do chat.
+    let _aberto = false;
+    document.addEventListener("pointerdown", (ev) => {
+      const s = ev.target.closest(".raciocinio-vivo > summary");
+      if (s) _aberto = !s.parentElement.open;
+    }, true);
     _timer = setInterval(async () => {
       try {
         const j = await (await fetch("/api/midia/status/" + jid)).json();
@@ -368,6 +379,11 @@
         const linhas = (j.lines || []).map(l =>
           "<div><span class='hora'>" + (l.ts || "") + "</span>" +
           String(l.msg || "").replace(/</g,"&lt;") + "</div>").join("");
+        // captura o SCROLL do log ANTES de re-renderizar (restaura depois)
+        const logAntes = alvo.querySelector(".raciocinio-vivo .log");
+        if (logAntes && _aberto) {
+          try { logAntes.dataset.scroll = String(logAntes.scrollTop); } catch (e) {}
+        }
         // 📊 BARRA DE PROGRESSO (pedido do dono 29/08): fração + etapa +
         // ETA vêm do motor (barras do sd-cli) via agente/registry
         const pct = Math.round((j.progresso || 0) * 100);
@@ -382,9 +398,15 @@
         alvo.innerHTML =
           "<div class='pensando-cab'><span class='ponto'></span> processando (" + (tipo || "mídia") + ")…</div>"
           + barra
-          + "<details class='raciocinio-vivo'><summary>raciocínio · "
+          + "<details class='raciocinio-vivo'" + (_aberto ? " open" : "")
+          + "><summary>raciocínio · "
           + (j.lines || []).length + " linha(s) — clique para abrir</summary>"
           + "<div class='log'>" + linhas + "</div></details>";
+        // re-render preserva o SCROLL interno do log aberto
+        const logEl = alvo.querySelector(".raciocinio-vivo .log");
+        if (logEl && _aberto && logEl.dataset.scroll) {
+          try { logEl.scrollTop = parseInt(logEl.dataset.scroll, 10) || 0; } catch (e) {}
+        }
         mScrollFim();
         if (!j.running) {
           clearInterval(_timer);
