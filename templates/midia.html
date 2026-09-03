@@ -152,8 +152,11 @@
     const o = selM.selectedOptions[0];
     const g = mGrupo();
     infoM.textContent = (o && o.title) || "";
+    // 🎞 gif marcado = frames FIXOS de loop (~1,5 s): a duração NÃO se
+    // aplica — o ⏱ sai de vista para não prometer o que o gif não cumpre
+    const gif = document.getElementById("m-gif").checked;
     document.getElementById("m-dur").style.display =
-      g.includes("vídeo") ? "" : "none";
+      (g.includes("vídeo") && !gif) ? "" : "none";
     document.getElementById("m-gif").parentElement.style.display =
       g.includes("vídeo") ? "" : "none";
     // GUIA DE CRIAÇÃO: só para GERADORES (imagem/vídeo) — dicas de cinema
@@ -167,7 +170,9 @@
         : "Flux: cena única com storytelling visual, sem texto na imagem — clique nas dicas para compor:";
     }
   }
-  selM.addEventListener("change", mInfo); mInfo();
+  selM.addEventListener("change", mInfo);
+  document.getElementById("m-gif").addEventListener("change", mInfo);  // 🎞 alterna o ⏱
+  mInfo();
 
   /* dica do estado vazio → composer (padrão do chat) */
   function mExemplo(btn) {

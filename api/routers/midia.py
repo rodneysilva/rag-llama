@@ -112,6 +112,13 @@ def midia_enviar(body: MidiaEnviarIn, request: Request):
         raise HTTPException(422, f"anexo '{nome_ref}' não encontrado — suba de novo")
     tipo = ("analise" if cat == "visao"
             else "video" if cat == "video" else "imagem")
+    # 🎞 GIF explícito: tipo GIF (renderiza <img>) e frames FIXOS de loop —
+    # a duração do seletor NÃO se aplica (gif bom = ciclo de ~1,5 s; a spec
+    # midia_duracao manda). Bug do dono 03/09: 🎞 marcado gerava item
+    # tipo "video" com arquivo .gif → <video src=*.gif> não renderiza NADA
+    # na tela e a duração pedida era silenciosamente ignorada.
+    if body.gif and cat == "video":
+        tipo = "gif"
     if tipo == "imagem" and referencia:
         tipo = "melhoria"
 

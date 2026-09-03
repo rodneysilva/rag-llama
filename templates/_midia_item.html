@@ -3,10 +3,14 @@
    prompt + anexo PRIMEIRO, raciocínio recolhido, saída formatada depois. #}
 <div class="msg" id="item-{{ it.id }}" style="border:1px solid var(--borda); border-radius:.8rem; padding:.7rem;">
   {% set r = it.resultado or {} %}
+  {# 🎞 tipo efetivo: o SALVO manda, mas item ANTIGO gravado como "video"
+     com arquivo .gif não renderizava (<video src=*.gif> é tela vazia) —
+     a extensão do arquivo corrige o tipo na EXIBIÇÃO (03/09) #}
+  {% set tipo_ok = 'gif' if (it.tipo == 'video' and (r.arquivo or '').lower().endswith('.gif')) else it.tipo %}
   {# ── 1) BOLHA DO USUÁRIO (o texto do pedido vem PRIMEIRO) ── #}
   <div class="cab-msg" style="display:flex; justify-content:space-between; gap:.5rem; align-items:baseline;">
     <span class="quem">👤 você
-      {%- if it.tipo == 'analise' %} · 👁 análise{% elif it.tipo == 'melhoria' %} · 🪄 melhoria (i2i){% elif it.tipo == 'video' %} · 🎬 vídeo{% elif it.tipo == 'gif' %} · 🎞 gif{% else %} · 🎨 imagem{% endif %}
+      {%- if tipo_ok == 'analise' %} · 👁 análise{% elif tipo_ok == 'melhoria' %} · 🪄 melhoria (i2i){% elif tipo_ok == 'video' %} · 🎬 vídeo{% elif tipo_ok == 'gif' %} · 🎞 gif{% else %} · 🎨 imagem{% endif %}
       com {{ it.modelo }}</span>
     <span class="hora">{{ it.ts }}{% if r.segundos %} · ⏱ {{ r.segundos }}s{% endif %}</span>
   </div>
@@ -32,7 +36,7 @@
   {# ── 3) SAÍDA FORMATADA (depois da pergunta) ── #}
   {% if r.erro %}
   <div class="rodape">⚠️ {{ r.erro }}</div>
-  {% elif it.tipo == 'analise' %}
+  {% elif tipo_ok == 'analise' %}
   <div class="msg assistente" style="margin-top:.5rem; border:none; padding:.4rem 0 0;">
     <div class="cab-msg"><span class="quem">🤖 análise</span></div>
     <div class="resposta">{{ _md_basico(r.texto or '') | safe }}</div>
@@ -43,13 +47,13 @@
   </div>
   {% else %}
   <div style="margin-top:.5rem;">
-    {% if it.tipo == 'video' %}
+    {% if tipo_ok == 'video' %}
     <video controls style="max-width:100%; border-radius:.6rem;" src="/api/midia/video/{{ r.arquivo }}"></video>
     {% else %}
-    <img style="max-width:100%; border-radius:.6rem;" src="/api/midia/{{ 'gif' if it.tipo == 'gif' else 'imagem' }}/{{ r.arquivo }}" alt="mídia gerada">
+    <img style="max-width:100%; border-radius:.6rem;" src="/api/midia/{{ 'gif' if tipo_ok == 'gif' else 'imagem' }}/{{ r.arquivo }}" alt="mídia gerada">
     {% endif %}
     <p class="mini" style="margin:.3rem 0 0;">{{ r.arquivo }}{% if r.kb %} · {{ r.kb }} KB{% endif %}{% if r.segundos %} · {{ r.segundos }}s{% endif %}
-      · <a href="/api/midia/{{ 'gif' if it.tipo == 'gif' else ('video' if it.tipo == 'video' else 'imagem') }}/{{ r.arquivo }}" download="{{ r.arquivo }}">baixar ↗</a></p>
+      · <a href="/api/midia/{{ 'gif' if tipo_ok == 'gif' else ('video' if tipo_ok == 'video' else 'imagem') }}/{{ r.arquivo }}" download="{{ r.arquivo }}">baixar ↗</a></p>
   </div>
   {% endif %}
 </div>
