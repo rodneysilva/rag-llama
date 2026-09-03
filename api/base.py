@@ -1718,6 +1718,12 @@ def _midia_pagina_base(request: Request, s: str):
         # sem job = sessão VIRTUAL (id vazio, NADA no disco — igual ao "/"
         # do chat): a sessão só NASCE no 1º envio (midia_enviar cria);
         # rascunhos vazias antigas não aparecem na lista (listar filtra).
+        # ⚠️ AJUSTE 03/09 (pedido: "perdeu todo o contexto"): a virtual só
+        # vale para quem NUNCA usou o módulo — quem JÁ tem sessões volta
+        # na ÚLTIMA delas (mesmo ciclo do chat, que restaura a última
+        # conversa). Nada de nascer vazio com histórico existente.
+        if sessao is None and ctx["m_sessoes"]:
+            sessao = midia_sessoes.abrir(ctx["m_sessoes"][0]["id"], owner)
         if sessao is None:
             sessao = {"id": "", "titulo": "", "itens": [],
                       "job_ativo": None, "owner": owner}

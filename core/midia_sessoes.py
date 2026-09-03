@@ -105,15 +105,24 @@ def anexar_item(sid: str, item: dict, titulo: str | None = None) -> None:
         _salvar(d)
 
 
-def marcar_job(sid: str, job: str, tipo: str, modelo: str) -> None:
+def marcar_job(sid: str, job: str, tipo: str, modelo: str,
+               prompt: str = "") -> None:
     """Anota o job em curso na sessão — quem voltar para a página RETOMA o
-    polling (a chamada segue rodando no executor do servidor)."""
+    polling (a chamada segue rodando no executor do servidor).
+
+    `prompt` (pedido do dono 03/09: "o multimídia não mostrou a minha
+    solicitação"): guardado no job_ativo para a RETOMADA renderizar a bolha
+    do usuário ANTES do card — e vira TÍTULO provisório da sessão (antes a
+    sidebar vivia "(sem título)" até o job concluir)."""
     with _lock:
         d = _carregar(sid)
         if not d:
             return
         d["job_ativo"] = {"job": job, "tipo": tipo, "modelo": modelo,
-                          "inicio": time.strftime("%H:%M:%S")}
+                          "inicio": time.strftime("%H:%M:%S"),
+                          "prompt": (prompt or "")[:400]}
+        if prompt and not (d.get("titulo") or "").strip():
+            d["titulo"] = prompt.strip()[:80]
         _salvar(d)
 
 

@@ -424,7 +424,10 @@
                     alert("não consegui apagar: " + e.message); });
   }
 
-  // RETOMADA: job ativo da sessão (anotado no SERVIDOR) → polling volta
+  // RETOMADA: job ativo da sessão (anotado no SERVIDOR) → polling volta.
+  // A BOLHA DO USUÁRIO entra ANTES do card (pedido do dono 03/09: "o
+  // multimídia não mostrou a minha solicitação") — o prompt viaja no
+  // job_ativo desde o envio.
   (function retomar() {
     let ja = null;
     try { ja = JSON.parse(DADOS.job || "null"); } catch (e) {}
@@ -432,6 +435,19 @@
     if (jid) {
       localStorage.setItem(_jobKey(), jid);
       const c = document.getElementById("m-conversa");
+      // estado vazio (dicas) sai — TEM conteúdo em curso
+      const vazio = c.querySelector(".mini[style*='opacity'], .chat-vazio");
+      if (vazio) vazio.remove();
+      if (ja && ja.prompt) {
+        const bolha = document.createElement("div");
+        bolha.className = "msg";
+        bolha.style.cssText = "border:1px solid var(--borda);border-radius:.8rem;padding:.7rem;";
+        bolha.innerHTML = '<div class="cab-msg" style="display:flex;justify-content:space-between;gap:.5rem;align-items:baseline;">'
+          + '<span class="quem">👤 você</span><span class="hora">' + (ja.inicio || "") + '</span></div>'
+          + '<div class="resposta" style="margin:.35rem 0;">'
+          + String(ja.prompt).replace(/</g, "&lt;") + "</div>";
+        c.appendChild(bolha);
+      }
       const card = document.createElement("div");
       card.className = "m-andamento";
       c.appendChild(card);

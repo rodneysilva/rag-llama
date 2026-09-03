@@ -123,7 +123,8 @@ def midia_enviar(body: MidiaEnviarIn, request: Request):
         tipo = "melhoria"
 
     job = _midia.novo_id()
-    midia_sessoes.marcar_job(body.sessao, job, tipo, modelo)
+    midia_sessoes.marcar_job(body.sessao, job, tipo, modelo,
+                             prompt=prompt)
 
     def _fabricar(payload: dict):
         jid = payload["job"]
