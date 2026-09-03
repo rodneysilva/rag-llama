@@ -36,6 +36,10 @@
   {# ── 3) SAÍDA FORMATADA (depois da pergunta) ── #}
   {% if r.erro %}
   <div class="rodape">⚠️ {{ r.erro }}</div>
+  <div class="acoes-msg" style="margin-top:.4rem;">
+    <button type="button" class="acao" onclick="mReusar('{{ it.prompt | e }}', '')"
+            title="enviar este pedido de novo (a geração falhou — tentar outra vez)">↻ tentar de novo</button>
+  </div>
   {% elif tipo_ok == 'analise' %}
   <div class="msg assistente" style="margin-top:.5rem; border:none; padding:.4rem 0 0;">
     <div class="cab-msg"><span class="quem">🤖 análise</span></div>
@@ -54,6 +58,17 @@
     {% endif %}
     <p class="mini" style="margin:.3rem 0 0;">{{ r.arquivo }}{% if r.kb %} · {{ r.kb }} KB{% endif %}{% if r.segundos %} · {{ r.segundos }}s{% endif %}
       · <a href="/api/midia/{{ 'gif' if tipo_ok == 'gif' else ('video' if tipo_ok == 'video' else 'imagem') }}/{{ r.arquivo }}" download="{{ r.arquivo }}">baixar ↗</a></p>
+    {# 🔁 CONTINUIDADE (pedido do dono 03/09: "usa essa imagem do contexto"):
+       o resultado de IMAGEM/GIF vira REFERÊNCIA do próximo envio (baixa e
+       re-anexa via /api/upload → entrada/) — análise, melhoria i2i ou
+       ponto de partida. Contexto deixa de se perder quando a geração
+       para no meio. Vídeo não é referência de imagem (fica sem botão). #}
+    {% if tipo_ok in ('imagem', 'gif') %}
+    <div class="acoes-msg">
+      <button type="button" class="acao" onclick="mReusar('{{ it.prompt | e }}', '{{ r.arquivo | e }}', '{{ tipo_ok }}')"
+              title="anexar esta mídia como referência do próximo envio (análise, melhoria i2i ou base da cena)">↰ usar como referência</button>
+    </div>
+    {% endif %}
   </div>
   {% endif %}
 </div>

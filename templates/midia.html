@@ -242,6 +242,34 @@
   }
 
   let _ref = null, _refNOME = "";
+  /* ↰ REUSAR: mídia gerada vira REFERÊNCIA do próximo envio (baixa pela
+     rota pública e re-anexa via /api/upload → entrada/). Pedido do dono
+     03/09 ("usa essa imagem do contexto p/ fazer o vídeo") — com arquivo
+     vazio, é o "tentar de novo" do item que FALHOU. */
+  async function mReusar(prompt, arquivo, tipo) {
+    const ta = document.getElementById("m-prompt");
+    const chip = document.getElementById("m-chip");
+    if (prompt) ta.value = prompt;
+    if (!arquivo) { ta.focus(); toast("prompt reutilizado — ajuste e envie"); return; }
+    chip.hidden = false; chip.textContent = "anexando " + arquivo.slice(0, 28) + "…";
+    try {
+      const pasta = tipo === "gif" ? "gif" : "imagem";
+      const blob = await (await fetch("/api/midia/" + pasta + "/" + encodeURIComponent(arquivo))).blob();
+      const fd = new FormData();
+      fd.append("file", blob, arquivo);
+      const r = await fetch("/api/upload", {method: "POST", body: fd});
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || r.status);
+      _ref = d.arquivo; _refNOME = d.nome || arquivo;
+      chip.textContent = "📎 " + _refNOME + " ✓";
+      chip.title = "clique para remover";
+      toast("📎 anexada como referência — escolha o modelo e envie");
+      ta.focus();
+    } catch (e) {
+      chip.textContent = "⚠️ " + e.message; _ref = null; _refNOME = "";
+    }
+  }
+
   async function mSubir(inp) {
     const f = inp.files[0]; inp.value = ""; if (!f) return;
     const chip = document.getElementById("m-chip");
